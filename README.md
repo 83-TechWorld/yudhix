@@ -97,7 +97,7 @@ sequenceDiagram
     actor Customer as Social Media User (YouTube / LinkedIn)
     participant Platform as Social Platform API (YouTube/LinkedIn)
     participant Airflow as Apache Airflow DAGs
-    participant Link as yudhix-link (Connectors)
+    participant LinkSvc as yudhix-link (Connectors)
     participant Staging as comment_staging (Postgres)
     participant Sense as yudhix-sense (Python AI Engine)
     participant Ollama as Ollama LLM (Qwen3:8b)
@@ -107,15 +107,15 @@ sequenceDiagram
     actor Approver as Brand Manager / Approver
     participant Resolve as yudhix-resolve (Reply Workflow)
     participant Ledger as yudhix-ledger (Audit Trail)
-    participant Loop as yudhix-loop (Turnaround Tracker)
+    participant LoopSvc as yudhix-loop (Turnaround Tracker)
 
     %% 1. Ingestion
     Customer->>Platform: Posts comment ("PS5 controller battery dies in 2 hours! #fail")
-    Airflow->>Link: Triggers scheduled fetch task (every 15 min / cron)
-    Link->>Platform: Incremental fetchComments(since Watermark)
-    Platform-->>Link: Returns raw comment, platformAuthorId, likes, replies
-    Note over Link: Keyed Pseudonymization:<br/>author_hash = HMAC-SHA256(tenant_key, author_id)
-    Link->>Staging: Inserts to comment_staging (encrypted text, 24h TTL)
+    Airflow->>LinkSvc: Triggers scheduled fetch task (every 15 min / cron)
+    LinkSvc->>Platform: Incremental fetchComments(since Watermark)
+    Platform-->>LinkSvc: Returns raw comment, platformAuthorId, likes, replies
+    Note over LinkSvc: Keyed Pseudonymization:<br/>author_hash = HMAC-SHA256(tenant_key, author_id)
+    LinkSvc->>Staging: Inserts to comment_staging (encrypted text, 24h TTL)
 
     %% 2. Sanitization & AI Processing
     Staging->>Sense: Batch worker pulls unanalyzed staging rows
@@ -139,19 +139,19 @@ sequenceDiagram
     Note over Resolve: Status: APPROVED
 
     %% 5. Posting & Tamper-Evident Audit
-    Resolve->>Link: Dispatches authorized post request
-    Link->>Platform: API Call: postReply(parentId, replyText)
-    Platform-->>Link: Success: returns platformReplyId
+    Resolve->>LinkSvc: Dispatches authorized post request
+    LinkSvc->>Platform: API Call: postReply(parentId, replyText)
+    Platform-->>LinkSvc: Success: returns platformReplyId
     Note over Resolve: Status: POSTED
     Resolve->>Ledger: Appends audit event
     Note over Ledger: SHA-256 Hash Chain:<br/>row_hash = SHA-256(prev_hash || tenant_id || action || payload)
 
     %% 6. Feedback & Turnaround Outcome Loop
-    Loop->>Airflow: Scheduled outcome checkpoints (+24h, +72h, +7d)
-    Airflow->>Link: Re-fetch original comment thread engagement & customer replies
-    Link-->>Loop: Returns follow-up comments & sentiment delta
-    Note over Loop: Evaluates Outcome:<br/>Customer: "Thanks for the quick help, working now!"<br/>Result: IMPROVED (Turnaround Success)
-    Loop->>Pulse: Records turnaround outcome in daily_product_sentiment
+    LoopSvc->>Airflow: Scheduled outcome checkpoints (+24h, +72h, +7d)
+    Airflow->>LinkSvc: Re-fetch original comment thread engagement & customer replies
+    LinkSvc-->>LoopSvc: Returns follow-up comments & sentiment delta
+    Note over LoopSvc: Evaluates Outcome:<br/>Customer: "Thanks for the quick help, working now!"<br/>Result: IMPROVED (Turnaround Success)
+    LoopSvc->>Pulse: Records turnaround outcome in daily_product_sentiment
     Agent->>Pulse: Views executive dashboard (Turnaround Rate KPI & Aspect Heatmap)
 ```
 

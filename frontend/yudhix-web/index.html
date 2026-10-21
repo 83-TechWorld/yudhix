@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Yudhix — Enterprise Comment Intelligence & Turnaround Platform</title>
+  <meta name="description" content="AI-driven social comment intelligence, crisis detection, and brand turnaround platform with cryptographic audit ledger and regional privacy compliance.">
+  
+  <!-- Modern Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Chart.js & Lucide Icons -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <link rel="stylesheet" href="css/index.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand-header">
+        <div class="brand-icon">Y</div>
+        <div>
+          <h1 class="brand-title">Yudhix</h1>
+        </div>
+        <span class="brand-tag">v1.0</span>
+      </div>
+
+      <ul class="nav-menu">
+        <li class="nav-item active" data-tab="dashboard" id="nav-dashboard">
+          <i data-lucide="layout-dashboard"></i>
+          <span>Dashboard</span>
+        </li>
+        <li class="nav-item" data-tab="inbox" id="nav-inbox">
+          <i data-lucide="inbox"></i>
+          <span>Social Inbox</span>
+          <span class="nav-badge">1 P1</span>
+        </li>
+        <li class="nav-item" data-tab="approvals" id="nav-approvals">
+          <i data-lucide="check-circle-2"></i>
+          <span>Approval Queue</span>
+        </li>
+        <li class="nav-item" data-tab="compliance" id="nav-compliance">
+          <i data-lucide="shield-check"></i>
+          <span>Privacy & Ledger</span>
+        </li>
+        <li class="nav-item" data-tab="connectors" id="nav-connectors">
+          <i data-lucide="network"></i>
+          <span>Platform Links</span>
+        </li>
+      </ul>
+
+      <div class="sidebar-footer">
+        <div class="user-avatar">AD</div>
+        <div class="user-info">
+          <span class="user-name">Admin Officer</span>
+          <span class="user-role">Tenant: Sony Global (IN)</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-wrapper">
+      <header class="top-bar">
+        <div>
+          <h2 class="view-heading" id="viewTitle">Executive Intelligence Overview</h2>
+          <span class="view-sub">Real-time comment velocity, AI sentiment, and turnaround metrics</span>
+        </div>
+        <div class="top-actions">
+          <button class="btn btn-secondary" onclick="window.location.reload()">
+            <i data-lucide="refresh-cw"></i> Refresh
+          </button>
+          <button class="btn btn-primary" onclick="alert('Airflow batch ingestion triggered successfully!')">
+            <i data-lucide="play"></i> Run Ingest DAG
+          </button>
+        </div>
+      </header>
+
+      <section class="content-body">
+        <!-- 1. DASHBOARD VIEW -->
+        <div id="view-dashboard" class="tab-view">
+          <!-- Metric KPI Cards -->
+          <div class="metrics-grid">
+            <div class="metric-card turnaround">
+              <span class="metric-title">Turnaround Rate (Neg → Pos)</span>
+              <div class="metric-value">68.4%</div>
+              <div class="metric-change positive">
+                <i data-lucide="trending-up"></i> +12.3% vs last week
+              </div>
+            </div>
+
+            <div class="metric-card crisis">
+              <span class="metric-title">P1 Crisis Comments</span>
+              <div class="metric-value">1</div>
+              <div class="metric-change negative">
+                <i data-lucide="alert-triangle"></i> Battery viral spike on YouTube
+              </div>
+            </div>
+
+            <div class="metric-card sla">
+              <span class="metric-title">Avg SLA Response Time</span>
+              <div class="metric-value">46m</div>
+              <div class="metric-change positive">
+                <i data-lucide="check"></i> 100% compliant (< 2h)
+              </div>
+            </div>
+
+            <div class="metric-card">
+              <span class="metric-title">Presidio Masked PII</span>
+              <div class="metric-value">1,420</div>
+              <div class="metric-change">
+                <i data-lucide="lock"></i> 100% zero raw PII stored
+              </div>
+            </div>
+          </div>
+
+          <!-- Charts Grid -->
+          <div class="dashboard-grid">
+            <div class="panel-card">
+              <div class="panel-header">
+                <h3 class="panel-title">
+                  <i data-lucide="line-chart"></i> 7-Day Negative Volume vs Brand Turnaround
+                </h3>
+              </div>
+              <div style="height: 280px; position: relative;">
+                <canvas id="timelineChart"></canvas>
+              </div>
+            </div>
+
+            <div class="panel-card">
+              <div class="panel-header">
+                <h3 class="panel-title">
+                  <i data-lucide="pie-chart"></i> Granular Aspect Sentiment
+                </h3>
+              </div>
+              <div class="aspect-list">
+                <div class="aspect-item">
+                  <div class="aspect-info">
+                    <span>Battery & Hardware</span>
+                    <span style="color:var(--status-negative);">72% Negative</span>
+                  </div>
+                  <div class="aspect-bar-bg">
+                    <div class="aspect-bar-fill" style="width: 72%; background: var(--status-negative);"></div>
+                  </div>
+                </div>
+
+                <div class="aspect-item">
+                  <div class="aspect-info">
+                    <span>Customer Support</span>
+                    <span style="color:var(--status-negative);">54% Negative</span>
+                  </div>
+                  <div class="aspect-bar-bg">
+                    <div class="aspect-bar-fill" style="width: 54%; background: var(--status-p2);"></div>
+                  </div>
+                </div>
+
+                <div class="aspect-item">
+                  <div class="aspect-info">
+                    <span>UI & Software Speed</span>
+                    <span style="color:var(--status-positive);">89% Positive</span>
+                  </div>
+                  <div class="aspect-bar-bg">
+                    <div class="aspect-bar-fill" style="width: 89%; background: var(--status-positive);"></div>
+                  </div>
+                </div>
+
+                <div class="aspect-item">
+                  <div class="aspect-info">
+                    <span>Pricing & Billing</span>
+                    <span style="color:var(--text-secondary);">62% Neutral</span>
+                  </div>
+                  <div class="aspect-bar-bg">
+                    <div class="aspect-bar-fill" style="width: 62%; background: var(--status-neutral);"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. SOCIAL INBOX VIEW -->
+        <div id="view-inbox" class="tab-view hidden">
+          <div class="inbox-container">
+            <div class="filters-bar">
+              <button class="filter-chip active" onclick="filterInbox('ALL')">All Comments</button>
+              <button class="filter-chip" onclick="filterInbox('P1')">P1 Critical</button>
+              <button class="filter-chip" onclick="filterInbox('P2')">P2 High Priority</button>
+              <button class="filter-chip" onclick="filterInbox('P3')">P3 Routine</button>
+            </div>
+            <div id="inboxList" style="display: flex; flex-direction: column; gap: 16px;"></div>
+          </div>
+        </div>
+
+        <!-- 3. APPROVAL QUEUE VIEW -->
+        <div id="view-approvals" class="tab-view hidden">
+          <div class="panel-header">
+            <h3 class="panel-title">
+              <i data-lucide="shield-alert"></i> Pending Multi-Stage Brand & Legal Approvals
+            </h3>
+            <span style="font-size:0.85rem; color:var(--text-secondary);">Enforcing Separation of Duties & Brand Guidelines</span>
+          </div>
+          <div id="approvalList"></div>
+        </div>
+
+        <!-- 4. PRIVACY & COMPLIANCE LEDGER VIEW -->
+        <div id="view-compliance" class="tab-view hidden">
+          <div class="dashboard-grid">
+            <div class="panel-card">
+              <div class="panel-header">
+                <h3 class="panel-title">
+                  <i data-lucide="cpu"></i> Tamper-Evident SHA-256 Chained Ledger (yudhix-ledger)
+                </h3>
+                <button class="btn btn-secondary" onclick="verifyAuditChain()">Verify Cryptographic Chain</button>
+              </div>
+              <table style="width:100%; border-collapse:collapse; text-align:left;">
+                <thead>
+                  <tr style="border-bottom:1px solid var(--border-subtle); color:var(--text-secondary); font-size:0.8rem;">
+                    <th style="padding:10px;">SEQ</th>
+                    <th style="padding:10px;">ACTOR</th>
+                    <th style="padding:10px;">ACTION</th>
+                    <th style="padding:10px;">ENTITY ID</th>
+                    <th style="padding:10px;">ROW HASH</th>
+                  </tr>
+                </thead>
+                <tbody id="ledgerTableBody"></tbody>
+              </table>
+            </div>
+
+            <div class="panel-card">
+              <div class="panel-header">
+                <h3 class="panel-title">
+                  <i data-lucide="user-x"></i> DSR Right-to-be-Forgotten (yudhix-dharma)
+                </h3>
+              </div>
+              <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:16px;">
+                Execute instantaneous cryptographic erasure across all partitions adhering to India DPDP Act and US CCPA.
+              </p>
+              <div style="display:flex; flex-direction:column; gap:12px;">
+                <input id="dsrInput" type="text" placeholder="Enter Author Pseudonym Hash (e.g. sha256:7f4a...)" 
+                       style="padding:12px; background:rgba(0,0,0,0.3); border:1px solid var(--border-subtle); border-radius:8px; color:#fff; font-family:var(--font-mono); font-size:0.85rem;">
+                <button class="btn btn-danger" onclick="executeDsrErasure()">
+                  <i data-lucide="trash-2"></i> Execute Right to be Forgotten
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. PLATFORM CONNECTORS VIEW -->
+        <div id="view-connectors" class="tab-view hidden">
+          <div class="panel-card">
+            <div class="panel-header">
+              <h3 class="panel-title">
+                <i data-lucide="radio"></i> Active Social Connectors (yudhix-link)
+              </h3>
+            </div>
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:18px;">
+              <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-subtle); border-radius:12px; padding:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                  <span style="font-weight:700;">YouTube Data v3 SPI</span>
+                  <span class="badge badge-pos">CONNECTED</span>
+                </div>
+                <p style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:12px;">Polling video comments and replies via AES-256 OAuth Vault.</p>
+                <span style="font-size:0.75rem; color:var(--accent-cyan); font-family:var(--font-mono);">Watermark: 2026-10-21T08:30:00Z</span>
+              </div>
+
+              <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-subtle); border-radius:12px; padding:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                  <span style="font-weight:700;">LinkedIn Community SPI</span>
+                  <span class="badge badge-pos">CONNECTED</span>
+                </div>
+                <p style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:12px;">Incremental ingestion with HMAC-SHA256 author pseudonymization.</p>
+                <span style="font-size:0.75rem; color:var(--accent-cyan); font-family:var(--font-mono);">Watermark: 2026-10-21T08:25:00Z</span>
+              </div>
+
+              <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-subtle); border-radius:12px; padding:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                  <span style="font-weight:700;">Reddit OAuth SPI</span>
+                  <span class="badge badge-pos">CONNECTED</span>
+                </div>
+                <p style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:12px;">Subreddit comment stream monitoring with discovery rules.</p>
+                <span style="font-size:0.75rem; color:var(--accent-cyan); font-family:var(--font-mono);">Watermark: 2026-10-21T08:34:00Z</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="js/app.js"></script>
+  <script>
+    lucide.createIcons();
+  </script>
+</body>
+</html>

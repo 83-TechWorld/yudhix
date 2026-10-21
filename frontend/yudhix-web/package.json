@@ -1,0 +1,9 @@
+{
+  "name": "yudhix-web",
+  "version": "1.0.0",
+  "description": "Yudhix Enterprise Social Comment Intelligence & Turnaround Platform",
+  "scripts": {
+    "start": "npx -y serve . -l 3000"
+  },
+  "dependencies": {}
+}

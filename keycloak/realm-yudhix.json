@@ -1,0 +1,64 @@
+{
+  "id": "yudhix",
+  "realm": "yudhix",
+  "displayName": "Yudhix Intelligence Platform",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "roles": {
+    "realm": [
+      {
+        "name": "tenant_admin",
+        "description": "Administrator with full tenant, user, rules, and billing control"
+      },
+      {
+        "name": "approver",
+        "description": "Authorized reviewer who approves or rejects drafted replies"
+      },
+      {
+        "name": "agent",
+        "description": "Support or brand agent who drafts responses and triages inbox"
+      },
+      {
+        "name": "analyst",
+        "description": "Data analyst with access to dashboards and outcome metrics"
+      },
+      {
+        "name": "viewer",
+        "description": "Read-only access to intelligence dashboards"
+      }
+    ]
+  },
+  "groups": [],
+  "clients": [
+    {
+      "clientId": "yudhix-gateway",
+      "name": "Yudhix API Gateway",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "gateway-secret-yudhix-2026",
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": true
+    },
+    {
+      "clientId": "yudhix-web",
+      "name": "Yudhix Angular SPA",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://localhost:4200/*",
+        "http://localhost:8080/*"
+      ],
+      "webOrigins": [
+        "http://localhost:4200",
+        "http://localhost:8080"
+      ]
+    }
+  ]
+}

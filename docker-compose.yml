@@ -1,0 +1,77 @@
+name: yudhix-stack
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: yudhix-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: yudhix
+      POSTGRES_USER: yudhix
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_password
+    secrets:
+      - pg_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U yudhix -d yudhix"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0.6
+    container_name: yudhix-keycloak
+    command: start-dev --import-realm
+    restart: unless-stopped
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: yudhix
+      KC_DB_PASSWORD_FILE: /run/secrets/pg_password
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD_FILE: /run/secrets/kc_admin_password
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+    secrets:
+      - pg_password
+      - kc_admin_password
+    volumes:
+      - ./keycloak/realm-yudhix.json:/opt/keycloak/data/import/realm-yudhix.json:ro
+    ports:
+      - "8180:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: yudhix-ollama
+    restart: unless-stopped
+    volumes:
+      - ollama_models:/root/.ollama
+    ports:
+      - "11434:11434"
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: yudhix-mailpit
+    restart: unless-stopped
+    ports:
+      - "8025:8025" # Web UI
+      - "1025:1025" # SMTP
+
+secrets:
+  pg_password:
+    file: ./secrets/pg_password.txt
+  kc_admin_password:
+    file: ./secrets/kc_admin_password.txt
+  master_key:
+    file: ./secrets/master_key.txt
+
+volumes:
+  pgdata:
+  ollama_models:

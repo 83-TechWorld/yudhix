@@ -50,6 +50,9 @@
         <module>services/yudhix-resolve</module>
         <module>services/yudhix-loop</module>
         <module>services/yudhix-notify</module>
+
+        <!-- Phase 6 Services -->
+        <module>services/yudhix-meter</module>
     </modules>
 
     <dependencyManagement>

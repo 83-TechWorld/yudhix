@@ -53,6 +53,9 @@
 
         <!-- Phase 6 Services -->
         <module>services/yudhix-meter</module>
+
+        <!-- Phase 7 Services -->
+        <module>services/yudhix-config</module>
     </modules>
 
     <dependencyManagement>

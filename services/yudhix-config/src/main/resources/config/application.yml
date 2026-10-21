@@ -1,0 +1,15 @@
+# Global Shared Configuration served by Yudhix Config Server
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
+
+yudhix:
+  security:
+    jwk-set-uri: http://localhost:8080/realms/yudhix/protocol/openid-connect/certs
+  platform:
+    version: 1.0.0
+    environment: local-dev

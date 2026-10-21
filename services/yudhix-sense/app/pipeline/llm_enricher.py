@@ -15,7 +15,7 @@ class OllamaLlmEnricher:
     """
 
     def __init__(self):
-        self.ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434")
+        self.ollama_url = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434")
         self.model_name = os.getenv("OLLAMA_MODEL", "llama3.1:latest")
 
     async def enrich(self, masked_text: str, base_sentiment: str) -> Dict[str, Any]:
@@ -35,7 +35,7 @@ Return JSON matching this schema:
 """
 
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=20.0) as client:
                 res = await client.post(
                     f"{self.ollama_url}/api/generate",
                     json={

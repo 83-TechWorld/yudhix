@@ -24,10 +24,13 @@ class AnalyzeCommentRequest(BaseModel):
     comment_id: str
     tenant_id: str
     raw_text: str
+    platform: Optional[str] = "YOUTUBE"
+    author_hash: Optional[str] = None
     language_hint: Optional[str] = "en"
     likes: int = 0
     replies: int = 0
     run_deep_llm: bool = True
+    persist: bool = True
 
 
 class AnalyzeCommentResponse(BaseModel):

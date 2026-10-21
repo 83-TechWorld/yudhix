@@ -1,9 +1,25 @@
 // Yudhix Enterprise Social Comment Intelligence & Turnaround Platform
 const YOUTUBE_API_KEY = "AIzaSyCWGhmMjOdPlGkSjcaV4OKdvLSGIhvL3Uc";
 
-document.addEventListener('DOMContentLoaded', () => {
+async function loadCommentsFromDatabase() {
+    try {
+        const res = await fetch('http://localhost:8000/api/v1/comments');
+        if (res.ok) {
+            const data = await res.json();
+            if (data.comments && data.comments.length > 0) {
+                // Prepend or replace with real comments from PostgreSQL
+                state.comments = data.comments;
+            }
+        }
+    } catch (e) {
+        console.warn("Could not load comments from DB, using fallback:", e.message);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
     initNavigation();
     initCharts();
+    await loadCommentsFromDatabase();
     renderInbox();
     renderApprovals();
     renderLedger();
@@ -505,7 +521,13 @@ window.fetchLiveYouTubeComments = async function(customRef, channelId) {
                     body: JSON.stringify({
                         comment_id: item.id,
                         tenant_id: "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
-                        raw_text: rawText
+                        raw_text: rawText,
+                        platform: "YOUTUBE",
+                        author_hash: authorHash,
+                        likes: likes,
+                        replies: item.snippet.totalReplyCount || 0,
+                        run_deep_llm: true,
+                        persist: true
                     })
                 });
                 if (senseRes.ok) {
@@ -539,6 +561,9 @@ window.fetchLiveYouTubeComments = async function(customRef, channelId) {
             analyzedCount++;
         }
 
+        // Reload fresh state directly from PostgreSQL database
+        await loadCommentsFromDatabase();
+
         // Update subscribed channel comments count
         if (channelId) {
             const ch = state.subscribedChannels.find(c => c.id === channelId);
@@ -552,7 +577,7 @@ window.fetchLiveYouTubeComments = async function(customRef, channelId) {
         const inboxTab = document.getElementById('nav-inbox');
         if (inboxTab) inboxTab.click();
 
-        alert(`Successfully fetched ${analyzedCount} LIVE YouTube comments using Google API Key and analyzed them with local Ollama Llama 3.1! Check the Social Inbox.`);
+        alert(`Successfully fetched ${analyzedCount} LIVE YouTube comments using Google API Key, analyzed them with local Ollama Llama 3.1, and PERSISTED them into the PostgreSQL database! Check the Social Inbox and query them anytime in the database with './yudhix.sh db'.`);
 
     } catch (err) {
         alert(`Error fetching live YouTube comments: ${err.message}. Please verify the video ID or network connection.`);

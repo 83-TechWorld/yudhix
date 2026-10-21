@@ -358,7 +358,219 @@ yudhix/
 ```bash
 docker compose up -d postgres keycloak ollama mailpit
 ```
-- **PostgreSQL**: `localhost:5432` (Database: `yudhix`, User: `yudhix`)
+- **PostgreSQL**: `localhost:5432` (Database: `yudhix`, User: `postgres` or `yudhix`)
 - **Keycloak Admin Console**: `http://localhost:8180` (User: `admin`)
 - **Mailpit Web UI**: `http://localhost:8025`
-- **Ollama AI Server**: `http://localhost:11434`
+- **Ollama AI Server**: `http://localhost:11434` (Model: `llama3.1:latest`)
+
+---
+
+## 9. Database Architecture & Complete Table Dictionary
+
+Yudhix utilizes **PostgreSQL 16** with a strict multi-tenant schema partitioning architecture. Every tenant-owned table is partitioned logically with `tenant_id UUID NOT NULL` as part of composite primary keys, enforcing tenant data isolation and PostgreSQL Row-Level Security (RLS).
+
+### Entity Relationship & Data Flow Diagram
+
+```mermaid
+erDiagram
+    tenant ||--o{ tenant_setting : "configures"
+    tenant ||--o{ tenant_user : "members"
+    tenant ||--o{ country_config : "localizes"
+    tenant ||--o{ product : "owns"
+    product ||--o{ product_alias : "has synonyms"
+    product ||--o{ owned_source : "tracks channels"
+    product ||--o{ discovery_rule : "matches"
+    topic ||--o{ discovery_rule : "categorizes"
+    owned_source ||--o{ platform_credential : "authenticates"
+    owned_source ||--o{ source_watermark : "poll cursor"
+    owned_source ||--o{ comment_staging : "buffers raw"
+    
+    product ||--o{ comment : "receives"
+    comment ||--|| comment_analysis : "1:1 AI analysis"
+    comment ||--o{ comment_aspect : "1:N granular aspects"
+    comment ||--o{ reply : "addressed by"
+    reply ||--o{ approval_step : "human review"
+    reply ||--o{ reply_outcome : "+24h/+72h/+7d turnaround"
+    comment ||--o{ label_feedback : "RLHF corrections"
+    
+    tenant ||--o{ audit_event : "cryptographic SHA-256 chain"
+    tenant ||--o{ consent_record : "proof of consent"
+    tenant ||--o{ dsr_request : "GDPR/DPDP erasure"
+    tenant ||--o{ usage_event : "metered actions"
+    tenant ||--o{ invoice : "monthly billing"
+    tenant ||--o{ notification_rule : "triggers alerts"
+```
+
+---
+
+### Complete 31-Table Dictionary & Links
+
+#### Group 1: Tenant & Identity Domain (`yudhix-tenant`)
+| Table Name | Primary Key | Foreign Keys / Links | Usage & Business Responsibility |
+|---|---|---|---|
+| `tenant` | `id (UUID)` | Root Entity | Stores enterprise organizations (e.g. Sony, PlayStation). Manages tier, status, slug, and billing contact. |
+| `tenant_setting` | `(tenant_id, key)` | `tenant_id` $\rightarrow$ `tenant.id` | Key-value store for tenant-specific configuration (SLA response time thresholds, default AI models, custom PII masking regex). |
+| `tenant_user` | `(tenant_id, user_id)` | `tenant_id` $\rightarrow$ `tenant.id` | Maps Keycloak authentication users to internal tenant roles (`ADMIN`, `AGENT`, `APPROVER`, `COMPLIANCE`). |
+| `country_config` | `(tenant_id, country_code)` | `tenant_id` $\rightarrow$ `tenant.id` | Multi-jurisdiction data privacy parameters. Governs whether India DPDP 2023 or US CCPA rules apply, and sets localized data retention limits. |
+
+#### Group 2: Product Catalog & Source Tracking (`yudhix-catalog`)
+| Table Name | Primary Key | Foreign Keys / Links | Usage & Business Responsibility |
+|---|---|---|---|
+| `product` | `(tenant_id, id)` | `tenant_id` $\rightarrow$ `tenant.id` | Registered brand products (e.g. "DualSense Wireless Controller", "Sony Cloud Platform"). Stores SKU and semantic vector embeddings for NLP matching. |
+| `product_alias` | `(tenant_id, id)` | `product_id` $\rightarrow$ `product.id` | Alternate names, colloquial abbreviations, hashtags, and competitor comparison terms used by ingestion matching rules. |
+| `owned_source` | `(tenant_id, id)` | `product_id` $\rightarrow$ `product.id` | Registered social channels (official YouTube channels, LinkedIn company pages, subreddits) subscribed for automated ingestion. |
+
+#### Group 3: Discovery Radar & Topic Taxonomy (`yudhix-radar`)
+| Table Name | Primary Key | Foreign Keys / Links | Usage & Business Responsibility |
+|---|---|---|---|
+| `topic` | `(tenant_id, id)` | `parent_id` $\rightarrow$ `topic.id` | Hierarchical taxonomy of customer issues (e.g. Hardware $\rightarrow$ Battery Life, Billing $\rightarrow$ API Overages). Enables categorization in the dashboard. |
+| `discovery_rule` | `(tenant_id, id)` | `product_id`, `topic_id` | Keyword rules, regex patterns, sentiment thresholds, and language filters that determine which harvested comments are routed to agents. |
+
+#### Group 4: Social Connectors & Ingestion (`yudhix-link`)
+| Table Name | Primary Key | Foreign Keys / Links | Usage & Business Responsibility |
+|---|---|---|---|
+| `platform_credential` | `(tenant_id, platform, source_id)` | `source_id` $\rightarrow$ `owned_source.id` | Secure OAuth2 access tokens and refresh tokens encrypted with envelope AES-256-GCM. |
+| `source_watermark` | `(tenant_id, source_id, platform)` | `source_id` $\rightarrow$ `owned_source.id` | High-water mark tracking for incremental polling. Remembers `last_comment_id` and timestamp so duplicate API requests are prevented. |
+| `comment_staging` | `id (BIGSERIAL)` | `tenant_id` $\rightarrow$ `tenant.id` | High-throughput, short-lived ingestion buffer (24-hour TTL). Holds encrypted raw payloads before PII sanitization and sentiment inference. |
+
+#### Group 5: Comments, AI Sentiment & Granular Aspects (`yudhix-pulse` & `yudhix-sense`)
+| Table Name | Primary Key | Foreign Keys / Links | Usage & Business Responsibility |
+|---|---|---|---|
+| `comment` | `(tenant_id, id)` | `product_id` $\rightarrow$ `product.id`<br/>`source_id` $\rightarrow$ `owned_source.id` | Master comment record with keyed author pseudonym (`author_hash`), PII-masked text, likes, reply counts, and YouTube comment IDs. Enforces `UNIQUE(tenant_id, platform, platform_comment_id)`. |
+| `comment_analysis` | `(tenant_id, comment_id)` | `comment_id` $\rightarrow$ `comment.id` | 1-to-1 AI intelligence results: fast sentiment classification, Ollama LLM intent (`COMPLAINT`, `PRAISE`), churn risk (0-1.0), impact score (0-100), priority (`P1`, `P2`, `P3`), and AI suggested turnaround reply. |
+| `comment_aspect` | `id (BIGSERIAL)` | `comment_id` $\rightarrow$ `comment.id` | 1-to-Many granular aspect breakdown (e.g. `battery`: NEGATIVE, `customer-support`: NEGATIVE) with extracted text evidence and confidence scores. |
+| `daily_product_sentiment` | `(tenant_id, day, product_id, platform, country_code)` | `product_id` $\rightarrow$ `product.id` | Daily pre-aggregated rollups (total positive/negative counts, engagement counts, turnaround success rates). Kept long-term for executive analytics after raw comments expire. |
+
+#### Group 6: Reply Turnaround & Approval Workflow (`yudhix-resolve`)
+| Table Name | Primary Key | Foreign Keys / Links | Usage & Business Responsibility |
+|---|---|---|---|
+| `reply` | `(tenant_id, id)` | `comment_id` $\rightarrow$ `comment.id`<br/>`product_id` $\rightarrow$ `product.id` | Outbound responses crafted to turn negative comments around. Tracks lifecycle state (`DRAFT` $\rightarrow$ `IN_REVIEW` $\rightarrow$ `APPROVED` $\rightarrow$ `POSTED`). |
+| `reply_template` | `(tenant_id, id)` | `topic_id` $\rightarrow$ `topic.id`<br/>`product_id` $\rightarrow$ `product.id` | Approved, brand-safe message templates containing interpolation variables (e.g. `{{author}}`, `{{support_link}}`). |
+| `approval_step` | `id (BIGSERIAL)` | `reply_id` $\rightarrow$ `reply.id` | Multi-tiered human-in-the-loop review log. Enforces Separation of Duties—an agent cannot approve their own drafted reply. |
+
+#### Group 7: Feedback Loop & Turnaround Outcome (`yudhix-loop`)
+| Table Name | Primary Key | Foreign Keys / Links | Usage & Business Responsibility |
+|---|---|---|---|
+| `reply_outcome` | `id (BIGSERIAL)` | `reply_id` $\rightarrow$ `reply.id`<br/>`comment_id` $\rightarrow$ `comment.id` | Follow-up tracking at +24h, +72h, and +7d. Measures if the customer replied, if their sentiment flipped from negative to positive, and calculates the Turnaround Success Rate. |
+| `label_feedback` | `id (BIGSERIAL)` | `comment_id` $\rightarrow$ `comment.id` | RLHF audit log where human agents correct model predictions (e.g. correcting sentiment from NEUTRAL to NEGATIVE). Used for local Ollama fine-tuning datasets. |
+
+#### Group 8: Immutable Cryptographic Ledger (`yudhix-ledger`)
+| Table Name | Primary Key | Foreign Keys / Links | Usage & Business Responsibility |
+|---|---|---|---|
+| `audit_event` | `id (BIGSERIAL)` | `tenant_id` $\rightarrow$ `tenant.id` | Append-only, cryptographic SHA-256 hash-chained audit trail. Every ingestion, analysis, approval, and reply posts a `row_hash = SHA256(prev_hash \|\| tenant_id \|\| action \|\| payload)`. |
+
+#### Group 9: Dharma Compliance & Privacy Framework (`yudhix-dharma`)
+| Table Name | Primary Key | Foreign Keys / Links | Usage & Business Responsibility |
+|---|---|---|---|
+| `policy_document` | `(tenant_id, id)` | `tenant_id` $\rightarrow$ `tenant.id` | Versioned compliance declarations (India DPDP 2023, US CCPA/CPRA, GDPR) with cryptographic content checksums. |
+| `consent_record` | `id (BIGSERIAL)` | `policy_id` $\rightarrow$ `policy_document.id` | Cryptographic evidence of data processing consent with timestamp and cryptographic signature. |
+| `dsr_request` | `id (BIGSERIAL)` | `tenant_id` $\rightarrow$ `tenant.id` | Data Subject Request log for Right-to-Erasure (RTBF) and Data Access requests. Orchestrates zero-trace comment purging across all tables. |
+
+#### Group 10: Usage Metering & Billing (`yudhix-meter`)
+| Table Name | Primary Key | Foreign Keys / Links | Usage & Business Responsibility |
+|---|---|---|---|
+| `plan` | `id (VARCHAR)` | Global | Available subscription tiers (Free, Pro, Enterprise) defining monthly comment limits, active channel quotas, and API access. |
+| `subscription` | `tenant_id (UUID)` | `tenant_id` $\rightarrow$ `tenant.id`<br/>`plan_id` $\rightarrow$ `plan.id` | Active billing subscription, billing cycle anchors, and current status (`ACTIVE`, `PAST_DUE`, `CANCELED`). |
+| `usage_event` | `id (BIGSERIAL)` | `tenant_id` $\rightarrow$ `tenant.id` | Real-time idempotent metering log. Records billable units (`COMMENT_INGESTED`, `AI_ANALYZE_INVOCATION`, `POST_PUBLISHED`). |
+| `invoice` | `id (VARCHAR)` | `tenant_id` $\rightarrow$ `tenant.id` | Monthly billing statements, payment processor IDs (Stripe/Razorpay), and tax calculation records. |
+
+#### Group 11: Alerting & Notifications (`yudhix-notify`)
+| Table Name | Primary Key | Foreign Keys / Links | Usage & Business Responsibility |
+|---|---|---|---|
+| `notification_rule` | `(tenant_id, id)` | `tenant_id` $\rightarrow$ `tenant.id` | Configurable alert triggers (e.g. "Trigger Slack alert if >5 P1 negative comments arrive within 15 minutes"). |
+| `notification_log` | `id (BIGSERIAL)` | `rule_id` $\rightarrow$ `notification_rule.id` | History of dispatched alerts across Slack webhooks, SMTP emails, and agent dashboard banners. |
+
+---
+
+## 10. Database Configuration & Setup Guide
+
+Follow these step-by-step instructions to configure, initialize, and verify the PostgreSQL database.
+
+### Step 1: Start PostgreSQL
+Ensure PostgreSQL 16+ is running locally or via Docker:
+```bash
+# Verify PostgreSQL is active
+pg_isready -h localhost -p 5432
+```
+
+### Step 2: Create the `yudhix` Database
+Create the dedicated application database:
+```bash
+# Create database using standard PostgreSQL CLI
+createdb -h localhost -p 5432 -U postgres yudhix
+```
+
+### Step 3: Enable Required PostgreSQL Extensions
+Connect to the database and enable the required extensions:
+```bash
+psql -h localhost -U postgres -d yudhix -c '
+  CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+  CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+'
+```
+
+### Step 4: Run Database Schema Migrations
+You can execute all migrations using **Option A (Automated)** or **Option B (Manual)**:
+
+#### Option A: One-Command Automated Setup (Recommended)
+Use the included lifecycle manager script:
+```bash
+./yudhix.sh init-db
+```
+This command automatically creates the database if missing, enables `uuid-ossp` and `pgcrypto`, and applies all 11 Flyway migration scripts in correct dependency order.
+
+#### Option B: Manual Execution Order
+Execute the migration scripts sequentially:
+```bash
+MIGRATIONS=(
+  "services/yudhix-tenant/src/main/resources/db/migration/V1__init_tenant_schema.sql"
+  "services/yudhix-ledger/src/main/resources/db/migration/V1__init_ledger_schema.sql"
+  "services/yudhix-dharma/src/main/resources/db/migration/V1__init_dharma_schema.sql"
+  "services/yudhix-catalog/src/main/resources/db/migration/V1__init_catalog_schema.sql"
+  "services/yudhix-radar/src/main/resources/db/migration/V1__init_radar_schema.sql"
+  "services/yudhix-link/src/main/resources/db/migration/V1__init_link_schema.sql"
+  "services/yudhix-pulse/src/main/resources/db/migration/V1__init_pulse_schema.sql"
+  "services/yudhix-resolve/src/main/resources/db/migration/V1__init_resolve_schema.sql"
+  "services/yudhix-loop/src/main/resources/db/migration/V1__init_loop_schema.sql"
+  "services/yudhix-notify/src/main/resources/db/migration/V1__init_notify_schema.sql"
+  "services/yudhix-meter/src/main/resources/db/migration/V1__init_meter_schema.sql"
+)
+
+for file in "${MIGRATIONS[@]}"; do
+  echo "Applying $file..."
+  psql -h localhost -U postgres -d yudhix -f "$file"
+done
+```
+
+### Step 5: Verify Database Tables
+Confirm that all 31 tables are created:
+```bash
+psql -h localhost -U postgres -d yudhix -c "\dt"
+```
+You should see 31 rows returned, spanning all domains.
+
+### Step 6: Query Live Ingested Comments & AI Sentiments
+Whenever you fetch live comments in the UI (`http://localhost:3000`) or via API, you can view the stored data directly in the terminal:
+```bash
+# View comments and granular aspects in formatted record view
+./yudhix.sh db
+```
+
+Or query directly with `psql`:
+```sql
+SELECT 
+    c.platform,
+    c.platform_comment_id,
+    c.masked_text,
+    c.like_count,
+    ca.sentiment,
+    ca.priority,
+    ca.impact_score,
+    ca.intent,
+    ca.suggested_reply
+FROM comment c
+LEFT JOIN comment_analysis ca ON c.id = ca.comment_id
+ORDER BY c.first_seen_at DESC
+LIMIT 10;
+```
+

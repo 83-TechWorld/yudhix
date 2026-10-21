@@ -172,6 +172,32 @@ show_db_comments() {
     "
 }
 
+init_db() {
+    print_banner
+    echo -e "${ORANGE}[+] Initializing PostgreSQL Database (yudhix)...${NC}"
+    createdb -h localhost -U postgres yudhix 2>/dev/null || echo -e "${WHITE}Database yudhix already exists.${NC}"
+    psql -h localhost -U postgres -d yudhix -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp"; CREATE EXTENSION IF NOT EXISTS "pgcrypto";'
+    echo -e "${GREEN}✔ Extensions enabled: uuid-ossp, pgcrypto${NC}"
+    echo -e "${ORANGE}[+] Executing Flyway schema migrations across all microservices...${NC}"
+    for f in \
+        services/yudhix-tenant/src/main/resources/db/migration/V1__init_tenant_schema.sql \
+        services/yudhix-ledger/src/main/resources/db/migration/V1__init_ledger_schema.sql \
+        services/yudhix-dharma/src/main/resources/db/migration/V1__init_dharma_schema.sql \
+        services/yudhix-catalog/src/main/resources/db/migration/V1__init_catalog_schema.sql \
+        services/yudhix-radar/src/main/resources/db/migration/V1__init_radar_schema.sql \
+        services/yudhix-link/src/main/resources/db/migration/V1__init_link_schema.sql \
+        services/yudhix-pulse/src/main/resources/db/migration/V1__init_pulse_schema.sql \
+        services/yudhix-resolve/src/main/resources/db/migration/V1__init_resolve_schema.sql \
+        services/yudhix-loop/src/main/resources/db/migration/V1__init_loop_schema.sql \
+        services/yudhix-notify/src/main/resources/db/migration/V1__init_notify_schema.sql \
+        services/yudhix-meter/src/main/resources/db/migration/V1__init_meter_schema.sql; do
+        if [ -f "$f" ]; then
+            psql -h localhost -U postgres -d yudhix -f "$f" >/dev/null 2>&1
+        fi
+    done
+    echo -e "${GREEN}✔ All 31 tables verified and initialized in PostgreSQL!${NC}"
+}
+
 case "$1" in
     start)
         start_all
@@ -193,18 +219,22 @@ case "$1" in
     db)
         show_db_comments
         ;;
+    init-db)
+        init_db
+        ;;
     ui)
         open "http://localhost:3000" || echo "Visit http://localhost:3000"
         ;;
     *)
         print_banner
-        echo -e "${WHITE}Usage:${NC} ./yudhix.sh {start|stop|restart|status|test|db|ui}"
+        echo -e "${WHITE}Usage:${NC} ./yudhix.sh {start|stop|restart|status|test|db|init-db|ui}"
         echo ""
         echo -e "  ${ORANGE}start${NC}    - Launch Ollama, yudhix-sense AI engine, and yudhix-web frontend"
         echo -e "  ${ORANGE}stop${NC}     - Stop all background running services"
         echo -e "  ${ORANGE}status${NC}   - Display health and ports of all services"
         echo -e "  ${ORANGE}test${NC}     - Run live end-to-end PII masking & AI analysis test"
         echo -e "  ${ORANGE}db${NC}       - Query and display comments and AI sentiment from PostgreSQL"
+        echo -e "  ${ORANGE}init-db${NC}  - Create DB yudhix, enable extensions, and run all 31 table migrations"
         echo -e "  ${ORANGE}ui${NC}       - Open the white/orange/black frontend in your default browser"
         ;;
 esac

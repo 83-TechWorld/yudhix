@@ -37,6 +37,11 @@
         <module>services/yudhix-tenant</module>
         <module>services/yudhix-ledger</module>
         <module>services/yudhix-dharma</module>
+
+        <!-- Phase 3 Services -->
+        <module>services/yudhix-catalog</module>
+        <module>services/yudhix-radar</module>
+        <module>services/yudhix-link</module>
     </modules>
 
     <dependencyManagement>

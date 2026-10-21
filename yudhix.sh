@@ -146,6 +146,32 @@ run_test() {
     echo -e "\n${GREEN}✔ Verification Test Complete!${NC}"
 }
 
+show_db_comments() {
+    print_banner
+    echo -e "${ORANGE}[+] Comments & AI Sentiment in PostgreSQL (Database: yudhix)${NC}\n"
+    psql -h localhost -U postgres -d yudhix -x -c "
+    SELECT 
+        c.platform,
+        c.platform_comment_id,
+        c.author_hash,
+        c.masked_text,
+        c.like_count,
+        ca.sentiment,
+        ca.priority,
+        ca.impact_score,
+        ca.intent,
+        ca.suggested_reply
+    FROM comment c
+    LEFT JOIN comment_analysis ca ON c.id = ca.comment_id
+    ORDER BY c.platform_created_at DESC
+    LIMIT 5;
+    "
+    echo -e "\n${ORANGE}[+] Granular Aspects (Table: comment_aspect)${NC}\n"
+    psql -h localhost -U postgres -d yudhix -c "
+    SELECT id, aspect, sentiment, score, evidence FROM comment_aspect LIMIT 10;
+    "
+}
+
 case "$1" in
     start)
         start_all
@@ -164,17 +190,21 @@ case "$1" in
     test)
         run_test
         ;;
+    db)
+        show_db_comments
+        ;;
     ui)
         open "http://localhost:3000" || echo "Visit http://localhost:3000"
         ;;
     *)
         print_banner
-        echo -e "${WHITE}Usage:${NC} ./yudhix.sh {start|stop|restart|status|test|ui}"
+        echo -e "${WHITE}Usage:${NC} ./yudhix.sh {start|stop|restart|status|test|db|ui}"
         echo ""
         echo -e "  ${ORANGE}start${NC}    - Launch Ollama, yudhix-sense AI engine, and yudhix-web frontend"
         echo -e "  ${ORANGE}stop${NC}     - Stop all background running services"
         echo -e "  ${ORANGE}status${NC}   - Display health and ports of all services"
         echo -e "  ${ORANGE}test${NC}     - Run live end-to-end PII masking & AI analysis test"
+        echo -e "  ${ORANGE}db${NC}       - Query and display comments and AI sentiment from PostgreSQL"
         echo -e "  ${ORANGE}ui${NC}       - Open the white/orange/black frontend in your default browser"
         ;;
 esac

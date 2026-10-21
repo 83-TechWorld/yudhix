@@ -45,6 +45,11 @@
 
         <!-- Phase 4 Services -->
         <module>services/yudhix-pulse</module>
+
+        <!-- Phase 5 Services -->
+        <module>services/yudhix-resolve</module>
+        <module>services/yudhix-loop</module>
+        <module>services/yudhix-notify</module>
     </modules>
 
     <dependencyManagement>

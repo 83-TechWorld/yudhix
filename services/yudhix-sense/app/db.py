@@ -241,11 +241,17 @@ def get_all_comments_from_db(tenant_id: str = DEFAULT_TENANT_ID, limit: int = 20
                     c.platform,
                     c.platform_comment_id,
                     c.author_hash,
+                    c.country_hint,
+                    c.product_id,
+                    p.name AS product_name,
+                    p.code AS product_code,
+                    p.category AS product_category,
                     c.masked_text,
                     c.like_count AS likes,
                     c.reply_count AS replies,
                     c.first_seen_at,
                     c.platform_created_at,
+                    to_char(c.platform_created_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at_iso,
                     c.custom_attributes,
                     ca.sentiment,
                     ca.sentiment_score,
@@ -255,27 +261,49 @@ def get_all_comments_from_db(tenant_id: str = DEFAULT_TENANT_ID, limit: int = 20
                     ca.impact_score,
                     ca.priority,
                     ca.needs_review,
-                    ca.suggested_reply
+                    ca.suggested_reply,
+                    coalesce(author_stats.author_total_comments, 1) as author_total_comments
                 FROM comment c
+                LEFT JOIN product p 
+                    ON c.product_id = p.id
                 LEFT JOIN comment_analysis ca 
                     ON c.tenant_id = ca.tenant_id AND c.id = ca.comment_id
+                LEFT JOIN (
+                    SELECT author_hash, count(*) as author_total_comments
+                    FROM comment
+                    WHERE tenant_id = %s
+                    GROUP BY author_hash
+                ) author_stats ON c.author_hash = author_stats.author_hash
                 WHERE c.tenant_id = %s
                 ORDER BY c.first_seen_at DESC, c.platform_created_at DESC
                 LIMIT %s;
-            """, (tenant_id, limit))
+            """, (tenant_id, tenant_id, limit))
             rows = cur.fetchall()
 
-            # Retrieve aspects for each comment
+            # Batch retrieve aspects for all comments in one single query
+            comment_ids = [r["id"] for r in rows]
+            aspects_by_comment = {}
+            if comment_ids:
+                cur.execute("""
+                    SELECT comment_id, aspect AS name, sentiment, score, evidence
+                    FROM comment_aspect
+                    WHERE tenant_id = %s AND comment_id = ANY(%s::uuid[]);
+                """, (tenant_id, [str(cid) for cid in comment_ids]))
+                for asp in cur.fetchall():
+                    cid = str(asp["comment_id"])
+                    if cid not in aspects_by_comment:
+                        aspects_by_comment[cid] = []
+                    aspects_by_comment[cid].append({
+                        "name": asp["name"],
+                        "sentiment": asp["sentiment"],
+                        "score": float(asp["score"]) if asp.get("score") is not None else 0.0,
+                        "evidence": asp.get("evidence")
+                    })
+
             results = []
             for r in rows:
                 c_id = str(r["id"])
-                cur.execute("""
-                    SELECT aspect AS name, sentiment, score, evidence
-                    FROM comment_aspect
-                    WHERE tenant_id = %s AND comment_id = %s;
-                """, (tenant_id, c_id))
-                aspects = cur.fetchall()
-
+                aspects = aspects_by_comment.get(c_id, [])
                 attrs = r.get("custom_attributes") or {}
                 channel_title = attrs.get("channel_title") or "YouTube"
                 video_title = attrs.get("video_title") or ""
@@ -288,6 +316,13 @@ def get_all_comments_from_db(tenant_id: str = DEFAULT_TENANT_ID, limit: int = 20
                     "platform": r["platform"].capitalize() if r["platform"] else "YouTube",
                     "platformCommentId": r["platform_comment_id"],
                     "authorHash": r["author_hash"],
+                    "authorTotalComments": int(r["author_total_comments"]),
+                    "isRepeatAuthor": int(r["author_total_comments"]) > 1,
+                    "country": r["country_hint"] or "US",
+                    "productId": str(r["product_id"]) if r["product_id"] else "",
+                    "productName": r["product_name"] or "General Product",
+                    "productCode": r["product_code"] or "general",
+                    "productCategory": r["product_category"] or "General",
                     "maskedText": r["masked_text"],
                     "hasPii": ("<PHONE>" in (r["masked_text"] or "") or "<EMAIL>" in (r["masked_text"] or "") or "<PERSON>" in (r["masked_text"] or "")),
                     "sentiment": r["sentiment"] or "NEUTRAL",
@@ -300,6 +335,7 @@ def get_all_comments_from_db(tenant_id: str = DEFAULT_TENANT_ID, limit: int = 20
                     "likes": r["likes"],
                     "replies": r["replies"],
                     "timeAgo": time_ago,
+                    "createdAtIso": r["created_at_iso"],
                     "channelTitle": channel_title,
                     "videoTitle": video_title,
                     "videoId": video_id,
@@ -312,6 +348,79 @@ def get_all_comments_from_db(tenant_id: str = DEFAULT_TENANT_ID, limit: int = 20
     except Exception as e:
         logger.error(f"Error querying comments from database: {e}", exc_info=True)
         return []
+    finally:
+        conn.close()
+
+
+def get_products_summary(tenant_id: str = DEFAULT_TENANT_ID) -> List[Dict[str, Any]]:
+    """
+    Returns product catalog with aggregated comment velocity, sentiment counts, and likes.
+    """
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT 
+                    p.id,
+                    p.code,
+                    p.name,
+                    p.category,
+                    count(c.id) as total_comments,
+                    count(c.id) FILTER (WHERE ca.sentiment = 'POSITIVE') as positive_count,
+                    count(c.id) FILTER (WHERE ca.sentiment = 'NEGATIVE') as negative_count,
+                    count(c.id) FILTER (WHERE ca.sentiment = 'NEUTRAL') as neutral_count,
+                    count(c.id) FILTER (WHERE ca.priority = 'P1') as p1_count,
+                    coalesce(sum(c.like_count), 0) as total_likes,
+                    coalesce(sum(c.reply_count), 0) as total_replies
+                FROM product p
+                LEFT JOIN comment c ON p.id = c.product_id AND c.tenant_id = %s
+                LEFT JOIN comment_analysis ca ON c.id = ca.comment_id AND c.tenant_id = ca.tenant_id
+                WHERE p.tenant_id = %s AND p.active = true
+                GROUP BY p.id, p.code, p.name, p.category
+                ORDER BY total_comments DESC;
+            """, (tenant_id, tenant_id))
+            rows = cur.fetchall()
+            return [
+                {
+                    "id": str(r["id"]),
+                    "code": r["code"],
+                    "name": r["name"],
+                    "category": r["category"],
+                    "totalComments": int(r["total_comments"]),
+                    "positiveCount": int(r["positive_count"]),
+                    "negativeCount": int(r["negative_count"]),
+                    "neutralCount": int(r["neutral_count"]),
+                    "p1Count": int(r["p1_count"]),
+                    "totalLikes": int(r["total_likes"]),
+                    "totalReplies": int(r["total_replies"])
+                }
+                for r in rows
+            ]
+    except Exception as e:
+        logger.error(f"Error fetching products summary: {e}", exc_info=True)
+        return []
+    finally:
+        conn.close()
+
+
+def tag_comment_product(comment_id: str, product_id: str, tenant_id: str = DEFAULT_TENANT_ID) -> bool:
+    """
+    Tags or moves a comment to a specific product.
+    """
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE comment 
+                SET product_id = %s 
+                WHERE id = %s AND tenant_id = %s;
+            """, (product_id, comment_id, tenant_id))
+            conn.commit()
+            return True
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Error tagging product for comment {comment_id}: {e}", exc_info=True)
+        return False
     finally:
         conn.close()
 

@@ -33,10 +33,10 @@
           </div>
 
           <h3 style="font-size:1.35rem; font-weight:800; line-height:1.3; color:#fff; margin-bottom:12px;">
-            Autonomous Social Comment Intelligence & Turnaround
+            Enterprise Comment Intelligence & Brand Resolution
           </h3>
           <p style="font-size:0.86rem; color:var(--text-secondary); line-height:1.5;">
-            Protect brand value, eliminate viral PR crises, and recover high-LTV churn risks across YouTube, LinkedIn, and Reddit with local Ollama Llama 3.1 inference.
+            Detect churn risks, protect brand value, and resolve customer grievances across YouTube, LinkedIn, Reddit, and global communities with unified intelligence.
           </p>
 
           <div class="auth-feature-list">
@@ -248,8 +248,8 @@
     <main class="main-wrapper">
       <header class="top-bar">
         <div>
-          <h2 class="view-heading" id="viewTitle">Executive Intelligence Overview</h2>
-          <span class="view-sub">Real-time comment velocity, AI sentiment, and turnaround metrics</span>
+          <h2 class="view-heading" id="viewTitle">Enterprise Comment Intelligence</h2>
+          <span class="view-sub">Real-time comment velocity, sentiment detection, repeat commenter alerts & brand turnaround</span>
         </div>
         <div class="top-actions" style="display:flex; align-items:center; gap:10px;">
           <div class="tenant-badge active" id="headerTenantBadge" title="Click to view tenant details" onclick="openLoginModal()" style="cursor:pointer;">
@@ -262,46 +262,122 @@
           <button class="btn btn-secondary" onclick="window.location.reload()">
             <i data-lucide="refresh-cw"></i> Refresh
           </button>
-          <button class="btn btn-outline-orange" onclick="logoutCurrentTenant()" title="Sign out of current tenant">
+          <button class="btn btn-outline-green" onclick="logoutCurrentTenant()" title="Sign out of current tenant">
             <i data-lucide="log-out"></i> Log Out
           </button>
         </div>
       </header>
 
       <section class="content-body">
+        <!-- MASTER SPLUNK-STYLE SEARCH & FILTER TOOLBAR -->
+        <div class="splunk-toolbar">
+          <div class="splunk-toolbar-top">
+            <div class="splunk-search-box">
+              <i data-lucide="search" style="width:16px; height:16px; color:var(--text-secondary);"></i>
+              <input type="text" id="splunkQueryInput" placeholder='Search comments, aspects, or keywords (e.g. "discs", "boycott", "price", "battery")...' oninput="handleSplunkSearch(this.value)">
+              <button class="btn btn-secondary" style="padding:4px 10px; font-size:0.75rem;" onclick="resetSplunkFilters()" title="Reset all filters">
+                <i data-lucide="rotate-ccw" style="width:12px; height:12px;"></i> Clear
+              </button>
+            </div>
+
+            <div class="splunk-stats-summary" id="splunkFilterSummary">
+              <span>Matching: <strong id="summaryTotalComments">2,662</strong> comments</span>
+              <span>Likes: <strong id="summaryTotalLikes">21,637</strong></span>
+              <span>P1 Critical: <strong id="summaryP1Count" style="color:var(--status-p1);">121</strong></span>
+              <span>Repeat Users: <strong id="summaryRepeatCount" style="color:var(--repeat-author-text);">76</strong></span>
+            </div>
+          </div>
+
+          <div class="splunk-filter-row">
+            <!-- 1. PRODUCT SELECTOR (Categorized with comment counts) -->
+            <div class="splunk-control-group">
+              <span class="splunk-label"><i data-lucide="package" style="width:13px; height:13px;"></i> Product:</span>
+              <select id="productFilterSelect" class="splunk-select" onchange="handleProductFilterChange(this.value)">
+                <option value="ALL">📦 All Products (2,662 comments)</option>
+              </select>
+            </div>
+
+            <!-- 2. DATE RANGE PRESETS (SPLUNK PRESETS) -->
+            <div class="splunk-control-group">
+              <span class="splunk-label"><i data-lucide="calendar" style="width:13px; height:13px;"></i> Time Range:</span>
+              <select id="dateRangeSelect" class="splunk-select" onchange="handleDateRangeChange(this.value)">
+                <option value="ALL" selected>All Time</option>
+                <option value="24H">Last 24 Hours</option>
+                <option value="7D">Last 7 Days</option>
+                <option value="30D">Last 30 Days</option>
+                <option value="90D">Last 90 Days</option>
+                <option value="1Y">Last 1 Year</option>
+              </select>
+            </div>
+
+            <!-- 3. GRAIN / COMPARISON (DAY, MONTH, YEAR) -->
+            <div class="splunk-control-group">
+              <span class="splunk-label"><i data-lucide="bar-chart-2" style="width:13px; height:13px;"></i> Group By:</span>
+              <div class="splunk-pill-group">
+                <button type="button" class="splunk-pill-btn active" id="grainBtnDay" onclick="setChartGrain('day')">Daily</button>
+                <button type="button" class="splunk-pill-btn" id="grainBtnMonth" onclick="setChartGrain('month')">Monthly</button>
+                <button type="button" class="splunk-pill-btn" id="grainBtnYear" onclick="setChartGrain('year')">Yearly</button>
+              </div>
+            </div>
+
+            <!-- 4. COUNTRY BREAKDOWN -->
+            <div class="splunk-control-group">
+              <span class="splunk-label"><i data-lucide="globe" style="width:13px; height:13px;"></i> Region:</span>
+              <select id="countryFilterSelect" class="splunk-select" onchange="handleCountryFilterChange(this.value)">
+                <option value="ALL">🌍 All Regions</option>
+                <option value="US">🇺🇸 United States (US)</option>
+                <option value="UK">🇬🇧 United Kingdom (UK)</option>
+                <option value="JP">🇯🇵 Japan (JP)</option>
+                <option value="IN">🇮🇳 India (IN)</option>
+                <option value="DE">🇩🇪 Germany (DE)</option>
+                <option value="CA">🇨🇦 Canada (CA)</option>
+              </select>
+            </div>
+
+            <!-- 5. REPEAT COMMENTERS -->
+            <div class="splunk-control-group">
+              <span class="splunk-label"><i data-lucide="users" style="width:13px; height:13px;"></i> Author Filter:</span>
+              <select id="authorFilterSelect" class="splunk-select" onchange="handleAuthorFilterChange(this.value)">
+                <option value="ALL">All Authors</option>
+                <option value="REPEAT_ONLY">⚠️ Repeat Commenters Only (76 users)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
         <!-- 1. DASHBOARD VIEW -->
         <div id="view-dashboard" class="tab-view">
-          <!-- Metric KPI Cards -->
+          <!-- Dynamic Metric KPI Cards from Real PostgreSQL Data -->
           <div class="metrics-grid">
             <div class="metric-card turnaround">
-              <span class="metric-title">Turnaround Rate (Neg → Pos)</span>
-              <div class="metric-value">68.4%</div>
-              <div class="metric-change orange">
-                <i data-lucide="trending-up"></i> +12.3% vs last week
+              <span class="metric-title">Product Comments Volume</span>
+              <div class="metric-value" id="kpiTotalComments">2,662</div>
+              <div class="metric-change green">
+                <i data-lucide="trending-up"></i> 100% Ingested & Analyzed
+              </div>
+            </div>
+
+            <div class="metric-card engagement">
+              <span class="metric-title">Total Reaction Velocity (Likes)</span>
+              <div class="metric-value" id="kpiTotalLikes">21,637</div>
+              <div class="metric-change green">
+                <i data-lucide="thumbs-up"></i> Authentic YouTube engagement
               </div>
             </div>
 
             <div class="metric-card crisis">
               <span class="metric-title">P1 Crisis Comments</span>
-              <div class="metric-value">1</div>
+              <div class="metric-value" id="kpiP1Crisis" style="color:var(--status-p1);">121</div>
               <div class="metric-change alert">
-                <i data-lucide="alert-triangle"></i> Battery viral spike on YouTube
+                <i data-lucide="alert-triangle"></i> Boycott & churn risks identified
               </div>
             </div>
 
-            <div class="metric-card sla">
-              <span class="metric-title">Avg SLA Response Time</span>
-              <div class="metric-value">46m</div>
-              <div class="metric-change white">
-                <i data-lucide="check"></i> 100% compliant (&lt; 2h)
-              </div>
-            </div>
-
-            <div class="metric-card">
-              <span class="metric-title">Presidio Masked PII</span>
-              <div class="metric-value">1,420</div>
-              <div class="metric-change orange">
-                <i data-lucide="lock"></i> 100% zero raw PII stored
+            <div class="metric-card compliance">
+              <span class="metric-title">Repeat Cross-Channel Users</span>
+              <div class="metric-value" id="kpiRepeatAuthors" style="color:var(--repeat-author-text);">76</div>
+              <div class="metric-change blue">
+                <i data-lucide="users"></i> Multi-channel active commenters
               </div>
             </div>
           </div>
@@ -310,11 +386,12 @@
           <div class="dashboard-grid">
             <div class="panel-card">
               <div class="panel-header">
-                <h3 class="panel-title">
-                  <i data-lucide="line-chart"></i> 7-Day Negative Volume vs Brand Turnaround
+                <h3 class="panel-title" id="timelineChartTitle">
+                  <i data-lucide="line-chart"></i> Comment Volume & Reaction Velocity Over Time
                 </h3>
+                <span style="font-size:0.75rem; color:var(--text-secondary);" id="timelineChartSubtitle">Daily grain · Filtered by Product & Date</span>
               </div>
-              <div style="height: 280px; position: relative;">
+              <div style="height: 290px; position: relative;">
                 <canvas id="timelineChart"></canvas>
               </div>
             </div>
@@ -322,47 +399,50 @@
             <div class="panel-card">
               <div class="panel-header">
                 <h3 class="panel-title">
-                  <i data-lucide="pie-chart"></i> Granular Aspect Sentiment
+                  <i data-lucide="pie-chart"></i> Product Aspect Sentiment
                 </h3>
               </div>
-              <div class="aspect-list">
-                <div class="aspect-item">
-                  <div class="aspect-info">
-                    <span>Battery & Hardware</span>
-                    <span style="color:var(--orange-primary);">72% Negative</span>
-                  </div>
-                  <div class="aspect-bar-bg">
-                    <div class="aspect-bar-fill" style="width: 72%; background: var(--orange-primary);"></div>
-                  </div>
-                </div>
+              <div class="aspect-list" id="aspectListContainer">
+                <!-- Dynamically populated from real comments -->
+              </div>
+            </div>
+          </div>
 
-                <div class="aspect-item">
-                  <div class="aspect-info">
-                    <span>Customer Support</span>
-                    <span style="color:var(--orange-primary);">54% Negative</span>
-                  </div>
-                  <div class="aspect-bar-bg">
-                    <div class="aspect-bar-fill" style="width: 54%; background: var(--orange-primary);"></div>
-                  </div>
-                </div>
+          <!-- Regional & Platform Breakdown Grid -->
+          <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr;">
+            <div class="panel-card">
+              <div class="panel-header">
+                <h3 class="panel-title">
+                  <i data-lucide="globe"></i> Geographic Distribution (Channel & Author Origin)
+                </h3>
+              </div>
+              <div id="countryDistributionList" style="display:flex; flex-direction:column; gap:10px;">
+                <!-- Populated dynamically -->
+              </div>
+            </div>
 
-                <div class="aspect-item">
-                  <div class="aspect-info">
-                    <span>UI & Software Speed</span>
-                    <span style="color:var(--white-pure);">89% Positive</span>
+            <div class="panel-card">
+              <div class="panel-header">
+                <h3 class="panel-title">
+                  <i data-lucide="shield-check"></i> Enterprise Connector Pipeline Status
+                </h3>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:12px; font-size:0.82rem; color:var(--text-secondary); line-height:1.5;">
+                <p>
+                  <strong style="color:var(--text-pure);">Universal Intelligence Architecture:</strong> The sentiment inference engine, Presidio PII sanitizer, aspect extraction, and repeat author tracking are <em>100% platform-agnostic</em>.
+                </p>
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                  <div style="display:flex; justify-content:space-between; align-items:center; background:var(--app-bg); padding:8px 12px; border-radius:6px; border:1px solid var(--app-border);">
+                    <span>🎬 YouTube Connector SPI</span>
+                    <span class="badge" style="background:rgba(37,211,102,0.15); color:#25d366;">Active (2,662 comments)</span>
                   </div>
-                  <div class="aspect-bar-bg">
-                    <div class="aspect-bar-fill" style="width: 89%; background: var(--white-pure);"></div>
+                  <div style="display:flex; justify-content:space-between; align-items:center; background:var(--app-bg); padding:8px 12px; border-radius:6px; border:1px solid var(--app-border);">
+                    <span>💼 LinkedIn Company Feed SPI</span>
+                    <span class="badge" style="background:rgba(0,132,255,0.15); color:#0084ff;">Ready (OAuth 2.0 Connected)</span>
                   </div>
-                </div>
-
-                <div class="aspect-item">
-                  <div class="aspect-info">
-                    <span>Pricing & Billing</span>
-                    <span style="color:var(--text-secondary);">62% Neutral</span>
-                  </div>
-                  <div class="aspect-bar-bg">
-                    <div class="aspect-bar-fill" style="width: 62%; background: #555555;"></div>
+                  <div style="display:flex; justify-content:space-between; align-items:center; background:var(--app-bg); padding:8px 12px; border-radius:6px; border:1px solid var(--app-border);">
+                    <span>👾 Reddit Subreddit Monitor SPI</span>
+                    <span class="badge" style="background:rgba(245,158,11,0.15); color:#f59e0b;">Ready (Polling Subscribed)</span>
                   </div>
                 </div>
               </div>
@@ -380,18 +460,19 @@
                 <button class="filter-chip" onclick="filterInbox('P1')">P1 Critical</button>
                 <button class="filter-chip" onclick="filterInbox('P2')">P2 High Priority</button>
                 <button class="filter-chip" onclick="filterInbox('POSITIVE')">Positive Praise</button>
+                <button class="filter-chip" onclick="filterInbox('REPEAT_ONLY')">⚠️ Repeat Commenters</button>
               </div>
               <div style="display:flex; gap:10px; align-items:center;">
                 <label style="font-size:0.8rem; color:var(--text-secondary); display:flex; align-items:center; gap:4px;">
-                  <i data-lucide="filter" style="width:14px; height:14px;"></i> Channel / Video:
+                  <i data-lucide="filter" style="width:14px; height:14px;"></i> Channel:
                 </label>
                 <select id="channelFilter" onchange="filterByChannel(this.value)" 
-                        style="padding:6px 12px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.82rem; max-width:320px;">
+                        style="padding:6px 12px; background:var(--app-surface); border:1px solid var(--app-border); border-radius:6px; color:#fff; font-size:0.82rem; max-width:320px;">
                   <option value="ALL">All Channels & Sources</option>
                 </select>
               </div>
             </div>
-            <div id="inboxList" style="display: flex; flex-direction: column; gap: 16px;"></div>
+            <div id="inboxList" style="display: flex; flex-direction: column; gap: 14px;"></div>
           </div>
         </div>
 

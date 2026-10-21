@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException
+from typing import Optional
+from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 
@@ -14,7 +15,9 @@ from app.db import (
     persist_comment_and_analysis,
     get_all_comments_from_db,
     save_source_watermark,
-    get_source_watermarks
+    get_source_watermarks,
+    get_products_summary,
+    tag_comment_product
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -44,8 +47,37 @@ def health_check():
     return {"status": "UP", "service": "yudhix-sense"}
 
 
+@app.get("/api/v1/products")
+def list_products(tenant_id: str = "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"):
+    """
+    Fetch all products, categories, and aggregated comment counts for the active tenant.
+    """
+    products = get_products_summary(tenant_id=tenant_id)
+    return {"products": products, "count": len(products)}
+
+
+@app.post("/api/v1/comments/{comment_id}/tag")
+def tag_product(
+    comment_id: str, 
+    product_id: Optional[str] = None, 
+    tenant_id: str = "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+    payload: Optional[dict] = Body(default=None)
+):
+    """
+    Tag or re-categorize a comment into a specific product.
+    Supports both JSON body and query parameters.
+    """
+    if payload:
+        product_id = payload.get("product_id") or product_id
+        tenant_id = payload.get("tenant_id") or tenant_id
+    if not product_id:
+        raise HTTPException(status_code=400, detail="product_id is required")
+    success = tag_comment_product(comment_id=comment_id, product_id=product_id, tenant_id=tenant_id)
+    return {"success": success, "commentId": comment_id, "productId": product_id}
+
+
 @app.get("/api/v1/comments")
-def list_comments(tenant_id: str = "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d", limit: int = 200):
+def list_comments(tenant_id: str = "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d", limit: int = 3500):
     """
     Fetch all ingested comments, sentiment classifications, aspects, and channel/video metadata from PostgreSQL.
     """

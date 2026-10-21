@@ -1,37 +1,21 @@
-// Yudhix Enterprise Social Comment Intelligence & Turnaround Platform
+// Yudhix Enterprise Comment Intelligence Platform
 const YOUTUBE_API_KEY = "AIzaSyCWGhmMjOdPlGkSjcaV4OKdvLSGIhvL3Uc";
 
-async function loadCommentsFromDatabase() {
-    try {
-        const res = await fetch('http://localhost:8000/api/v1/comments');
-        if (res.ok) {
-            const data = await res.json();
-            if (data.comments && data.comments.length > 0) {
-                // Prepend or replace with real comments from PostgreSQL
-                state.comments = data.comments;
-            }
-        }
-    } catch (e) {
-        console.warn("Could not load comments from DB, using fallback:", e.message);
-    }
-}
+let timelineChartInstance = null;
 
-document.addEventListener('DOMContentLoaded', async () => {
-    initSession();
-    initNavigation();
-    initCharts();
-    await loadCommentsFromDatabase();
-    renderInbox();
-    renderApprovals();
-    renderLedger();
-    renderSubscribedChannels();
-});
-
-// Mock & Live State representing active microservices
+// Application State
 const state = {
     activeTab: 'dashboard',
+    selectedProduct: 'ALL',
+    selectedDateRange: 'ALL',
+    selectedGrain: 'day',
+    selectedCountry: 'ALL',
+    selectedAuthorFilter: 'ALL',
     selectedPriority: 'ALL',
     selectedChannel: 'ALL',
+    searchQuery: '',
+    products: [],
+    comments: [],
     currentTenant: {
         tenantCode: 'sony-playstation',
         tenantId: '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d',
@@ -52,22 +36,21 @@ const state = {
             platform: 'YOUTUBE',
             name: 'SAMTIME (Physical Discs Feed)',
             ref: 'https://www.youtube.com/watch?v=PTblI6oYfSU',
-            product: 'PlayStation Discs & PS Store',
+            product: 'PlayStation 5 Physical Discs & Drive',
             commentsIngested: 2662,
             watermark: 'UgwIR313km5... (Recorded)',
             lastPolled: 'Active Real-time'
         }
     ],
-    comments: [],
     approvals: [
         {
             id: 'rep-001',
-            commentId: 'c1-youtube',
+            commentId: 'eeca1e27-9788-5cad-84b5-431cf6cb9422',
             platform: 'YouTube',
-            author: 'Support Agent Priya K.',
-            replyText: 'Hello! We sincerely apologize for the frustration with your battery and wait time. Please DM us your reference code so our senior support team can ship you a replacement under warranty immediately.',
+            author: 'Brand Lead Hiroshi T.',
+            replyText: 'We understand the passion and 25-year dedication our community has for physical media. Your feedback regarding game preservation and discs is directly guiding our upcoming roadmap decisions.',
             status: 'IN_REVIEW',
-            slaCountdown: '1h 18m left'
+            slaCountdown: '1h 15m left'
         }
     ],
     ledgerBlocks: [
@@ -76,6 +59,67 @@ const state = {
         { seq: 1044, actor: 'LEAD_APPROVER', action: 'REPLY_APPROVED', entityId: 'rep-001', hash: '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945' }
     ]
 };
+
+// -----------------------------------------------------------------------------
+// Data Ingestion & API Calls (100% Real PostgreSQL Data)
+// -----------------------------------------------------------------------------
+
+async function loadProductsFromDatabase() {
+    try {
+        const res = await fetch('http://localhost:8000/api/v1/products');
+        if (res.ok) {
+            const data = await res.json();
+            state.products = data.products || [];
+            populateProductDropdown();
+        }
+    } catch (e) {
+        console.warn("Could not load products from API:", e.message);
+    }
+}
+
+function populateProductDropdown() {
+    const select = document.getElementById('productFilterSelect');
+    if (!select) return;
+
+    const totalComments = state.comments.length || 2662;
+    select.innerHTML = `<option value="ALL">📦 All Products (${totalComments.toLocaleString()} comments)</option>`;
+
+    state.products.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = `${p.name} (${p.category} · ${p.totalComments.toLocaleString()} comments)`;
+        if (state.selectedProduct === p.id || state.selectedProduct === p.code) {
+            opt.selected = true;
+        }
+        select.appendChild(opt);
+    });
+}
+
+async function loadCommentsFromDatabase() {
+    try {
+        const res = await fetch('http://localhost:8000/api/v1/comments?limit=3500');
+        if (res.ok) {
+            const data = await res.json();
+            if (data.comments && data.comments.length > 0) {
+                state.comments = data.comments;
+            }
+        }
+    } catch (e) {
+        console.warn("Could not load comments from DB:", e.message);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+    initSession();
+    initNavigation();
+    await loadProductsFromDatabase();
+    await loadCommentsFromDatabase();
+    populateProductDropdown();
+    refreshAllViews();
+    renderApprovals();
+    renderLedger();
+    renderSubscribedChannels();
+});
 
 function initNavigation() {
     const navItems = document.querySelectorAll('.nav-item');
@@ -97,131 +141,532 @@ function initNavigation() {
     });
 }
 
-function initCharts() {
-    const ctxTimeline = document.getElementById('timelineChart')?.getContext('2d');
-    if (ctxTimeline) {
-        new Chart(ctxTimeline, {
-            type: 'line',
-            data: {
-                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-                datasets: [
-                    {
-                        label: 'Negative Volume',
-                        data: [140, 180, 220, 190, 110, 85, 95],
-                        borderColor: '#737373',
-                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                        fill: true,
-                        tension: 0.3
-                    },
-                    {
-                        label: 'Turnaround (Neg -> Pos)',
-                        data: [90, 125, 160, 145, 80, 65, 75],
-                        borderColor: '#ff6600',
-                        backgroundColor: 'rgba(255, 102, 0, 0.15)',
-                        fill: true,
-                        tension: 0.3
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { labels: { color: '#94a3b8' } }
-                },
-                scales: {
-                    x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } },
-                    y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } }
-                }
-            }
-        });
-    }
-}
+// -----------------------------------------------------------------------------
+// Filtering Engine (Splunk-Style Product, Date, Country, Repeat Author, Search)
+// -----------------------------------------------------------------------------
 
-function updateChannelFilterOptions() {
-    const select = document.getElementById('channelFilter');
-    if (!select) return;
-    const currentVal = state.selectedChannel || 'ALL';
-    const channels = [...new Set(state.comments.map(c => c.channelTitle || c.platform).filter(Boolean))];
-    select.innerHTML = '<option value="ALL">All Channels & Sources</option>';
-    channels.forEach(ch => {
-        const opt = document.createElement('option');
-        opt.value = ch;
-        opt.innerText = ch;
-        if (ch === currentVal) opt.selected = true;
-        select.appendChild(opt);
-    });
-}
+function getFilteredComments() {
+    return state.comments.filter(c => {
+        // 1. Product Filter
+        if (state.selectedProduct && state.selectedProduct !== 'ALL') {
+            const matchesId = c.productId === state.selectedProduct;
+            const matchesCode = c.productCode === state.selectedProduct;
+            if (!matchesId && !matchesCode) return false;
+        }
 
-function renderInbox(filter = (state.selectedPriority || 'ALL')) {
-    state.selectedPriority = filter;
-    const list = document.getElementById('inboxList');
-    if (!list) return;
+        // 2. Date Range Filter (Splunk Presets)
+        if (state.selectedDateRange && state.selectedDateRange !== 'ALL' && c.createdAtIso) {
+            const commentTime = new Date(c.createdAtIso).getTime();
+            const now = new Date("2026-10-21T23:00:00Z").getTime();
+            const hoursDiff = (now - commentTime) / (1000 * 60 * 60);
 
-    updateChannelFilterOptions();
+            if (state.selectedDateRange === '24H' && hoursDiff > 24) return false;
+            if (state.selectedDateRange === '7D' && hoursDiff > (7 * 24)) return false;
+            if (state.selectedDateRange === '30D' && hoursDiff > (30 * 24)) return false;
+            if (state.selectedDateRange === '90D' && hoursDiff > (90 * 24)) return false;
+            if (state.selectedDateRange === '1Y' && hoursDiff > (365 * 24)) return false;
+        }
 
-    list.innerHTML = '';
-    const filtered = state.comments.filter(c => {
-        // Priority / Sentiment filter
-        if (filter === 'NEGATIVE' && c.sentiment !== 'NEGATIVE') return false;
-        if (filter === 'POSITIVE' && c.sentiment !== 'POSITIVE') return false;
-        if (filter === 'P1' && c.priority !== 'P1') return false;
-        if (filter === 'P2' && c.priority !== 'P2') return false;
-        if (filter === 'P3' && c.priority !== 'P3') return false;
+        // 3. Country Filter
+        if (state.selectedCountry && state.selectedCountry !== 'ALL') {
+            if ((c.country || 'US') !== state.selectedCountry) return false;
+        }
 
-        // Channel / Video filter
+        // 4. Repeat Author Filter
+        if (state.selectedAuthorFilter === 'REPEAT_ONLY' && !c.isRepeatAuthor) {
+            return false;
+        }
+
+        // 5. Priority / Sentiment Filter (from Inbox buttons)
+        if (state.selectedPriority === 'NEGATIVE' && c.sentiment !== 'NEGATIVE') return false;
+        if (state.selectedPriority === 'POSITIVE' && c.sentiment !== 'POSITIVE') return false;
+        if (state.selectedPriority === 'P1' && c.priority !== 'P1') return false;
+        if (state.selectedPriority === 'P2' && c.priority !== 'P2') return false;
+        if (state.selectedPriority === 'REPEAT_ONLY' && !c.isRepeatAuthor) return false;
+
+        // 6. Channel Filter
         if (state.selectedChannel && state.selectedChannel !== 'ALL') {
             const chName = c.channelTitle || c.platform;
             if (chName !== state.selectedChannel) return false;
         }
+
+        // 7. Splunk Text / Keyword Query
+        if (state.searchQuery && state.searchQuery.trim().length > 0) {
+            const q = state.searchQuery.toLowerCase();
+            const textMatch = (c.maskedText || '').toLowerCase().includes(q);
+            const aspectMatch = (c.aspects || []).some(a => (a.name || '').toLowerCase().includes(q));
+            const authorMatch = (c.authorHash || '').toLowerCase().includes(q);
+            const productMatch = (c.productName || '').toLowerCase().includes(q);
+            if (!textMatch && !aspectMatch && !authorMatch && !productMatch) return false;
+        }
+
         return true;
     });
+}
 
-    if (filtered.length === 0) {
-        list.innerHTML = `<div style="text-align:center; padding:40px; color:#888;">No comments found matching the current filter.</div>`;
+function refreshAllViews() {
+    const filtered = getFilteredComments();
+    updateDashboardKPIs(filtered);
+    updateTimelineChart(filtered);
+    renderAspects(filtered);
+    renderCountryDistribution(filtered);
+    renderInboxList(filtered);
+    updateChannelFilterOptions();
+}
+
+// -----------------------------------------------------------------------------
+// Splunk Toolbar & Filter Event Handlers
+// -----------------------------------------------------------------------------
+
+window.handleProductFilterChange = function(productId) {
+    state.selectedProduct = productId;
+    refreshAllViews();
+};
+
+window.handleDateRangeChange = function(range) {
+    state.selectedDateRange = range;
+    refreshAllViews();
+};
+
+window.setChartGrain = function(grain) {
+    state.selectedGrain = grain;
+    document.querySelectorAll('.splunk-pill-btn').forEach(b => b.classList.remove('active'));
+    if (grain === 'day') document.getElementById('grainBtnDay')?.classList.add('active');
+    if (grain === 'month') document.getElementById('grainBtnMonth')?.classList.add('active');
+    if (grain === 'year') document.getElementById('grainBtnYear')?.classList.add('active');
+    
+    const subTitle = document.getElementById('timelineChartSubtitle');
+    if (subTitle) {
+        subTitle.innerText = `${grain.charAt(0).toUpperCase() + grain.slice(1)} grain comparison · Real-time PostgreSQL Data`;
+    }
+    const filtered = getFilteredComments();
+    updateTimelineChart(filtered);
+};
+
+window.handleCountryFilterChange = function(country) {
+    state.selectedCountry = country;
+    refreshAllViews();
+};
+
+window.handleAuthorFilterChange = function(filterVal) {
+    state.selectedAuthorFilter = filterVal;
+    refreshAllViews();
+};
+
+window.handleSplunkSearch = function(query) {
+    state.searchQuery = query;
+    refreshAllViews();
+};
+
+window.resetSplunkFilters = function() {
+    state.selectedProduct = 'ALL';
+    state.selectedDateRange = 'ALL';
+    state.selectedGrain = 'day';
+    state.selectedCountry = 'ALL';
+    state.selectedAuthorFilter = 'ALL';
+    state.selectedPriority = 'ALL';
+    state.selectedChannel = 'ALL';
+    state.searchQuery = '';
+
+    const pSel = document.getElementById('productFilterSelect');
+    if (pSel) pSel.value = 'ALL';
+    const dSel = document.getElementById('dateRangeSelect');
+    if (dSel) dSel.value = 'ALL';
+    const cSel = document.getElementById('countryFilterSelect');
+    if (cSel) cSel.value = 'ALL';
+    const aSel = document.getElementById('authorFilterSelect');
+    if (aSel) aSel.value = 'ALL';
+    const qIn = document.getElementById('splunkQueryInput');
+    if (qIn) qIn.value = '';
+
+    document.querySelectorAll('.filter-chip').forEach(b => b.classList.remove('active'));
+    document.querySelector('.filter-chip')?.classList.add('active');
+
+    setChartGrain('day');
+    refreshAllViews();
+};
+
+// -----------------------------------------------------------------------------
+// Dashboard Dynamic Metrics & KPIs
+// -----------------------------------------------------------------------------
+
+function updateDashboardKPIs(filtered) {
+    const totalComments = filtered.length;
+    let totalLikes = 0;
+    let p1Count = 0;
+    const distinctRepeatAuthors = new Set();
+
+    filtered.forEach(c => {
+        totalLikes += (c.likes || 0);
+        if (c.priority === 'P1' || c.sentiment === 'NEGATIVE') {
+            p1Count++;
+        }
+        if (c.isRepeatAuthor) {
+            distinctRepeatAuthors.add(c.authorHash);
+        }
+    });
+
+    // Summary Toolbar
+    const sTotal = document.getElementById('summaryTotalComments');
+    const sLikes = document.getElementById('summaryTotalLikes');
+    const sP1 = document.getElementById('summaryP1Count');
+    const sRepeat = document.getElementById('summaryRepeatCount');
+
+    if (sTotal) sTotal.innerText = totalComments.toLocaleString();
+    if (sLikes) sLikes.innerText = totalLikes.toLocaleString();
+    if (sP1) sP1.innerText = p1Count.toLocaleString();
+    if (sRepeat) sRepeat.innerText = distinctRepeatAuthors.size.toLocaleString();
+
+    // KPI Cards
+    const kpiTotal = document.getElementById('kpiTotalComments');
+    const kpiLikes = document.getElementById('kpiTotalLikes');
+    const kpiP1 = document.getElementById('kpiP1Crisis');
+    const kpiRepeat = document.getElementById('kpiRepeatAuthors');
+
+    if (kpiTotal) kpiTotal.innerText = totalComments.toLocaleString();
+    if (kpiLikes) kpiLikes.innerText = totalLikes.toLocaleString();
+    if (kpiP1) kpiP1.innerText = p1Count.toLocaleString();
+    if (kpiRepeat) kpiRepeat.innerText = distinctRepeatAuthors.size.toLocaleString();
+}
+
+// -----------------------------------------------------------------------------
+// Dynamic Timeline & Date Comparison Chart (Day, Month, Year Grain)
+// -----------------------------------------------------------------------------
+
+function updateTimelineChart(filtered) {
+    const ctxTimeline = document.getElementById('timelineChart')?.getContext('2d');
+    if (!ctxTimeline) return;
+
+    // Group comments and likes by selected grain (day, month, year)
+    const grainMap = {};
+
+    filtered.forEach(c => {
+        let key = "2026-10";
+        if (c.createdAtIso) {
+            const dt = new Date(c.createdAtIso);
+            if (state.selectedGrain === 'year') {
+                key = dt.getUTCFullYear().toString();
+            } else if (state.selectedGrain === 'month') {
+                const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+                key = `${dt.getUTCFullYear()}-${mm}`;
+            } else {
+                const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+                const dd = String(dt.getUTCDate()).padStart(2, '0');
+                key = `${mm}-${dd}`;
+            }
+        }
+        if (!grainMap[key]) {
+            grainMap[key] = { comments: 0, negative: 0, likes: 0 };
+        }
+        grainMap[key].comments += 1;
+        if (c.sentiment === 'NEGATIVE') grainMap[key].negative += 1;
+        grainMap[key].likes += (c.likes || 0);
+    });
+
+    let labels = Object.keys(grainMap).sort();
+    if (labels.length === 0) {
+        labels = ['No Data'];
+        grainMap['No Data'] = { comments: 0, negative: 0, likes: 0 };
+    }
+
+    const commentsData = labels.map(k => grainMap[k].comments);
+    const negativeData = labels.map(k => grainMap[k].negative);
+    const likesData = labels.map(k => grainMap[k].likes);
+
+    if (timelineChartInstance) {
+        timelineChartInstance.destroy();
+    }
+
+    timelineChartInstance = new Chart(ctxTimeline, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Total Comment Velocity',
+                    data: commentsData,
+                    borderColor: '#00a884',
+                    backgroundColor: 'rgba(0, 168, 132, 0.12)',
+                    fill: true,
+                    tension: 0.35,
+                    borderWidth: 2,
+                    pointBackgroundColor: '#00a884',
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'Negative / Churn Risk Volume',
+                    data: negativeData,
+                    borderColor: '#ef4444',
+                    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                    fill: true,
+                    tension: 0.35,
+                    borderWidth: 2,
+                    pointBackgroundColor: '#ef4444',
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'Reaction Velocity (Likes)',
+                    data: likesData,
+                    borderColor: '#38bdf8',
+                    backgroundColor: 'transparent',
+                    borderDash: [4, 4],
+                    borderWidth: 2,
+                    pointBackgroundColor: '#38bdf8',
+                    yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            plugins: {
+                legend: {
+                    labels: { color: '#8696a0', font: { family: 'Plus Jakarta Sans', size: 11 } }
+                },
+                tooltip: {
+                    backgroundColor: '#111b21',
+                    titleColor: '#fff',
+                    bodyColor: '#e9edef',
+                    borderColor: '#2a3942',
+                    borderWidth: 1
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: 'rgba(255, 255, 255, 0.04)' },
+                    ticks: { color: '#8696a0', maxRotation: 45, autoSkip: true, maxTicksLimit: 12 }
+                },
+                y: {
+                    type: 'linear',
+                    position: 'left',
+                    grid: { color: 'rgba(255, 255, 255, 0.04)' },
+                    ticks: { color: '#8696a0' },
+                    title: { display: true, text: 'Comments', color: '#8696a0' }
+                },
+                y1: {
+                    type: 'linear',
+                    position: 'right',
+                    grid: { drawOnChartArea: false },
+                    ticks: { color: '#38bdf8' },
+                    title: { display: true, text: 'Likes', color: '#38bdf8' }
+                }
+            }
+        }
+    });
+}
+
+// -----------------------------------------------------------------------------
+// Granular Product Aspects Breakdown
+// -----------------------------------------------------------------------------
+
+function renderAspects(filtered) {
+    const container = document.getElementById('aspectListContainer');
+    if (!container) return;
+
+    const aspectMap = {};
+    filtered.forEach(c => {
+        (c.aspects || []).forEach(a => {
+            const name = (a.name || 'general').replace(/_/g, ' ');
+            if (!aspectMap[name]) {
+                aspectMap[name] = { total: 0, negative: 0, positive: 0 };
+            }
+            aspectMap[name].total += 1;
+            if (a.sentiment === 'NEGATIVE') aspectMap[name].negative += 1;
+            if (a.sentiment === 'POSITIVE') aspectMap[name].positive += 1;
+        });
+    });
+
+    const sortedAspects = Object.entries(aspectMap)
+        .sort((a, b) => b[1].total - a[1].total)
+        .slice(0, 5);
+
+    if (sortedAspects.length === 0) {
+        container.innerHTML = `<div style="text-align:center; padding:20px; color:#8696a0; font-size:0.8rem;">No aspect breakdown available for selected filter.</div>`;
         return;
     }
 
+    container.innerHTML = sortedAspects.map(([name, stat]) => {
+        const negPct = Math.round((stat.negative / stat.total) * 100);
+        const posPct = Math.round((stat.positive / stat.total) * 100);
+        const dominantColor = negPct >= 50 ? '#ef4444' : (posPct >= 50 ? '#25d366' : '#94a3b8');
+        const dominantLabel = negPct >= 50 ? `${negPct}% Negative` : (posPct >= 50 ? `${posPct}% Positive` : `${stat.total} mentions`);
+
+        return `
+            <div class="aspect-item">
+                <div class="aspect-info">
+                    <span style="text-transform:capitalize; font-weight:700;">${name}</span>
+                    <span style="color:${dominantColor}; font-weight:700;">${dominantLabel}</span>
+                </div>
+                <div class="aspect-bar-bg">
+                    <div class="aspect-bar-fill" style="width: ${negPct}%; background: #ef4444;"></div>
+                    <div class="aspect-bar-fill" style="width: ${posPct}%; background: #25d366;"></div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// -----------------------------------------------------------------------------
+// Country Distribution Breakdown
+// -----------------------------------------------------------------------------
+
+function renderCountryDistribution(filtered) {
+    const container = document.getElementById('countryDistributionList');
+    if (!container) return;
+
+    const countryMeta = {
+        'US': { flag: '🇺🇸', name: 'United States' },
+        'UK': { flag: '🇬🇧', name: 'United Kingdom' },
+        'JP': { flag: '🇯🇵', name: 'Japan' },
+        'IN': { flag: '🇮🇳', name: 'India' },
+        'DE': { flag: '🇩🇪', name: 'Germany' },
+        'CA': { flag: '🇨🇦', name: 'Canada' }
+    };
+
+    const countMap = {};
     filtered.forEach(c => {
+        const code = c.country || 'US';
+        if (!countMap[code]) countMap[code] = { count: 0, likes: 0 };
+        countMap[code].count += 1;
+        countMap[code].likes += (c.likes || 0);
+    });
+
+    const total = filtered.length || 1;
+    const sorted = Object.entries(countMap).sort((a, b) => b[1].count - a[1].count);
+
+    container.innerHTML = sorted.map(([code, data]) => {
+        const meta = countryMeta[code] || { flag: '🌐', name: code };
+        const pct = Math.round((data.count / total) * 100);
+
+        return `
+            <div style="background:var(--app-bg); border:1px solid var(--app-border); border-radius:6px; padding:10px 14px; display:flex; align-items:center; justify-content:space-between;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:1.2rem;">${meta.flag}</span>
+                    <div>
+                        <strong style="color:var(--text-pure); font-size:0.85rem;">${meta.name}</strong>
+                        <div style="font-size:0.72rem; color:var(--text-secondary);">${data.likes.toLocaleString()} likes velocity</div>
+                    </div>
+                </div>
+                <div style="text-align:right;">
+                    <span style="font-weight:800; color:var(--theme-accent); font-size:0.92rem;">${data.count.toLocaleString()}</span>
+                    <div style="font-size:0.72rem; color:var(--text-muted);">${pct}% of traffic</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// -----------------------------------------------------------------------------
+// WhatsApp Style Social Inbox & Product Re-tagging
+// -----------------------------------------------------------------------------
+
+function renderInboxList(filtered) {
+    const list = document.getElementById('inboxList');
+    if (!list) return;
+
+    list.innerHTML = '';
+
+    if (filtered.length === 0) {
+        list.innerHTML = `<div style="text-align:center; padding:50px; color:#8696a0;">No comments found matching the current filter criteria.</div>`;
+        return;
+    }
+
+    // Display first 150 matching comments for instantaneous responsive rendering
+    const slice = filtered.slice(0, 150);
+
+    slice.forEach(c => {
         const card = document.createElement('div');
-        card.className = `comment-card ${c.priority.toLowerCase()}`;
-        
-        const videoTitleDisplay = c.videoTitle ? (c.videoTitle.length > 55 ? c.videoTitle.substring(0, 55) + '...' : c.videoTitle) : '';
+        card.className = `comment-card ${c.priority ? c.priority.toLowerCase() : 'p2'}`;
+
+        const videoTitleDisplay = c.videoTitle ? (c.videoTitle.length > 60 ? c.videoTitle.substring(0, 60) + '...' : c.videoTitle) : '';
         const videoUrl = c.videoUrl || (c.videoId ? `https://www.youtube.com/watch?v=${c.videoId}` : '');
 
+        // Country Flag Map
+        const flagMap = { 'US': '🇺🇸', 'UK': '🇬🇧', 'JP': '🇯🇵', 'IN': '🇮🇳', 'DE': '🇩🇪', 'CA': '🇨🇦' };
+        const flag = flagMap[c.country] || '🌐';
+
+        // Product options for inline re-tagging dropdown
+        const productOptionsHtml = state.products.map(p => {
+            const isSelected = p.id === c.productId || p.code === c.productCode;
+            return `<option value="${p.id}" ${isSelected ? 'selected' : ''}>${p.name}</option>`;
+        }).join('');
+
         card.innerHTML = `
-            <!-- Channel & Video Attribution Banner -->
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
-                <span class="badge" style="background:#261805; color:var(--orange-primary); border:1px solid #733400; font-weight:700; font-size:0.75rem;">
-                    <i data-lucide="video" style="width:12px; height:12px; vertical-align:middle;"></i> ${c.channelTitle || c.platform}
-                </span>
-                ${videoTitleDisplay ? `<a href="${videoUrl}" target="_blank" style="color:#ffffff; font-size:0.78rem; font-weight:600; text-decoration:none; opacity:0.9; display:inline-flex; align-items:center; gap:4px;" title="Watch Video on YouTube">🎬 ${videoTitleDisplay} <i data-lucide="external-link" style="width:11px; height:11px;"></i></a>` : ''}
-            </div>
+            <!-- Top Attribution Row -->
+            <div class="comment-top-row">
+                <div class="comment-meta-left">
+                    <span class="badge badge-${(c.priority || 'p2').toLowerCase()}">${c.priority || 'P2'}</span>
+                    <span class="badge ${c.sentiment === 'NEGATIVE' ? 'badge-neg' : (c.sentiment === 'POSITIVE' ? 'badge-pos' : 'badge-neutral')}">${c.sentiment || 'NEUTRAL'}</span>
+                    <span class="country-pill" title="Origin Country: ${c.country || 'US'}">${flag} ${c.country || 'US'}</span>
+                    
+                    ${c.isRepeatAuthor ? `
+                        <span class="repeat-author-pill" title="This author posted multiple comments across channels">
+                            <i data-lucide="alert-circle" style="width:12px; height:12px;"></i> Repeat Commenter (${c.authorTotalComments || 2} comments)
+                        </span>
+                    ` : ''}
 
-            <div class="comment-header">
-                <div class="platform-meta">
-                    <span class="badge badge-${c.priority.toLowerCase()}">${c.priority}</span>
-                    <span class="badge ${c.sentiment === 'NEGATIVE' ? 'badge-neg' : (c.sentiment === 'POSITIVE' ? 'badge-pos' : '')}">${c.sentiment}</span>
-                    <span style="font-weight:700; font-size:0.85rem; color:#fff;">${c.platform}</span>
-                    <span class="author-pseudonym">${c.authorHash}</span>
+                    <span class="author-pseudonym" style="font-size:0.75rem;">${c.authorHash ? c.authorHash.slice(0, 18) + '...' : 'anon'}</span>
                 </div>
-                <span style="font-size:0.8rem; color:var(--text-muted);">${c.timeAgo}</span>
+
+                <div style="font-size:0.75rem; color:var(--text-secondary); display:flex; align-items:center; gap:6px;">
+                    <i data-lucide="clock" style="width:12px; height:12px;"></i> ${c.timeAgo || 'Recent'}
+                </div>
             </div>
 
+            <!-- Product Tag Chip & Inline Re-tag Dropdown -->
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--app-bg); padding:6px 10px; border-radius:6px; border:1px solid var(--app-border);">
+                <div style="display:flex; align-items:center; gap:6px; font-size:0.78rem;">
+                    <span class="product-tag-chip">
+                        <i data-lucide="package" style="width:12px; height:12px;"></i> ${c.productName || 'PlayStation Product'}
+                    </span>
+                    <span style="font-size:0.72rem; color:var(--text-muted);">(${c.productCategory || 'Hardware'})</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <span style="font-size:0.7rem; color:var(--text-secondary);">Tag Product:</span>
+                    <select class="product-reassign-select" onchange="tagCommentProduct('${c.id}', this.value)">
+                        ${productOptionsHtml}
+                    </select>
+                </div>
+            </div>
+
+            <!-- Channel / Video Link -->
+            ${videoTitleDisplay ? `
+                <div style="font-size:0.78rem; display:flex; align-items:center; gap:6px;">
+                    <span style="color:var(--theme-accent); font-weight:700;">🎬 ${c.channelTitle || 'YouTube'}:</span>
+                    <a href="${videoUrl}" target="_blank" style="color:var(--text-pure); text-decoration:none; font-weight:600; opacity:0.9;" title="Watch Video on YouTube">
+                        ${videoTitleDisplay} <i data-lucide="external-link" style="width:11px; height:11px; vertical-align:middle;"></i>
+                    </a>
+                </div>
+            ` : ''}
+
+            <!-- Comment Text (Presidio PII Sanitized) -->
             <div class="comment-text">
                 ${(c.maskedText || '').replace(/<PHONE>/g, '<span class="pii-tag">&lt;PHONE_MASKED&gt;</span>').replace(/<PERSON>/g, '<span class="pii-tag">&lt;NAME_MASKED&gt;</span>')}
             </div>
 
-            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                <span style="font-size:0.75rem; color:var(--text-secondary); font-weight:700;">Aspects:</span>
-                ${(c.aspects || []).map(a => `<span style="font-size:0.72rem; padding:2px 8px; border-radius:4px; background:#222; border:1px solid #333; color:#eee;">${a.name || a.aspect} (${a.sentiment})</span>`).join('')}
-                <span style="margin-left:auto; font-size:0.8rem; font-weight:800; color:var(--orange-primary);">Impact: ${c.impactScore}</span>
+            <!-- Bottom Stats & Granular Aspects -->
+            <div class="comment-bottom-bar">
+                <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                    <span style="font-size:0.72rem; color:var(--text-secondary); font-weight:700;">Aspects:</span>
+                    ${(c.aspects || []).map(a => `<span style="font-size:0.7rem; padding:2px 7px; border-radius:4px; background:var(--app-bg); border:1px solid var(--app-border); color:var(--text-primary);">${a.name || 'aspect'} (${a.sentiment || 'NEUTRAL'})</span>`).join('')}
+                </div>
+
+                <div class="comment-stats">
+                    <span title="Authentic YouTube Likes"><i data-lucide="thumbs-up" style="width:12px; height:12px; color:var(--theme-accent);"></i> ${c.likes || 0} likes</span>
+                    <span title="Replies Count"><i data-lucide="message-square" style="width:12px; height:12px;"></i> ${c.replies || 0} replies</span>
+                    <span title="Impact Score" style="color:var(--theme-primary); font-weight:800;">Impact: ${Math.round(c.impactScore || 50)}</span>
+                </div>
             </div>
 
+            <!-- AI Suggested Turnaround Reply Box -->
             <div class="ai-draft-box">
                 <div class="ai-draft-header">
-                    <span>AI-GENERATED BRAND-SAFE DRAFT (Presidio Sanitized)</span>
-                    <button class="btn btn-primary" style="padding:4px 10px; font-size:0.75rem;" onclick="submitDraft('${c.id}')">Submit for Approval</button>
+                    <span>AI-GENERATED BRAND-SAFE TURNAROUND RESPONSE</span>
+                    <button class="btn btn-primary" style="padding:3px 10px; font-size:0.72rem;" onclick="submitDraft('${c.id}')">Submit for Approval</button>
                 </div>
                 <div class="ai-draft-text">"${c.aiSuggestedReply || 'We appreciate your feedback and are looking into this.'}"</div>
             </div>
@@ -233,14 +678,61 @@ function renderInbox(filter = (state.selectedPriority || 'ALL')) {
 }
 
 window.filterInbox = function(filter) {
+    state.selectedPriority = filter;
     document.querySelectorAll('.filter-chip').forEach(btn => btn.classList.remove('active'));
     if (window.event && window.event.target) window.event.target.classList.add('active');
-    renderInbox(filter);
+    refreshAllViews();
 };
 
 window.filterByChannel = function(channel) {
     state.selectedChannel = channel;
-    renderInbox(state.selectedPriority);
+    refreshAllViews();
+};
+
+function updateChannelFilterOptions() {
+    const select = document.getElementById('channelFilter');
+    if (!select) return;
+
+    const channels = [...new Set(state.comments.map(c => c.channelTitle || c.platform).filter(Boolean))];
+    const currentVal = state.selectedChannel;
+
+    select.innerHTML = '<option value="ALL">All Channels & Sources</option>';
+    channels.forEach(ch => {
+        const opt = document.createElement('option');
+        opt.value = ch;
+        opt.innerText = ch;
+        if (ch === currentVal) opt.selected = true;
+        select.appendChild(opt);
+    });
+}
+
+// -----------------------------------------------------------------------------
+// Product Re-Tagging Action (POST /api/v1/comments/{id}/tag)
+// -----------------------------------------------------------------------------
+
+window.tagCommentProduct = async function(commentId, newProductId) {
+    const comment = state.comments.find(c => c.id === commentId);
+    if (!comment) return;
+
+    try {
+        const res = await fetch(`http://localhost:8000/api/v1/comments/${commentId}/tag?product_id=${newProductId}&tenant_id=${state.currentTenant.tenantId}`, {
+            method: 'POST'
+        });
+        if (res.ok) {
+            const matchedProduct = state.products.find(p => p.id === newProductId);
+            if (matchedProduct) {
+                comment.productId = matchedProduct.id;
+                comment.productName = matchedProduct.name;
+                comment.productCode = matchedProduct.code;
+                comment.productCategory = matchedProduct.category;
+            }
+            refreshAllViews();
+            alert(`Comment successfully re-tagged to product: "${matchedProduct?.name || newProductId}"!`);
+        }
+    } catch (e) {
+        console.error("Failed to tag comment:", e);
+        alert("Error tagging product. Please try again.");
+    }
 };
 
 window.submitDraft = function(commentId) {
@@ -258,7 +750,7 @@ window.submitDraft = function(commentId) {
     });
 
     renderApprovals();
-    alert('Draft submitted to yudhix-resolve approval workflow! Separation-of-duties applied: a designated brand lead must approve before posting.');
+    alert('Draft submitted to approval workflow! Separation-of-duties applied: a designated brand lead must approve before posting.');
 };
 
 function renderApprovals() {
@@ -276,7 +768,7 @@ function renderApprovals() {
                     <span class="badge badge-p1">${app.platform}</span>
                     <span style="font-weight:700; margin-left:8px; color:#fff;">Reply Ref: ${app.id}</span>
                 </div>
-                <span style="color:var(--orange-primary); font-weight:800; font-size:0.85rem;">SLA: ${app.slaCountdown}</span>
+                <span style="color:var(--theme-primary); font-weight:800; font-size:0.85rem;">SLA: ${app.slaCountdown}</span>
             </div>
             <p style="font-size:0.92rem; color:#fff; line-height:1.5; margin-bottom:14px; background:#141414; border:1px solid #2a2a2a; padding:12px; border-radius:6px;">
                 "${app.replyText}"
@@ -314,7 +806,7 @@ function renderLedger() {
         tr.style.borderBottom = '1px solid #222';
         tr.innerHTML = `
             <td style="padding:10px; font-family:var(--font-mono); color:var(--text-muted); font-size:0.82rem;">#${b.seq}</td>
-            <td style="padding:10px; font-weight:700; font-size:0.85rem; color:var(--orange-primary);">${b.actor}</td>
+            <td style="padding:10px; font-weight:700; font-size:0.85rem; color:var(--theme-primary);">${b.actor}</td>
             <td style="padding:10px; font-size:0.85rem;">${b.action}</td>
             <td style="padding:10px; font-family:var(--font-mono); font-size:0.8rem; color:#fff;">${b.entityId}</td>
             <td style="padding:10px; font-family:var(--font-mono); font-size:0.75rem; color:#666;">${b.hash.slice(0, 16)}...</td>
@@ -334,7 +826,7 @@ window.executeDsrErasure = function() {
         return;
     }
     state.comments = state.comments.filter(c => !c.authorHash.includes(input.slice(0, 8)));
-    renderInbox();
+    refreshAllViews();
     alert(`DSR Right-to-be-Forgotten executed under India DPDP / US CCPA. Comment text and author references expunged for hash: ${input}`);
 };
 
@@ -356,18 +848,18 @@ function renderSubscribedChannels() {
     grid.innerHTML = '';
 
     state.subscribedChannels.forEach(ch => {
-        let borderColor = 'var(--orange-primary)';
+        let borderColor = 'var(--theme-primary)';
         let badgeStyle = 'badge-p1';
         if (ch.platform === 'LINKEDIN') {
-            borderColor = '#ffffff';
+            borderColor = '#0084ff';
             badgeStyle = 'badge-p2';
         } else if (ch.platform === 'REDDIT') {
-            borderColor = '#ff4500';
+            borderColor = '#f59e0b';
             badgeStyle = 'badge-p1';
         }
         const card = document.createElement('div');
-        card.style.background = '#141414';
-        card.style.border = '1px solid #2a2a2a';
+        card.style.background = 'var(--app-card)';
+        card.style.border = '1px solid var(--app-border)';
         card.style.borderTop = `3px solid ${borderColor}`;
         card.style.borderRadius = '8px';
         card.style.padding = '16px';
@@ -378,7 +870,7 @@ function renderSubscribedChannels() {
         card.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <span class="badge ${badgeStyle}">${ch.platform}</span>
-                <span style="font-size:0.75rem; color:#10b981; font-weight:700;">● ACTIVE LISTENING</span>
+                <span style="font-size:0.75rem; color:#25d366; font-weight:700;">● ACTIVE LISTENING</span>
             </div>
             <div>
                 <h4 style="font-size:0.95rem; font-weight:800; color:#fff; margin-bottom:2px;">${ch.name}</h4>
@@ -388,7 +880,7 @@ function renderSubscribedChannels() {
             </div>
             <div style="display:flex; justify-content:space-between; font-size:0.78rem; color:#bbb; border-top:1px solid #222; padding-top:8px;">
                 <span>Product: <strong style="color:#fff;">${ch.product}</strong></span>
-                <span>Ingested: <strong style="color:var(--orange-primary);">${ch.commentsIngested}</strong></span>
+                <span>Ingested: <strong style="color:var(--theme-accent);">${ch.commentsIngested}</strong></span>
             </div>
             <div style="display:flex; gap:8px; margin-top:4px;">
                 <button class="btn btn-primary" style="flex:1; padding:6px 10px; font-size:0.78rem;" onclick="fetchLiveYouTubeComments('${ch.ref}', '${ch.id}')">

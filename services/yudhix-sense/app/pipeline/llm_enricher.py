@@ -16,7 +16,7 @@ class OllamaLlmEnricher:
 
     def __init__(self):
         self.ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434")
-        self.model_name = os.getenv("OLLAMA_MODEL", "qwen3:8b")
+        self.model_name = os.getenv("OLLAMA_MODEL", "llama3.1:latest")
 
     async def enrich(self, masked_text: str, base_sentiment: str) -> Dict[str, Any]:
         prompt = f"""

@@ -42,6 +42,9 @@
         <module>services/yudhix-catalog</module>
         <module>services/yudhix-radar</module>
         <module>services/yudhix-link</module>
+
+        <!-- Phase 4 Services -->
+        <module>services/yudhix-pulse</module>
     </modules>
 
     <dependencyManagement>

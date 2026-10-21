@@ -249,42 +249,110 @@
           </div>
         </div>
 
-        <!-- 5. PLATFORM CONNECTORS VIEW -->
+        <!-- 5. PLATFORM CHANNELS & SUBSCRIPTIONS VIEW -->
         <div id="view-connectors" class="tab-view hidden">
-          <div class="panel-card">
+          <!-- Quota & Subscription Status Bar -->
+          <div class="metrics-grid" style="margin-bottom: 24px;">
+            <div class="metric-card turnaround">
+              <span class="metric-title">YouTube Monitored Channels</span>
+              <div class="metric-value" id="ytChannelCount">1 / 20</div>
+              <div class="metric-change orange">
+                <i data-lucide="radio"></i> Max 20 channels per tenant
+              </div>
+            </div>
+
+            <div class="metric-card sla">
+              <span class="metric-title">LinkedIn Monitored Profiles</span>
+              <div class="metric-value" id="liProfileCount">1 / 10</div>
+              <div class="metric-change white">
+                <i data-lucide="briefcase"></i> Max 10 company pages/profiles
+              </div>
+            </div>
+
+            <div class="metric-card">
+              <span class="metric-title">Active Google API Key</span>
+              <div class="metric-value" style="font-size: 1.1rem; font-family: var(--font-mono); color: var(--orange-primary);">AIzaSyCW...L3Uc</div>
+              <div class="metric-change orange">
+                <i data-lucide="shield-check"></i> Connected & Verified Live
+              </div>
+            </div>
+          </div>
+
+          <!-- Subscription Action Forms -->
+          <div class="dashboard-grid">
+            <!-- YouTube Channel/Video Subscription Box -->
+            <div class="panel-card" style="border-top: 3px solid var(--orange-primary);">
+              <div class="panel-header">
+                <h3 class="panel-title">
+                  <i data-lucide="video" style="color:var(--orange-primary);"></i> Subscribe YouTube Channel / Video
+                </h3>
+                <span class="badge badge-p1">YouTube v3 SPI</span>
+              </div>
+              <p style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:14px;">
+                Enter any YouTube Video URL, Video ID, or Channel ID to monitor comment sentiment and run AI turnaround analysis.
+              </p>
+              <div style="display:flex; flex-direction:column; gap:12px;">
+                <div>
+                  <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">YouTube Video URL or Channel ID</label>
+                  <input id="ytInput" type="text" value="https://www.youtube.com/watch?v=dQw4w9WgXcQ" placeholder="e.g. https://www.youtube.com/watch?v=... or @PlayStation" 
+                         style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-family:var(--font-mono); font-size:0.85rem;">
+                </div>
+                <div>
+                  <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Associated Product</label>
+                  <input id="ytProductInput" type="text" value="DualSense Controller" placeholder="e.g. PS5 DualSense Controller"
+                         style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.85rem;">
+                </div>
+                <div style="display:flex; gap:10px; margin-top:4px;">
+                  <button class="btn btn-primary" onclick="subscribeChannel('YOUTUBE')">
+                    <i data-lucide="plus"></i> Subscribe Channel
+                  </button>
+                  <button class="btn btn-outline-orange" id="btnLiveFetch" onclick="fetchLiveYouTubeComments()">
+                    <i data-lucide="zap"></i> Fetch & Analyze Live Comments
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- LinkedIn Profile/Company Page Subscription Box -->
+            <div class="panel-card" style="border-top: 3px solid #ffffff;">
+              <div class="panel-header">
+                <h3 class="panel-title">
+                  <i data-lucide="briefcase"></i> Subscribe LinkedIn Profile / Page
+                </h3>
+                <span class="badge badge-p2">LinkedIn SPI</span>
+              </div>
+              <p style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:14px;">
+                Add company page or executive profile URLs to harvest professional comments with HMAC author pseudonymization.
+              </p>
+              <div style="display:flex; flex-direction:column; gap:12px;">
+                <div>
+                  <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">LinkedIn Profile / Company URL</label>
+                  <input id="liInput" type="text" value="https://www.linkedin.com/company/sony" placeholder="e.g. https://www.linkedin.com/company/..." 
+                         style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-family:var(--font-mono); font-size:0.85rem;">
+                </div>
+                <div>
+                  <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Associated Product</label>
+                  <input id="liProductInput" type="text" value="Sony Cloud Platform" placeholder="e.g. Enterprise Cloud API"
+                         style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.85rem;">
+                </div>
+                <div style="margin-top:4px;">
+                  <button class="btn btn-secondary" onclick="subscribeChannel('LINKEDIN')">
+                    <i data-lucide="plus"></i> Subscribe Profile
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Active Subscribed Channels Grid -->
+          <div class="panel-card" style="margin-top:20px;">
             <div class="panel-header">
               <h3 class="panel-title">
-                <i data-lucide="radio"></i> Active Social Connectors (yudhix-link)
+                <i data-lucide="list"></i> Subscribed Channels & Monitored Feeds
               </h3>
+              <span style="font-size:0.8rem; color:var(--text-secondary);">Automated 5-minute incremental ingestion active</span>
             </div>
-            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:18px;">
-              <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-subtle); border-radius:12px; padding:20px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                  <span style="font-weight:700;">YouTube Data v3 SPI</span>
-                  <span class="badge badge-pos">CONNECTED</span>
-                </div>
-                <p style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:12px;">Polling video comments and replies via AES-256 OAuth Vault.</p>
-                <span style="font-size:0.75rem; color:var(--accent-cyan); font-family:var(--font-mono);">Watermark: 2026-10-21T08:30:00Z</span>
-              </div>
-
-              <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-subtle); border-radius:12px; padding:20px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                  <span style="font-weight:700;">LinkedIn Community SPI</span>
-                  <span class="badge badge-pos">CONNECTED</span>
-                </div>
-                <p style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:12px;">Incremental ingestion with HMAC-SHA256 author pseudonymization.</p>
-                <span style="font-size:0.75rem; color:var(--accent-cyan); font-family:var(--font-mono);">Watermark: 2026-10-21T08:25:00Z</span>
-              </div>
-
-              <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-subtle); border-radius:12px; padding:20px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                  <span style="font-weight:700;">Reddit OAuth SPI</span>
-                  <span class="badge badge-pos">CONNECTED</span>
-                </div>
-                <p style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:12px;">Subreddit comment stream monitoring with discovery rules.</p>
-                <span style="font-size:0.75rem; color:var(--accent-cyan); font-family:var(--font-mono);">Watermark: 2026-10-21T08:34:00Z</span>
-              </div>
-            </div>
+            <div id="subscribedChannelsGrid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:16px;"></div>
           </div>
         </div>
       </section>

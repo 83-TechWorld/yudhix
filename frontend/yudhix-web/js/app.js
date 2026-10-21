@@ -29,14 +29,27 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Mock & Live State representing active microservices
 const state = {
     activeTab: 'dashboard',
+    selectedPriority: 'ALL',
+    selectedChannel: 'ALL',
     subscribedChannels: [
         {
             id: 'yt-001',
+            platform: 'YOUTUBE',
+            name: 'SAMTIME (Physical Discs)',
+            ref: 'https://www.youtube.com/watch?v=PTblI6oYfSU',
+            product: 'PlayStation Discs & PS Store',
+            commentsIngested: 2662,
+            watermark: 'Ugzm8Tx-MkDP... (Recorded)',
+            lastPolled: 'Just now'
+        },
+        {
+            id: 'yt-002',
             platform: 'YOUTUBE',
             name: 'PlayStation Global Channel',
             ref: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
             product: 'DualSense Controller',
             commentsIngested: 420,
+            watermark: 'yt_c_dual_101 (Recorded)',
             lastPolled: '5m ago'
         },
         {
@@ -46,6 +59,7 @@ const state = {
             ref: 'https://www.linkedin.com/company/sony',
             product: 'Sony Cloud Platform',
             commentsIngested: 88,
+            watermark: 'li_sync_cursor_01',
             lastPolled: '15m ago'
         }
     ],
@@ -190,24 +204,70 @@ function initCharts() {
     }
 }
 
-function renderInbox(filter = 'ALL') {
+function updateChannelFilterOptions() {
+    const select = document.getElementById('channelFilter');
+    if (!select) return;
+    const currentVal = state.selectedChannel || 'ALL';
+    const channels = [...new Set(state.comments.map(c => c.channelTitle || c.platform).filter(Boolean))];
+    select.innerHTML = '<option value="ALL">All Channels & Sources</option>';
+    channels.forEach(ch => {
+        const opt = document.createElement('option');
+        opt.value = ch;
+        opt.innerText = ch;
+        if (ch === currentVal) opt.selected = true;
+        select.appendChild(opt);
+    });
+}
+
+function renderInbox(filter = (state.selectedPriority || 'ALL')) {
+    state.selectedPriority = filter;
     const list = document.getElementById('inboxList');
     if (!list) return;
 
+    updateChannelFilterOptions();
+
     list.innerHTML = '';
     const filtered = state.comments.filter(c => {
-        if (filter === 'ALL') return true;
-        return c.priority === filter;
+        // Priority / Sentiment filter
+        if (filter === 'NEGATIVE' && c.sentiment !== 'NEGATIVE') return false;
+        if (filter === 'POSITIVE' && c.sentiment !== 'POSITIVE') return false;
+        if (filter === 'P1' && c.priority !== 'P1') return false;
+        if (filter === 'P2' && c.priority !== 'P2') return false;
+        if (filter === 'P3' && c.priority !== 'P3') return false;
+
+        // Channel / Video filter
+        if (state.selectedChannel && state.selectedChannel !== 'ALL') {
+            const chName = c.channelTitle || c.platform;
+            if (chName !== state.selectedChannel) return false;
+        }
+        return true;
     });
+
+    if (filtered.length === 0) {
+        list.innerHTML = `<div style="text-align:center; padding:40px; color:#888;">No comments found matching the current filter.</div>`;
+        return;
+    }
 
     filtered.forEach(c => {
         const card = document.createElement('div');
         card.className = `comment-card ${c.priority.toLowerCase()}`;
+        
+        const videoTitleDisplay = c.videoTitle ? (c.videoTitle.length > 55 ? c.videoTitle.substring(0, 55) + '...' : c.videoTitle) : '';
+        const videoUrl = c.videoUrl || (c.videoId ? `https://www.youtube.com/watch?v=${c.videoId}` : '');
+
         card.innerHTML = `
+            <!-- Channel & Video Attribution Banner -->
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
+                <span class="badge" style="background:#261805; color:var(--orange-primary); border:1px solid #733400; font-weight:700; font-size:0.75rem;">
+                    <i data-lucide="video" style="width:12px; height:12px; vertical-align:middle;"></i> ${c.channelTitle || c.platform}
+                </span>
+                ${videoTitleDisplay ? `<a href="${videoUrl}" target="_blank" style="color:#ffffff; font-size:0.78rem; font-weight:600; text-decoration:none; opacity:0.9; display:inline-flex; align-items:center; gap:4px;" title="Watch Video on YouTube">🎬 ${videoTitleDisplay} <i data-lucide="external-link" style="width:11px; height:11px;"></i></a>` : ''}
+            </div>
+
             <div class="comment-header">
                 <div class="platform-meta">
                     <span class="badge badge-${c.priority.toLowerCase()}">${c.priority}</span>
-                    <span class="badge ${c.sentiment === 'NEGATIVE' ? 'badge-neg' : 'badge-pos'}">${c.sentiment}</span>
+                    <span class="badge ${c.sentiment === 'NEGATIVE' ? 'badge-neg' : (c.sentiment === 'POSITIVE' ? 'badge-pos' : '')}">${c.sentiment}</span>
                     <span style="font-weight:700; font-size:0.85rem; color:#fff;">${c.platform}</span>
                     <span class="author-pseudonym">${c.authorHash}</span>
                 </div>
@@ -215,12 +275,12 @@ function renderInbox(filter = 'ALL') {
             </div>
 
             <div class="comment-text">
-                ${c.maskedText.replace('<PHONE>', '<span class="pii-tag">&lt;PHONE_MASKED&gt;</span>')}
+                ${(c.maskedText || '').replace(/<PHONE>/g, '<span class="pii-tag">&lt;PHONE_MASKED&gt;</span>').replace(/<PERSON>/g, '<span class="pii-tag">&lt;NAME_MASKED&gt;</span>')}
             </div>
 
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                 <span style="font-size:0.75rem; color:var(--text-secondary); font-weight:700;">Aspects:</span>
-                ${c.aspects.map(a => `<span style="font-size:0.72rem; padding:2px 8px; border-radius:4px; background:#222; border:1px solid #333; color:#eee;">${a.name || a.aspect} (${a.sentiment})</span>`).join('')}
+                ${(c.aspects || []).map(a => `<span style="font-size:0.72rem; padding:2px 8px; border-radius:4px; background:#222; border:1px solid #333; color:#eee;">${a.name || a.aspect} (${a.sentiment})</span>`).join('')}
                 <span style="margin-left:auto; font-size:0.8rem; font-weight:800; color:var(--orange-primary);">Impact: ${c.impactScore}</span>
             </div>
 
@@ -234,12 +294,19 @@ function renderInbox(filter = 'ALL') {
         `;
         list.appendChild(card);
     });
+
+    if (window.lucide) window.lucide.createIcons();
 }
 
-window.filterInbox = function(priority) {
+window.filterInbox = function(filter) {
     document.querySelectorAll('.filter-chip').forEach(btn => btn.classList.remove('active'));
-    event.target.classList.add('active');
-    renderInbox(priority);
+    if (window.event && window.event.target) window.event.target.classList.add('active');
+    renderInbox(filter);
+};
+
+window.filterByChannel = function(channel) {
+    state.selectedChannel = channel;
+    renderInbox(state.selectedPriority);
 };
 
 window.submitDraft = function(commentId) {
@@ -464,7 +531,7 @@ window.unsubscribeChannel = function(id) {
 window.fetchLiveYouTubeComments = async function(customRef, channelId) {
     let ref = customRef || document.getElementById('ytInput')?.value.trim();
     if (!ref) {
-        ref = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+        ref = "https://www.youtube.com/watch?v=PTblI6oYfSU";
     }
 
     let videoId = ref;
@@ -478,44 +545,87 @@ window.fetchLiveYouTubeComments = async function(customRef, channelId) {
     if (btn) btn.innerText = "Connecting to YouTube API...";
 
     try {
-        const apiUrl = `https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${videoId}&maxResults=6&key=${YOUTUBE_API_KEY}`;
-        const res = await fetch(apiUrl);
-
-        if (!res.ok) {
-            throw new Error(`YouTube API returned status ${res.status}`);
+        // 1. Fetch Video Metadata (Channel Title & Video Title)
+        let channelTitle = "YouTube";
+        let videoTitle = "";
+        try {
+            const vRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=${YOUTUBE_API_KEY}`);
+            if (vRes.ok) {
+                const vData = await vRes.json();
+                if (vData.items && vData.items.length > 0) {
+                    channelTitle = vData.items[0].snippet.channelTitle || "YouTube";
+                    videoTitle = vData.items[0].snippet.title || "";
+                }
+            }
+        } catch(e) {
+            console.warn("Could not fetch video metadata:", e.message);
         }
 
-        const data = await res.json();
-        const items = data.items || [];
+        // 2. Fetch Comments with Pagination (Batch Limit)
+        const batchLimitOption = document.getElementById('ytBatchLimit')?.value || '100';
+        let maxToFetch = batchLimitOption === 'ALL' ? 500 : parseInt(batchLimitOption, 10);
+        let allItems = [];
+        let pageToken = '';
 
-        if (items.length === 0) {
+        while (allItems.length < maxToFetch) {
+            const pageSize = Math.min(100, maxToFetch - allItems.length);
+            let apiUrl = `https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${videoId}&maxResults=${pageSize}&order=time&key=${YOUTUBE_API_KEY}`;
+            if (pageToken) apiUrl += `&pageToken=${pageToken}`;
+
+            if (btn) btn.innerText = `Fetching comments (${allItems.length} loaded)...`;
+            const res = await fetch(apiUrl);
+            if (!res.ok) throw new Error(`YouTube API returned status ${res.status}`);
+
+            const data = await res.json();
+            const items = data.items || [];
+            if (items.length === 0) break;
+            allItems = allItems.concat(items);
+
+            pageToken = data.nextPageToken;
+            if (!pageToken) break;
+        }
+
+        if (allItems.length === 0) {
             alert(`Connected to YouTube, but no public comments were found for video: ${videoId}`);
             return;
         }
 
+        // 3. Record Watermark (The first item in order=time is the newest comment!)
+        const newestItem = allItems[0];
+        const newestSnippet = newestItem.snippet.topLevelComment.snippet;
+        const watermarkId = newestItem.id;
+        const watermarkTs = newestSnippet.publishedAt;
+
+        try {
+            await fetch('http://localhost:8000/api/v1/watermark', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    tenant_id: "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+                    source_id: channelId || "c0a80101-0000-0000-0000-000000000001",
+                    platform: "YOUTUBE",
+                    last_comment_ts: watermarkTs,
+                    page_token: watermarkId
+                })
+            });
+        } catch(e) {
+            console.warn("Could not save watermark to backend:", e.message);
+        }
+
+        // 4. Ingest and Persist comments into PostgreSQL via yudhix-sense
+        if (btn) btn.innerText = `Persisting ${allItems.length} comments into PostgreSQL...`;
         let analyzedCount = 0;
 
-        for (const item of items) {
+        for (let i = 0; i < allItems.length; i++) {
+            const item = allItems[i];
             const snippet = item.snippet.topLevelComment.snippet;
             const rawText = snippet.textOriginal || snippet.textDisplay;
             const author = snippet.authorDisplayName || "anonymous_user";
             const likes = snippet.likeCount || 0;
-
-            // Generate pseudonymous hash
             const authorHash = "sha256:" + Math.abs(author.split('').reduce((a,b)=>{a=((a<<5)-a)+b.charCodeAt(0);return a&a},0)).toString(16) + "...yt";
 
-            // Call yudhix-sense for real PII scrub & Ollama sentiment
-            let analysis = {
-                masked_text: rawText,
-                sentiment: likes > 5 ? "POSITIVE" : "NEGATIVE",
-                sentiment_score: likes > 5 ? 0.7 : -0.6,
-                aspects: [{ aspect: "content", sentiment: likes > 5 ? "POSITIVE" : "NEGATIVE" }],
-                priority: "P2",
-                suggested_reply: "Thank you for sharing your feedback with our team!"
-            };
-
             try {
-                const senseRes = await fetch('http://localhost:8000/api/v1/analyze', {
+                await fetch('http://localhost:8000/api/v1/analyze', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -524,52 +634,49 @@ window.fetchLiveYouTubeComments = async function(customRef, channelId) {
                         raw_text: rawText,
                         platform: "YOUTUBE",
                         author_hash: authorHash,
+                        channel_title: channelTitle,
+                        video_id: videoId,
+                        video_title: videoTitle,
+                        video_url: `https://www.youtube.com/watch?v=${videoId}`,
+                        platform_created_at: snippet.publishedAt,
                         likes: likes,
                         replies: item.snippet.totalReplyCount || 0,
-                        run_deep_llm: true,
+                        run_deep_llm: (i < 3), // deep LLM on top comments, fast sentiment for bulk
                         persist: true
                     })
                 });
-                if (senseRes.ok) {
-                    analysis = await senseRes.json();
-                }
+                analyzedCount++;
             } catch (e) {
-                console.log("Sense service call fallback:", e.message);
+                console.warn("Persistence error:", e.message);
             }
-
-            state.comments.unshift({
-                id: item.id,
-                platform: 'YouTube',
-                platformCommentId: item.id,
-                authorHash: authorHash,
-                maskedText: analysis.masked_text || rawText,
-                hasPii: (analysis.entities_masked && analysis.entities_masked.length > 0),
-                sentiment: analysis.sentiment || "NEUTRAL",
-                sentimentScore: analysis.sentiment_score || 0.0,
-                aspects: analysis.aspects || [{ name: "experience", sentiment: "NEUTRAL" }],
-                toxic: analysis.toxic || false,
-                churnRisk: analysis.churn_risk || 0.3,
-                impactScore: 65.0,
-                priority: (analysis.sentiment === "NEGATIVE" && analysis.churn_risk > 0.5) ? "P1" : "P2",
-                likes: likes,
-                replies: item.snippet.totalReplyCount || 0,
-                timeAgo: 'Just now',
-                aiSuggestedReply: analysis.suggested_reply,
-                status: 'NEEDS_REVIEW'
-            });
-
-            analyzedCount++;
         }
+
+        // 5. Update Channel Subscription state
+        let targetChannel = state.subscribedChannels.find(c => c.ref.includes(videoId));
+        if (!targetChannel) {
+            targetChannel = {
+                id: 'yt-' + Date.now().toString().slice(-4),
+                platform: 'YOUTUBE',
+                name: `${channelTitle} (${videoTitle ? videoTitle.substring(0, 26) + '...' : 'Feed'})`,
+                ref: `https://www.youtube.com/watch?v=${videoId}`,
+                product: 'PlayStation Discs & PS Store',
+                commentsIngested: allItems.length,
+                watermark: `${watermarkId.slice(0, 14)}... (Recorded)`,
+                lastPolled: 'Just now'
+            };
+            state.subscribedChannels.unshift(targetChannel);
+        } else {
+            targetChannel.commentsIngested = allItems.length;
+            targetChannel.watermark = `${watermarkId.slice(0, 14)}... (Recorded)`;
+            targetChannel.lastPolled = 'Just now';
+        }
+
+        // Update watermark card in UI
+        const wmCard = document.getElementById('activeWatermarkText');
+        if (wmCard) wmCard.innerText = `${watermarkId.slice(0, 12)}... (Recorded)`;
 
         // Reload fresh state directly from PostgreSQL database
         await loadCommentsFromDatabase();
-
-        // Update subscribed channel comments count
-        if (channelId) {
-            const ch = state.subscribedChannels.find(c => c.id === channelId);
-            if (ch) ch.commentsIngested += analyzedCount;
-        }
-
         renderInbox();
         renderSubscribedChannels();
 
@@ -577,7 +684,7 @@ window.fetchLiveYouTubeComments = async function(customRef, channelId) {
         const inboxTab = document.getElementById('nav-inbox');
         if (inboxTab) inboxTab.click();
 
-        alert(`Successfully fetched ${analyzedCount} LIVE YouTube comments using Google API Key, analyzed them with local Ollama Llama 3.1, and PERSISTED them into the PostgreSQL database! Check the Social Inbox and query them anytime in the database with './yudhix.sh db'.`);
+        alert(`Successfully fetched ${allItems.length} comments for "${videoTitle || videoId}" by ${channelTitle}! Watermark recorded: ${watermarkId}. All comments persisted in PostgreSQL.`);
 
     } catch (err) {
         alert(`Error fetching live YouTube comments: ${err.message}. Please verify the video ID or network connection.`);

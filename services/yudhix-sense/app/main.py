@@ -10,7 +10,12 @@ from app.models.schemas import (
 from app.pipeline.masker import PiiMasker
 from app.pipeline.classifier import FastSentimentClassifier
 from app.pipeline.llm_enricher import OllamaLlmEnricher
-from app.db import persist_comment_and_analysis, get_all_comments_from_db
+from app.db import (
+    persist_comment_and_analysis,
+    get_all_comments_from_db,
+    save_source_watermark,
+    get_source_watermarks
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("yudhix-sense")
@@ -40,9 +45,9 @@ def health_check():
 
 
 @app.get("/api/v1/comments")
-def list_comments(tenant_id: str = "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d", limit: int = 50):
+def list_comments(tenant_id: str = "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d", limit: int = 200):
     """
-    Fetch all ingested comments, sentiment classifications, and aspects from PostgreSQL.
+    Fetch all ingested comments, sentiment classifications, aspects, and channel/video metadata from PostgreSQL.
     """
     comments = get_all_comments_from_db(tenant_id=tenant_id, limit=limit)
     return {"comments": comments, "count": len(comments)}
@@ -59,6 +64,29 @@ def persist_single_comment(payload: dict):
     except Exception as e:
         logger.error(f"Persist error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/watermarks")
+def list_watermarks(tenant_id: str = "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"):
+    """
+    Get latest ingestion watermarks for all channels.
+    """
+    return {"watermarks": get_source_watermarks(tenant_id)}
+
+
+@app.post("/api/v1/watermark")
+def update_watermark(payload: dict):
+    """
+    Record or advance a channel's ingestion watermark.
+    """
+    res = save_source_watermark(
+        tenant_id=payload.get("tenant_id", "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"),
+        source_id=payload.get("source_id", "c0a80101-0000-0000-0000-000000000001"),
+        platform=payload.get("platform", "YOUTUBE"),
+        last_comment_ts=payload.get("last_comment_ts", "now()"),
+        page_token=payload.get("page_token")
+    )
+    return res
 
 
 @app.post("/api/v1/mask", response_model=MaskResponse)
@@ -130,6 +158,11 @@ async def analyze_comment(request: AnalyzeCommentRequest):
                 "churn_risk": churn_risk,
                 "toxic": enrichment.get("toxic", False),
                 "suggested_reply": suggested_reply,
+                "channel_title": request.channel_title,
+                "video_id": request.video_id,
+                "video_title": request.video_title,
+                "video_url": request.video_url,
+                "platform_created_at": request.platform_created_at,
                 "priority": "P1" if (sentiment == "NEGATIVE" and churn_risk > 0.4) else "P2",
                 "aspects": [a.model_dump() for a in aspect_items]
             })

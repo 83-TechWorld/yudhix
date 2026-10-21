@@ -184,11 +184,23 @@
         <!-- 2. SOCIAL INBOX VIEW -->
         <div id="view-inbox" class="tab-view hidden">
           <div class="inbox-container">
-            <div class="filters-bar">
-              <button class="filter-chip active" onclick="filterInbox('ALL')">All Comments</button>
-              <button class="filter-chip" onclick="filterInbox('P1')">P1 Critical</button>
-              <button class="filter-chip" onclick="filterInbox('P2')">P2 High Priority</button>
-              <button class="filter-chip" onclick="filterInbox('P3')">P3 Routine</button>
+            <div class="filters-bar" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <button class="filter-chip active" onclick="filterInbox('ALL')">All Comments</button>
+                <button class="filter-chip" onclick="filterInbox('NEGATIVE')">Negative Sentiments</button>
+                <button class="filter-chip" onclick="filterInbox('P1')">P1 Critical</button>
+                <button class="filter-chip" onclick="filterInbox('P2')">P2 High Priority</button>
+                <button class="filter-chip" onclick="filterInbox('POSITIVE')">Positive Praise</button>
+              </div>
+              <div style="display:flex; gap:10px; align-items:center;">
+                <label style="font-size:0.8rem; color:var(--text-secondary); display:flex; align-items:center; gap:4px;">
+                  <i data-lucide="filter" style="width:14px; height:14px;"></i> Channel / Video:
+                </label>
+                <select id="channelFilter" onchange="filterByChannel(this.value)" 
+                        style="padding:6px 12px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.82rem; max-width:320px;">
+                  <option value="ALL">All Channels & Sources</option>
+                </select>
+              </div>
             </div>
             <div id="inboxList" style="display: flex; flex-direction: column; gap: 16px;"></div>
           </div>
@@ -270,10 +282,10 @@
             </div>
 
             <div class="metric-card">
-              <span class="metric-title">Active Google API Key</span>
-              <div class="metric-value" style="font-size: 1.1rem; font-family: var(--font-mono); color: var(--orange-primary);">AIzaSyCW...L3Uc</div>
-              <div class="metric-change orange">
-                <i data-lucide="shield-check"></i> Connected & Verified Live
+              <span class="metric-title">Ingestion Watermark (Cursor)</span>
+              <div class="metric-value" style="font-size: 0.95rem; font-family: var(--font-mono); color: #10b981; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" id="activeWatermarkText">Ugzm8Tx... (Recorded)</div>
+              <div class="metric-change" style="color:var(--text-secondary);">
+                <i data-lucide="check-circle" style="color:#10b981;"></i> Zero-duplicate crawler cursor
               </div>
             </div>
           </div>
@@ -294,13 +306,24 @@
               <div style="display:flex; flex-direction:column; gap:12px;">
                 <div>
                   <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">YouTube Video URL or Channel ID</label>
-                  <input id="ytInput" type="text" value="https://www.youtube.com/watch?v=dQw4w9WgXcQ" placeholder="e.g. https://www.youtube.com/watch?v=... or @PlayStation" 
+                  <input id="ytInput" type="text" value="https://www.youtube.com/watch?v=PTblI6oYfSU" placeholder="e.g. https://www.youtube.com/watch?v=... or @PlayStation" 
                          style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-family:var(--font-mono); font-size:0.85rem;">
                 </div>
-                <div>
-                  <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Associated Product</label>
-                  <input id="ytProductInput" type="text" value="DualSense Controller" placeholder="e.g. PS5 DualSense Controller"
-                         style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.85rem;">
+                <div style="display:flex; gap:12px;">
+                  <div style="flex:1;">
+                    <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Associated Product</label>
+                    <input id="ytProductInput" type="text" value="PlayStation Discs & PS Store" placeholder="e.g. PS5 DualSense Controller"
+                           style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.85rem;">
+                  </div>
+                  <div style="width:140px;">
+                    <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Batch Limit</label>
+                    <select id="ytBatchLimit" style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.85rem;">
+                      <option value="100">100 Comments</option>
+                      <option value="50">50 Comments</option>
+                      <option value="20">20 Comments</option>
+                      <option value="ALL">All (Multi-Page)</option>
+                    </select>
+                  </div>
                 </div>
                 <div style="display:flex; gap:10px; margin-top:4px;">
                   <button class="btn btn-primary" onclick="subscribeChannel('YOUTUBE')">

@@ -71,6 +71,18 @@ def persist_comment_and_analysis(data: Dict[str, Any]) -> Dict[str, Any]:
     suggested_reply = data.get("suggested_reply") or "Thank you for reaching out to us. Our customer team is here to help!"
     aspects = data.get("aspects") or []
 
+    custom_attrs = data.get("custom_attributes") or {}
+    if data.get("channel_title"):
+        custom_attrs["channel_title"] = data.get("channel_title")
+    if data.get("video_id"):
+        custom_attrs["video_id"] = data.get("video_id")
+    if data.get("video_title"):
+        custom_attrs["video_title"] = data.get("video_title")
+    if data.get("video_url"):
+        custom_attrs["video_url"] = data.get("video_url")
+    custom_attrs_json = json.dumps(custom_attrs)
+    platform_created_at = data.get("platform_created_at") or "now()"
+
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
@@ -86,21 +98,23 @@ def persist_comment_and_analysis(data: Dict[str, Any]) -> Dict[str, Any]:
                     %s, %s, %s, %s, NULL,
                     %s, %s, %s, 1,
                     %s, now() + interval '30 days', 'en', 'GLOBAL',
-                    %s, %s, 0, now(),
-                    now(), now(), %s, 'ACTIVE', '{}'::jsonb
+                    %s, %s, 0, %s,
+                    now(), now(), %s, 'ACTIVE', %s::jsonb
                 )
                 ON CONFLICT (tenant_id, platform, platform_comment_id)
                 DO UPDATE SET
                     like_count = EXCLUDED.like_count,
                     reply_count = EXCLUDED.reply_count,
                     masked_text = EXCLUDED.masked_text,
+                    platform_created_at = EXCLUDED.platform_created_at,
+                    custom_attributes = EXCLUDED.custom_attributes,
                     last_seen_at = now()
                 RETURNING id;
             """, (
                 tenant_id, comment_uuid, platform, platform_comment_id,
                 source_id, product_id, author_hash,
                 masked_text, like_count, reply_count,
-                content_hash
+                platform_created_at, content_hash, custom_attrs_json
             ))
             row = cur.fetchone()
             actual_comment_id = str(row[0]) if row else comment_uuid
@@ -188,9 +202,35 @@ def persist_comment_and_analysis(data: Dict[str, Any]) -> Dict[str, Any]:
         conn.close()
 
 
-def get_all_comments_from_db(tenant_id: str = DEFAULT_TENANT_ID, limit: int = 50) -> List[Dict[str, Any]]:
+def format_time_ago(dt):
+    if not dt:
+        return "Recent"
+    try:
+        import datetime
+        now = datetime.datetime.now(datetime.timezone.utc)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=datetime.timezone.utc)
+        diff = now - dt
+        seconds = max(0, int(diff.total_seconds()))
+        if seconds < 60:
+            return "Just now"
+        elif seconds < 3600:
+            return f"{seconds // 60}m ago"
+        elif seconds < 86400:
+            return f"{seconds // 3600}h ago"
+        elif seconds < 2592000:
+            return f"{seconds // 86400}d ago"
+        else:
+            months = seconds // 2592000
+            return f"{months} month{'s' if months > 1 else ''} ago"
+    except Exception:
+        return "Recent"
+
+
+def get_all_comments_from_db(tenant_id: str = DEFAULT_TENANT_ID, limit: int = 200) -> List[Dict[str, Any]]:
     """
-    Retrieves stored comments, their sentiment analysis, and granular aspects from PostgreSQL.
+    Retrieves stored comments, their sentiment analysis, granular aspects,
+    and channel/video attribution from PostgreSQL.
     """
     conn = get_db_connection()
     try:
@@ -205,6 +245,8 @@ def get_all_comments_from_db(tenant_id: str = DEFAULT_TENANT_ID, limit: int = 50
                     c.like_count AS likes,
                     c.reply_count AS replies,
                     c.first_seen_at,
+                    c.platform_created_at,
+                    c.custom_attributes,
                     ca.sentiment,
                     ca.sentiment_score,
                     ca.intent,
@@ -218,7 +260,7 @@ def get_all_comments_from_db(tenant_id: str = DEFAULT_TENANT_ID, limit: int = 50
                 LEFT JOIN comment_analysis ca 
                     ON c.tenant_id = ca.tenant_id AND c.id = ca.comment_id
                 WHERE c.tenant_id = %s
-                ORDER BY c.first_seen_at DESC
+                ORDER BY c.first_seen_at DESC, c.platform_created_at DESC
                 LIMIT %s;
             """, (tenant_id, limit))
             rows = cur.fetchall()
@@ -233,6 +275,13 @@ def get_all_comments_from_db(tenant_id: str = DEFAULT_TENANT_ID, limit: int = 50
                     WHERE tenant_id = %s AND comment_id = %s;
                 """, (tenant_id, c_id))
                 aspects = cur.fetchall()
+
+                attrs = r.get("custom_attributes") or {}
+                channel_title = attrs.get("channel_title") or "YouTube"
+                video_title = attrs.get("video_title") or ""
+                video_id = attrs.get("video_id") or ""
+                video_url = attrs.get("video_url") or (f"https://www.youtube.com/watch?v={video_id}" if video_id else "")
+                time_ago = format_time_ago(r.get("platform_created_at"))
 
                 results.append({
                     "id": c_id,
@@ -250,7 +299,11 @@ def get_all_comments_from_db(tenant_id: str = DEFAULT_TENANT_ID, limit: int = 50
                     "priority": r["priority"] or "P2",
                     "likes": r["likes"],
                     "replies": r["replies"],
-                    "timeAgo": "Recent",
+                    "timeAgo": time_ago,
+                    "channelTitle": channel_title,
+                    "videoTitle": video_title,
+                    "videoId": video_id,
+                    "videoUrl": video_url,
                     "aiSuggestedReply": r["suggested_reply"] or "Thank you for your feedback!",
                     "status": "NEEDS_REVIEW" if r["needs_review"] else "RESOLVED"
                 })
@@ -261,3 +314,55 @@ def get_all_comments_from_db(tenant_id: str = DEFAULT_TENANT_ID, limit: int = 50
         return []
     finally:
         conn.close()
+
+
+def save_source_watermark(tenant_id: str, source_id: str, platform: str, last_comment_ts: str, page_token: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Saves the newest comment watermark for incremental polling in table source_watermark.
+    """
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO source_watermark (
+                    id, tenant_id, source_id, platform, last_comment_ts, page_token, last_run_at, status
+                ) VALUES (
+                    gen_random_uuid(), %s, %s, %s, %s, %s, now(), 'ACTIVE'
+                )
+                ON CONFLICT (tenant_id, source_id, platform)
+                DO UPDATE SET
+                    last_comment_ts = EXCLUDED.last_comment_ts,
+                    page_token = EXCLUDED.page_token,
+                    last_run_at = now()
+                RETURNING id, last_comment_ts;
+            """, (tenant_id, source_id, platform.upper(), last_comment_ts, page_token))
+            row = cur.fetchone()
+            conn.commit()
+            return {"status": "SUCCESS", "watermark_id": str(row[0]), "last_comment_ts": str(row[1])}
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Failed to save source watermark: {e}")
+        return {"status": "ERROR", "detail": str(e)}
+    finally:
+        conn.close()
+
+
+def get_source_watermarks(tenant_id: str = DEFAULT_TENANT_ID) -> List[Dict[str, Any]]:
+    """
+    Retrieves all registered watermarks across platforms and channels.
+    """
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT source_id, platform, last_comment_ts, page_token, last_run_at, status
+                FROM source_watermark
+                WHERE tenant_id = %s;
+            """, (tenant_id,))
+            return [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        logger.error(f"Error fetching watermarks: {e}")
+        return []
+    finally:
+        conn.close()
+

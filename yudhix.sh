@@ -148,14 +148,22 @@ run_test() {
 
 show_db_comments() {
     print_banner
-    echo -e "${ORANGE}[+] Comments & AI Sentiment in PostgreSQL (Database: yudhix)${NC}\n"
+    echo -e "${ORANGE}[+] Ingestion Watermark Cursors (Table: source_watermark)${NC}\n"
+    psql -h localhost -U postgres -d yudhix -c "
+    SELECT platform, source_id, last_comment_ts, page_token AS last_comment_id, last_run_at, status 
+    FROM source_watermark LIMIT 5;
+    "
+    echo -e "\n${ORANGE}[+] Recent Comments & AI Sentiment in PostgreSQL (Database: yudhix)${NC}\n"
     psql -h localhost -U postgres -d yudhix -x -c "
     SELECT 
         c.platform,
+        c.custom_attributes ->> 'channel_title' AS channel,
+        c.custom_attributes ->> 'video_title' AS video,
         c.platform_comment_id,
         c.author_hash,
         c.masked_text,
         c.like_count,
+        c.platform_created_at,
         ca.sentiment,
         ca.priority,
         ca.impact_score,
@@ -163,12 +171,12 @@ show_db_comments() {
         ca.suggested_reply
     FROM comment c
     LEFT JOIN comment_analysis ca ON c.id = ca.comment_id
-    ORDER BY c.platform_created_at DESC
+    ORDER BY c.first_seen_at DESC, c.platform_created_at DESC
     LIMIT 5;
     "
     echo -e "\n${ORANGE}[+] Granular Aspects (Table: comment_aspect)${NC}\n"
     psql -h localhost -U postgres -d yudhix -c "
-    SELECT id, aspect, sentiment, score, evidence FROM comment_aspect LIMIT 10;
+    SELECT id, aspect, sentiment, score, evidence FROM comment_aspect ORDER BY id DESC LIMIT 10;
     "
 }
 

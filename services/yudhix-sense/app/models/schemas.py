@@ -26,6 +26,11 @@ class AnalyzeCommentRequest(BaseModel):
     raw_text: str
     platform: Optional[str] = "YOUTUBE"
     author_hash: Optional[str] = None
+    channel_title: Optional[str] = None
+    video_id: Optional[str] = None
+    video_title: Optional[str] = None
+    video_url: Optional[str] = None
+    platform_created_at: Optional[str] = None
     language_hint: Optional[str] = "en"
     likes: int = 0
     replies: int = 0

@@ -121,18 +121,18 @@ function initCharts() {
                     {
                         label: 'Negative Volume',
                         data: [140, 180, 220, 190, 110, 85, 95],
-                        borderColor: '#f43f5e',
-                        backgroundColor: 'rgba(244, 63, 94, 0.1)',
+                        borderColor: '#737373',
+                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
                         fill: true,
-                        tension: 0.4
+                        tension: 0.3
                     },
                     {
                         label: 'Turnaround (Neg -> Pos)',
                         data: [90, 125, 160, 145, 80, 65, 75],
-                        borderColor: '#10b981',
-                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        borderColor: '#ff6600',
+                        backgroundColor: 'rgba(255, 102, 0, 0.15)',
                         fill: true,
-                        tension: 0.4
+                        tension: 0.3
                     }
                 ]
             },

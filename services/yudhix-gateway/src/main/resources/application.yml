@@ -1,0 +1,102 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: yudhix-gateway
+
+  cloud:
+    gateway:
+      routes:
+        # Tenancy & Orgs Service
+        - id: tenant-service
+          uri: ${TENANT_SERVICE_URL:http://localhost:8081}
+          predicates:
+            - Path=/api/v1/tenants/**, /api/v1/countries/**
+
+        # Catalog & Embeddings Service
+        - id: catalog-service
+          uri: ${CATALOG_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/api/v1/catalog/**
+
+        # Discovery Rules Service
+        - id: radar-service
+          uri: ${RADAR_SERVICE_URL:http://localhost:8083}
+          predicates:
+            - Path=/api/v1/rules/**
+
+        # Connector & OAuth Vault Service
+        - id: link-service
+          uri: ${LINK_SERVICE_URL:http://localhost:8084}
+          predicates:
+            - Path=/api/v1/connectors/**
+
+        # Comment & Impact Scoring Service
+        - id: pulse-service
+          uri: ${PULSE_SERVICE_URL:http://localhost:8085}
+          predicates:
+            - Path=/api/v1/comments/**, /api/v1/analytics/**
+
+        # Reply & Approval Workflow Service
+        - id: resolve-service
+          uri: ${RESOLVE_SERVICE_URL:http://localhost:8086}
+          predicates:
+            - Path=/api/v1/replies/**, /api/v1/templates/**
+
+        # Turnaround Feedback Loop Service
+        - id: loop-service
+          uri: ${LOOP_SERVICE_URL:http://localhost:8087}
+          predicates:
+            - Path=/api/v1/feedback/**
+
+        # Tamper-Evident Audit Ledger Service
+        - id: ledger-service
+          uri: ${LEDGER_SERVICE_URL:http://localhost:8088}
+          predicates:
+            - Path=/api/v1/audit/**
+
+        # Compliance, Consent & DSR Service
+        - id: dharma-service
+          uri: ${DHARMA_SERVICE_URL:http://localhost:8089}
+          predicates:
+            - Path=/api/v1/compliance/**, /api/v1/dsr/**
+
+        # Usage Metering & Billing Service
+        - id: meter-service
+          uri: ${METER_SERVICE_URL:http://localhost:8090}
+          predicates:
+            - Path=/api/v1/billing/**
+
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins:
+              - "http://localhost:4200"
+              - "http://localhost:8080"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - PATCH
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
+            maxAge: 3600
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/yudhix}
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8180/realms/yudhix/protocol/openid-connect/certs}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, gateway
+  endpoint:
+    health:
+      show-details: always

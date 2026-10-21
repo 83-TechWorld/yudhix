@@ -31,6 +31,12 @@
         <!-- Shared Libraries -->
         <module>libs/yudhix-common</module>
         <module>libs/yudhix-connector-sdk</module>
+
+        <!-- Phase 2 Services -->
+        <module>services/yudhix-gateway</module>
+        <module>services/yudhix-tenant</module>
+        <module>services/yudhix-ledger</module>
+        <module>services/yudhix-dharma</module>
     </modules>
 
     <dependencyManagement>
@@ -100,6 +106,14 @@
                                 <artifactId>lombok</artifactId>
                             </exclude>
                         </excludes>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>3.5.0</version>
+                    <configuration>
+                        <argLine>-XX:+EnableDynamicAgentLoading -Dnet.bytebuddy.experimental=true</argLine>
                     </configuration>
                 </plugin>
                 <plugin>

@@ -157,7 +157,95 @@ sequenceDiagram
 
 ---
 
-## 4. Microservices Catalog & Responsibilities
+## 4. Visual Data Pipeline & Lifecycle State Machine
+
+A step-by-step visual map showing how raw public social data is progressively enriched, prioritized, resolved, and tracked:
+
+```mermaid
+flowchart TD
+    classDef stage fill:#1e293b,stroke:#3b82f6,stroke-width:2px,color:#f8fafc;
+    classDef ai fill:#312e81,stroke:#6366f1,stroke-width:2px,color:#f8fafc;
+    classDef state fill:#0f766e,stroke:#14b8a6,stroke-width:2px,color:#f8fafc;
+    classDef action fill:#831843,stroke:#ec4899,stroke-width:2px,color:#f8fafc;
+    classDef kpi fill:#14532d,stroke:#22c55e,stroke-width:2px,color:#f8fafc;
+
+    subgraph PhaseIngestion ["STAGE 1 & 2: INGESTION & PRIVACY"]
+        RAW["💬 Public Comment<br/><i>'PS5 controller battery dies in 2 hrs!'</i>"]:::stage
+        HMAC["🔐 Keyed HMAC-SHA256<br/><b>Author Pseudonym:</b> v1.7F3A2C..."]:::stage
+        MASK["🛡️ Microsoft Presidio Masking<br/>Masks Names, Phones, Emails, Aadhaar"]:::stage
+        RAW --> HMAC --> MASK
+    end
+
+    subgraph PhaseAI ["STAGE 3: TWO-TIER AI PIPELINE (yudhix-sense)"]
+        TIER1["⚡ Tier-1 Fast Classifier (XLM-RoBERTa)<br/>Sentiment: <b>NEGATIVE (-0.84)</b>"]:::ai
+        RULES{"Passes Discovery Rules?<br/>(Sentiment/Keywords/Likes)"}
+        TIER2["🧠 Tier-2 LLM Enrichment (Ollama Qwen3:8b)<br/>• Aspects: [battery: NEGATIVE]<br/>• Intent: COMPLAINT | ChurnRisk: 0.75<br/>• Auto-generates Brand-Safe AI Reply Draft"]:::ai
+
+        MASK --> TIER1 --> RULES
+        RULES -- Yes --> TIER2
+        RULES -- No / Low Risk --> PASSIVE["📁 Store for Trend Metrics"]:::stage
+    end
+
+    subgraph PhaseScore ["STAGE 4: SCORING & ROUTING (yudhix-pulse)"]
+        SCORING["📊 Impact Scoring Formula (0-100)<br/>Severity × (Likes + Replies + Velocity) × Recency"]:::stage
+        PRIORITY{"Priority Band"}
+        P1["🚨 Priority P1 (Score ≥ 80)<br/>2h SLA Timer · Alert to Slack/Email"]:::action
+        P2["⚠️ Priority P2 (Score 50-79)<br/>24h SLA Queue"]:::stage
+        P3["ℹ️ Priority P3 (Score < 50)<br/>Low Urgency Backlog"]:::stage
+
+        TIER2 --> SCORING --> PRIORITY
+        PRIORITY -- "Score ≥ 80" --> P1
+        PRIORITY -- "50 - 79" --> P2
+        PRIORITY -- "< 50" --> P3
+    end
+
+    subgraph PhaseWorkflow ["STAGE 5: REPLY APPROVAL STATE MACHINE (yudhix-resolve)"]
+        DRAFT["📝 State: DRAFT<br/>Pre-filled with AI suggested reply"]:::state
+        IN_REVIEW["🔍 State: IN_REVIEW<br/>Agent edits & submits to manager"]:::state
+        DECISION{"Approver Decision"}
+        REJECTED["❌ State: REJECTED<br/>Feedback returned to agent"]:::state
+        APPROVED["✅ State: APPROVED<br/>Brand safety checks passed"]:::state
+
+        P1 --> DRAFT
+        P2 --> DRAFT
+        DRAFT -->|Agent submits| IN_REVIEW
+        IN_REVIEW --> DECISION
+        DECISION -- "Approve" --> APPROVED
+        DECISION -- "Request Changes" --> REJECTED
+        REJECTED -->|Edit Draft| DRAFT
+    end
+
+    subgraph PhasePosting ["STAGE 6: BRAND-SAFE POSTING & AUDIT (yudhix-link & yudhix-ledger)"]
+        POSTED["🚀 State: POSTED<br/>Published to YouTube/LinkedIn API"]:::state
+        AUDIT["⛓️ Hash-Chained Audit Ledger<br/>row_hash = SHA-256(prev_hash || tenant || action)"]:::stage
+        BILLING["💳 Metered Billing Event<br/>Idempotent event: replies_posted"]:::stage
+
+        APPROVED -->|connector-service| POSTED
+        POSTED --> AUDIT
+        POSTED --> BILLING
+    end
+
+    subgraph PhaseOutcome ["STAGE 7: TURNAROUND OUTCOME LOOP (yudhix-loop)"]
+        CHECKPOINTS["⏱️ Scheduled Checks (+24h, +72h, +7d)<br/>Re-fetches thread & customer reply"]:::stage
+        EVAL{"Did Thread Sentiment Improve?"}
+        IMPROVED["🌟 Outcome: IMPROVED<br/>Customer satisfied / positive reply"]:::kpi
+        NEUTRAL["⚖️ Outcome: NEUTRAL<br/>No further negative responses"]:::stage
+        WORSENED["⚠️ Outcome: WORSENED<br/>Escalate to Customer Support Lead"]:::action
+        DASH["📈 Executive Analytics Dashboard<br/><b>Turnaround Rate KPI</b> = Improved / Total Posted"]:::kpi
+
+        POSTED --> CHECKPOINTS --> EVAL
+        EVAL -- "Sentiment Delta > 0" --> IMPROVED
+        EVAL -- "No Change" --> NEUTRAL
+        EVAL -- "Sentiment Delta < 0" --> WORSENED
+        IMPROVED --> DASH
+        NEUTRAL --> DASH
+        WORSENED --> DASH
+    end
+```
+
+---
+
+## 5. Microservices Catalog & Responsibilities
 
 | # | Service Directory | Service Name | Tech Stack | Responsibility | Owned Tables |
 |---|---|---|---|---|---|
@@ -183,7 +271,7 @@ sequenceDiagram
 
 ---
 
-## 5. Privacy, Pseudonymization & Data Lifecycle
+## 6. Privacy, Pseudonymization & Data Lifecycle
 
 ```
 [Raw Social Comment]
@@ -207,7 +295,7 @@ sequenceDiagram
 
 ---
 
-## 6. Repository Directory Structure
+## 7. Repository Directory Structure
 
 ```
 yudhix/
@@ -252,7 +340,7 @@ yudhix/
 
 ---
 
-## 7. Getting Started (Local Development)
+## 8. Getting Started (Local Development)
 
 ### Prerequisites
 - **Java 21** (Temurin 21 recommended)

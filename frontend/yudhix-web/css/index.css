@@ -46,7 +46,8 @@ body {
   background-color: var(--black-bg);
   color: var(--white-text);
   min-height: 100vh;
-  display: flex;
+  margin: 0;
+  padding: 0;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
 }
@@ -533,3 +534,228 @@ body {
 }
 
 .hidden { display: none !important; }
+
+/* Modal & SaaS Tenant Login Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.modal-dialog {
+  background: #141414;
+  border: 1px solid var(--black-border);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8), var(--orange-glow);
+  border-radius: var(--radius-lg);
+  width: 90%;
+  max-width: 580px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--black-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #1a1a1a;
+}
+
+.modal-body {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--black-border);
+  background: #181818;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.tenant-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  background: #222;
+  border: 1px solid #333;
+  color: #fff;
+}
+
+.tenant-badge.active {
+  background: var(--orange-subtle);
+  border-color: var(--orange-border);
+  color: var(--orange-primary);
+}
+
+.platform-pill {
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.platform-pill.subscribed {
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  color: #4ade80;
+}
+
+.platform-pill.unsubscribed {
+  background: rgba(163, 163, 163, 0.1);
+  border: 1px solid #444;
+  color: #888;
+}
+
+/* ==============================================================================
+   Full-Screen SaaS Auth Portal (Sign In & Sign Up)
+   ============================================================================== */
+.auth-portal-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: radial-gradient(circle at 15% 20%, rgba(255, 102, 0, 0.15) 0%, transparent 45%),
+              radial-gradient(circle at 85% 80%, rgba(255, 102, 0, 0.10) 0%, transparent 45%),
+              #0a0a0a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  padding: 24px;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 1020px;
+  min-height: 590px;
+  background: #141414;
+  border: 1px solid rgba(255, 102, 0, 0.3);
+  border-radius: 16px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.95), 0 0 35px rgba(255, 102, 0, 0.2);
+  display: grid;
+  grid-template-columns: 420px 1fr;
+  overflow: hidden;
+  margin: auto;
+}
+
+@media (max-width: 860px) {
+  .auth-card {
+    grid-template-columns: 1fr;
+    max-width: 520px;
+  }
+  .auth-brand-side {
+    display: none !important;
+  }
+}
+
+.auth-brand-side {
+  background: linear-gradient(160deg, #181818 0%, #0d0d0d 100%);
+  border-right: 1px solid #242424;
+  padding: 44px 36px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.auth-form-side {
+  background: #141414;
+  padding: 40px 38px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+}
+
+.auth-tab-bar {
+  display: flex;
+  gap: 6px;
+  background: #0d0d0d;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  padding: 4px;
+  margin-bottom: 6px;
+}
+
+.auth-tab-btn {
+  flex: 1;
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  color: #888888;
+  font-weight: 700;
+  font-size: 0.85rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.auth-tab-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.auth-tab-btn.active {
+  background: var(--orange-primary) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(255, 102, 0, 0.4);
+}
+
+.auth-feature-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.auth-feature-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.auth-feature-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(255, 102, 0, 0.12);
+  border: 1px solid rgba(255, 102, 0, 0.35);
+  color: var(--orange-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 0.9rem;
+}
+
+
+

@@ -31,9 +31,9 @@ services:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
       KC_DB_USERNAME: yudhix
-      KC_DB_PASSWORD_FILE: /run/secrets/pg_password
-      KC_BOOTSTRAP_ADMIN_USERNAME: admin
-      KC_BOOTSTRAP_ADMIN_PASSWORD_FILE: /run/secrets/kc_admin_password
+      KC_DB_PASSWORD: yudhix_dev_password_2026
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin_yudhix_2026
       KC_HEALTH_ENABLED: "true"
       KC_METRICS_ENABLED: "true"
     secrets:

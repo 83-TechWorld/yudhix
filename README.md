@@ -574,3 +574,159 @@ ORDER BY c.first_seen_at DESC
 LIMIT 10;
 ```
 
+---
+
+## 11. Keycloak Multi-Tenant Identity, Authentication & Setup Guide
+
+Yudhix uses **Keycloak 25+** as its centralized OpenID Connect (OIDC) / OAuth2 Identity and Access Management (IAM) engine. In this multi-tenant SaaS architecture, every tenant operates in logical isolation while sharing unified authentication and authorization primitives.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Tenant Administrator / Agent
+    participant Web as Yudhix Web SPA (Port 3000)
+    participant KC as Keycloak 25+ (Port 8180)
+    participant GW as API Gateway (Port 8080)
+    participant Svc as Microservices Mesh (Port 8000+)
+    participant DB as PostgreSQL 16 (Port 5432)
+
+    User->>Web: Enters Tenant Code, Email & Password (or Registers)
+    Web->>KC: POST /realms/yudhix/protocol/openid-connect/token (Direct Grant / PKCE)
+    KC-->>Web: Signed RS256 JWT Token (claims: tenant_id, tenant_code, roles)
+    Note over Web: Saves session to localStorage (yudhix_session, 24h TTL)
+    Web->>GW: API Request + Authorization: Bearer <JWT>
+    GW->>KC: Validates signature against JWKS endpoint (/certs)
+    GW->>Svc: Forwards request with X-Tenant-ID & X-User-Roles headers
+    Svc->>DB: SET LOCAL app.current_tenant = '9b1deb4d...';
+    DB-->>Svc: Returns strictly isolated tenant data (RLS enforced)
+    Svc-->>Web: Filtered Comments, Ingestion Status & Metrics
+```
+
+---
+
+### 11.1 Keycloak Realm, Roles & Client Architecture
+
+All enterprise tenant identities reside under the dedicated **`yudhix`** realm:
+
+| Role Name | Scope | Permissions & Capabilities |
+| :--- | :--- | :--- |
+| `tenant_admin` | Realm | Full control over tenant lifecycle, platform subscriptions (YouTube, LinkedIn, Reddit), user invitations, and billing. |
+| `approver` | Realm | Authorized brand lead who reviews and formally approves or rejects AI-drafted turnaround replies (Separation of Duties). |
+| `agent` | Realm | Frontline triage agent who monitors the Social Inbox and refines drafted responses. |
+| `analyst` | Realm | Access to executive intelligence overview, sentiment velocity charts, and turnaround analytics. |
+| `viewer` | Realm | Read-only access to metrics and reports. |
+
+#### Registered Clients in `realm-yudhix.json`
+* **`yudhix-web`**: Public Single Page Application (SPA) client supporting Authorization Code Flow with PKCE and Direct Access Grants (Resource Owner Password Credentials). Allowed origins: `http://localhost:3000`, `http://127.0.0.1:3000`.
+* **`yudhix-gateway`**: Confidential client used by Spring Cloud Gateway (`services/yudhix-gateway`) to authenticate microservice service-to-service calls.
+
+---
+
+### 11.2 Authentication & Authorization Token Claims
+
+When a user logs in, Keycloak generates a cryptographically signed RS256 JWT `access_token` with custom tenant claims:
+
+```json
+{
+  "iss": "http://localhost:8180/realms/yudhix",
+  "aud": "account",
+  "sub": "314c7634-074a-45e1-b55e-1e1c27c8a762",
+  "typ": "Bearer",
+  "azp": "yudhix-web",
+  "preferred_username": "admin@sony.com",
+  "email": "admin@sony.com",
+  "tenant_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+  "tenant_code": "sony-playstation",
+  "organization": "Sony Interactive Entertainment",
+  "realm_access": {
+    "roles": [
+      "tenant_admin",
+      "default-roles-yudhix",
+      "offline_access",
+      "uma_authorization"
+    ]
+  }
+}
+```
+
+#### How Microservices Enforce Isolation:
+1. **Gateway Validation**: The API Gateway validates token expiration (`exp`) and signature against `http://localhost:8180/realms/yudhix/protocol/openid-connect/certs`.
+2. **Context Injection**: `TenantContextFilter` extracts `tenant_id` from claims and propagates it via the `X-Tenant-ID` header.
+3. **Database RLS**: When microservices open a connection, they execute:
+   ```sql
+   SET LOCAL app.current_tenant = '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d';
+   ```
+   PostgreSQL Row-Level Security policies automatically filter out any rows belonging to other tenants.
+
+---
+
+### 11.3 Step-by-Step Keycloak Setup Guide
+
+#### Step 1: Start Keycloak with Docker Compose
+Keycloak is pre-configured in `docker-compose.yml`. Start the container:
+```bash
+docker compose up -d keycloak
+```
+
+Verify that Keycloak is running and healthy:
+```bash
+curl -I http://localhost:8180
+# Returns HTTP/1.1 302 Found (Redirects to /admin/)
+```
+
+#### Step 2: Access Keycloak Admin Console
+* **URL**: [http://localhost:8180](http://localhost:8180)
+* **Master Username**: `admin`
+* **Master Password**: `admin_yudhix_2026`
+
+#### Step 3: Switch to the `yudhix` Realm
+1. In the top-left dropdown (next to the Keycloak logo), switch from `master` to **`yudhix`**.
+2. Verify that the realm is active and roles (`tenant_admin`, `approver`, `agent`, `analyst`) are present.
+
+#### Step 4: Create a New Tenant User
+1. Go to **Manage** $\rightarrow$ **Users** $\rightarrow$ **Add user**.
+2. Set:
+   * **Username**: `admin@sony.com`
+   * **Email**: `admin@sony.com`
+   * **Email verified**: **ON**
+3. Open the **Attributes** tab and add:
+   * `tenant_id`: `9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d`
+   * `tenant_code`: `sony-playstation`
+   * `organization`: `Sony Interactive Entertainment`
+4. Open the **Credentials** tab:
+   * Click **Set password** $\rightarrow$ `sony_admin_2026` (Toggle **Temporary** to **OFF**).
+5. Open the **Role mapping** tab:
+   * Click **Assign role** $\rightarrow$ Select `tenant_admin`.
+
+#### Step 5: Test Token Generation via Terminal
+You can authenticate and inspect the live JWT directly:
+```bash
+curl -X POST "http://localhost:8180/realms/yudhix/protocol/openid-connect/token" \
+  -d "client_id=yudhix-web" \
+  -d "username=admin@sony.com" \
+  -d "password=sony_admin_2026" \
+  -d "grant_type=password"
+```
+
+---
+
+### 11.4 SaaS Auth Portal & Persistent Session Management
+
+The web application (`http://localhost:3000`) provides a centralized **SaaS Auth Portal**:
+
+#### 1. Sign In Tab
+* Allows tenant admins and agents to authenticate using their **Tenant Code**, **Work Email**, and **Password**.
+* Includes a **"Maintain persistent session"** option enabled by default.
+* Includes a **"Quick Fill: Sony PlayStation Demo"** button for instant one-click onboarding.
+
+#### 2. Register New Tenant Tab (Sign Up)
+* Allows new enterprise customers to register their organization.
+* Fields: Company Name, auto-generated Tenant Code (kebab-case slug), Admin Full Name, Email, Password, and initial platform subscription toggles (YouTube up to 20 channels, LinkedIn, Reddit).
+* Automatically provisions a new Tenant UUID, initializes quotas, and starts the workspace.
+
+#### 3. Session Persistence Engine
+* Sessions are persisted in browser `localStorage` under the key `yudhix_session` with a 24-hour expiration.
+* On page refresh (`F5`), `initSession()` checks the token validity and restores tenant context without forcing re-login.
+* The header and sidebar include a **Log Out** button that clears `localStorage` and smoothly returns to the Auth Portal.
+
+

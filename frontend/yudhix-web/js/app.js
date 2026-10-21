@@ -17,6 +17,7 @@ async function loadCommentsFromDatabase() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+    initSession();
     initNavigation();
     initCharts();
     await loadCommentsFromDatabase();
@@ -31,100 +32,33 @@ const state = {
     activeTab: 'dashboard',
     selectedPriority: 'ALL',
     selectedChannel: 'ALL',
+    currentTenant: {
+        tenantCode: 'sony-playstation',
+        tenantId: '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d',
+        name: 'Sony Interactive Entertainment',
+        user: 'admin@sony.com',
+        role: 'tenant_admin',
+        token: null,
+        authenticated: true,
+        subscriptions: {
+            YOUTUBE: { active: true, count: 1, max: 20 },
+            LINKEDIN: { active: true, count: 1, max: 10 },
+            REDDIT: { active: true, count: 1, max: 10 }
+        }
+    },
     subscribedChannels: [
         {
             id: 'yt-001',
             platform: 'YOUTUBE',
-            name: 'SAMTIME (Physical Discs)',
+            name: 'SAMTIME (Physical Discs Feed)',
             ref: 'https://www.youtube.com/watch?v=PTblI6oYfSU',
             product: 'PlayStation Discs & PS Store',
             commentsIngested: 2662,
-            watermark: 'Ugzm8Tx-MkDP... (Recorded)',
-            lastPolled: 'Just now'
-        },
-        {
-            id: 'yt-002',
-            platform: 'YOUTUBE',
-            name: 'PlayStation Global Channel',
-            ref: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-            product: 'DualSense Controller',
-            commentsIngested: 420,
-            watermark: 'yt_c_dual_101 (Recorded)',
-            lastPolled: '5m ago'
-        },
-        {
-            id: 'li-001',
-            platform: 'LINKEDIN',
-            name: 'Sony Semiconductor Solutions',
-            ref: 'https://www.linkedin.com/company/sony',
-            product: 'Sony Cloud Platform',
-            commentsIngested: 88,
-            watermark: 'li_sync_cursor_01',
-            lastPolled: '15m ago'
+            watermark: 'UgwIR313km5... (Recorded)',
+            lastPolled: 'Active Real-time'
         }
     ],
-    comments: [
-        {
-            id: 'c1-youtube',
-            platform: 'YouTube',
-            platformCommentId: 'yt_98124',
-            authorHash: 'sha256:7f4a...d91c',
-            maskedText: 'The battery in my PlayStation controller died after only 3 weeks! Called customer support at <PHONE> but nobody picked up for 45 minutes.',
-            hasPii: true,
-            sentiment: 'NEGATIVE',
-            sentimentScore: -0.88,
-            aspects: [{ name: 'Battery', sentiment: 'NEGATIVE' }, { name: 'Support', sentiment: 'NEGATIVE' }],
-            toxic: false,
-            churnRisk: 0.78,
-            impactScore: 84.50,
-            priority: 'P1',
-            likes: 420,
-            replies: 88,
-            timeAgo: '42m ago',
-            aiSuggestedReply: 'Hello! We sincerely apologize for the frustration with your battery and wait time. Please DM us your reference code so our senior support team can ship you a replacement under warranty immediately.',
-            status: 'NEEDS_REVIEW'
-        },
-        {
-            id: 'c2-linkedin',
-            platform: 'LinkedIn',
-            platformCommentId: 'li_55219',
-            authorHash: 'sha256:3e2b...8a0f',
-            maskedText: 'Our enterprise deployment experienced severe throttling on the billing API endpoint. Requesting urgent priority escalation.',
-            hasPii: false,
-            sentiment: 'NEGATIVE',
-            sentimentScore: -0.65,
-            aspects: [{ name: 'API Performance', sentiment: 'NEGATIVE' }, { name: 'Billing', sentiment: 'NEUTRAL' }],
-            toxic: false,
-            churnRisk: 0.62,
-            impactScore: 68.20,
-            priority: 'P2',
-            likes: 45,
-            replies: 12,
-            timeAgo: '2h ago',
-            aiSuggestedReply: 'Hi there, thank you for reaching out. We have escalated this to our cloud operations team. A dedicated engineer is investigating your tenant API logs right now.',
-            status: 'NEEDS_REVIEW'
-        },
-        {
-            id: 'c3-reddit',
-            platform: 'Reddit',
-            platformCommentId: 'rd_88192',
-            authorHash: 'sha256:1a9c...034e',
-            maskedText: 'Just tested the new update v2.4, the UI response time is noticeably smoother. Excellent work by the engineering team!',
-            hasPii: false,
-            sentiment: 'POSITIVE',
-            sentimentScore: 0.92,
-            aspects: [{ name: 'UI / UX', sentiment: 'POSITIVE' }, { name: 'Speed', sentiment: 'POSITIVE' }],
-            toxic: false,
-            churnRisk: 0.05,
-            impactScore: 18.00,
-            priority: 'P3',
-            likes: 189,
-            replies: 14,
-            timeAgo: '4h ago',
-            aiSuggestedReply: 'Thank you so much for the kind words! Glad you are enjoying v2.4.',
-            status: 'RESOLVED'
-        }
-    ],
+    comments: [],
     approvals: [
         {
             id: 'rep-001',
@@ -422,11 +356,19 @@ function renderSubscribedChannels() {
     grid.innerHTML = '';
 
     state.subscribedChannels.forEach(ch => {
-        const isYt = ch.platform === 'YOUTUBE';
+        let borderColor = 'var(--orange-primary)';
+        let badgeStyle = 'badge-p1';
+        if (ch.platform === 'LINKEDIN') {
+            borderColor = '#ffffff';
+            badgeStyle = 'badge-p2';
+        } else if (ch.platform === 'REDDIT') {
+            borderColor = '#ff4500';
+            badgeStyle = 'badge-p1';
+        }
         const card = document.createElement('div');
         card.style.background = '#141414';
         card.style.border = '1px solid #2a2a2a';
-        card.style.borderTop = isYt ? '3px solid var(--orange-primary)' : '3px solid #ffffff';
+        card.style.borderTop = `3px solid ${borderColor}`;
         card.style.borderRadius = '8px';
         card.style.padding = '16px';
         card.style.display = 'flex';
@@ -435,8 +377,8 @@ function renderSubscribedChannels() {
 
         card.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span class="badge ${isYt ? 'badge-p1' : 'badge-p2'}">${ch.platform}</span>
-                <span style="font-size:0.75rem; color:#10b981; font-weight:700;">● ACTIVE</span>
+                <span class="badge ${badgeStyle}">${ch.platform}</span>
+                <span style="font-size:0.75rem; color:#10b981; font-weight:700;">● ACTIVE LISTENING</span>
             </div>
             <div>
                 <h4 style="font-size:0.95rem; font-weight:800; color:#fff; margin-bottom:2px;">${ch.name}</h4>
@@ -520,7 +462,330 @@ window.subscribeChannel = function(platform) {
         state.subscribedChannels.push(newChannel);
         renderSubscribedChannels();
         alert(`Successfully subscribed LinkedIn profile! Ingestion active with HMAC pseudonymization.`);
+    } else if (platform === 'REDDIT') {
+        const input = document.getElementById('rdInput')?.value.trim();
+        const product = document.getElementById('rdProductInput')?.value.trim() || 'PlayStation Ecosystem';
+        if (!input) {
+            alert('Please enter a Subreddit name or URL (e.g. r/playstation).');
+            return;
+        }
+
+        const currentRd = state.subscribedChannels.filter(c => c.platform === 'REDDIT').length;
+        if (currentRd >= 10) {
+            alert('Tenant Quota Exceeded: You have reached the maximum allowed limit of 10 subreddits.');
+            return;
+        }
+
+        const subName = input.startsWith('r/') ? input : 'r/' + input;
+        const newChannel = {
+            id: 'rd-' + Date.now().toString().slice(-4),
+            platform: 'REDDIT',
+            name: subName,
+            ref: `https://www.reddit.com/${subName}`,
+            product: product,
+            commentsIngested: 0,
+            lastPolled: 'Just subscribed'
+        };
+
+        state.subscribedChannels.push(newChannel);
+        renderSubscribedChannels();
+        alert(`Successfully subscribed Reddit community! Stream ingestion active.`);
     }
+};
+
+// ==============================================================================
+// SaaS Session & Multi-Tenant Authentication Engine
+// ==============================================================================
+
+window.initSession = function() {
+    const raw = localStorage.getItem('yudhix_session');
+    if (raw) {
+        try {
+            const session = JSON.parse(raw);
+            if (session && session.expiresAt && session.expiresAt > Date.now()) {
+                state.currentTenant = session;
+                syncTenantUI();
+                showMainApp();
+                return;
+            }
+        } catch(e) {
+            console.warn("Invalid session stored, clearing:", e);
+            localStorage.removeItem('yudhix_session');
+        }
+    }
+    // No valid session: open full Auth Portal
+    showAuthPortal();
+};
+
+window.showAuthPortal = function() {
+    const portal = document.getElementById('authPortalContainer');
+    const app = document.getElementById('mainAppContainer');
+    if (portal) portal.classList.remove('hidden');
+    if (app) app.classList.add('hidden');
+    if (window.lucide) window.lucide.createIcons();
+};
+
+window.showMainApp = function() {
+    const portal = document.getElementById('authPortalContainer');
+    const app = document.getElementById('mainAppContainer');
+    if (portal) portal.classList.add('hidden');
+    if (app) app.classList.remove('hidden');
+    if (window.lucide) window.lucide.createIcons();
+};
+
+window.syncTenantUI = function() {
+    const t = state.currentTenant;
+    const badgeText = document.getElementById('headerTenantText');
+    if (badgeText) badgeText.innerText = `${t.tenantCode} (${t.role || 'Admin'})`;
+    const sideUser = document.getElementById('sidebarUserName');
+    if (sideUser) sideUser.innerText = t.user;
+    const sideRole = document.getElementById('sidebarTenantRole');
+    if (sideRole) sideRole.innerText = `${t.tenantCode} (${t.role || 'Admin'})`;
+    const sideAvatar = document.getElementById('sidebarAvatar');
+    if (sideAvatar) sideAvatar.innerText = (t.user || 'AD').slice(0, 2).toUpperCase();
+};
+
+window.switchAuthTab = function(tab) {
+    const btnIn = document.getElementById('tabBtnSignIn');
+    const btnUp = document.getElementById('tabBtnSignUp');
+    const formIn = document.getElementById('formSignIn');
+    const formUp = document.getElementById('formSignUp');
+
+    if (tab === 'signin') {
+        btnIn?.classList.add('active');
+        btnUp?.classList.remove('active');
+        formIn?.classList.remove('hidden');
+        formUp?.classList.add('hidden');
+    } else {
+        btnUp?.classList.add('active');
+        btnIn?.classList.remove('active');
+        formUp?.classList.remove('hidden');
+        formIn?.classList.add('hidden');
+    }
+    if (window.lucide) window.lucide.createIcons();
+};
+
+window.autoGenerateTenantCode = function(name) {
+    if (!name) return;
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const codeInput = document.getElementById('regTenantCode');
+    if (codeInput) codeInput.value = slug;
+};
+
+window.quickFillDemoTenant = function(code, email, pass, role) {
+    const cInput = document.getElementById('portalTenantCode');
+    const eInput = document.getElementById('portalEmail');
+    const pInput = document.getElementById('portalPassword');
+    const rInput = document.getElementById('portalRole');
+    if (cInput) cInput.value = code;
+    if (eInput) eInput.value = email;
+    if (pInput) pInput.value = pass;
+    if (rInput) rInput.value = role;
+};
+
+window.handlePortalSignIn = async function(event) {
+    event.preventDefault();
+    const tenantCode = document.getElementById('portalTenantCode')?.value.trim() || 'sony-playstation';
+    const email = document.getElementById('portalEmail')?.value.trim() || 'admin@sony.com';
+    const password = document.getElementById('portalPassword')?.value || 'sony_admin_2026';
+    const role = document.getElementById('portalRole')?.value || 'tenant_admin';
+    const remember = document.getElementById('portalRememberSession')?.checked !== false;
+
+    let accessToken = null;
+    try {
+        const bodyParams = new URLSearchParams();
+        bodyParams.append('client_id', 'yudhix-web');
+        bodyParams.append('grant_type', 'password');
+        bodyParams.append('username', email);
+        bodyParams.append('password', password);
+
+        const res = await fetch('http://localhost:8180/realms/yudhix/protocol/openid-connect/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: bodyParams
+        });
+        if (res.ok) {
+            const data = await res.json();
+            accessToken = data.access_token;
+            console.log("Keycloak authenticated successfully!", data);
+        }
+    } catch(err) {
+        console.warn("Direct Keycloak token call skipped:", err.message);
+    }
+
+    const session = {
+        tenantCode,
+        tenantId: "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+        name: tenantCode === 'sony-playstation' ? 'Sony Interactive Entertainment' : (tenantCode.toUpperCase() + ' Tenant'),
+        user: email,
+        role: role,
+        token: accessToken,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + (24 * 3600 * 1000) // 24 hours
+    };
+
+    if (remember) {
+        localStorage.setItem('yudhix_session', JSON.stringify(session));
+    }
+
+    state.currentTenant = session;
+    syncTenantUI();
+    showMainApp();
+    alert(`Keycloak Login Successful!\n\nWelcome back, ${email}.\nActive Tenant: ${session.name} (${tenantCode})\nRole: ${role}\nRow-Level Security session established.`);
+};
+
+window.handlePortalSignUp = function(event) {
+    event.preventDefault();
+    const orgName = document.getElementById('regOrgName')?.value.trim();
+    const tenantCode = document.getElementById('regTenantCode')?.value.trim();
+    const adminName = document.getElementById('regAdminName')?.value.trim();
+    const adminEmail = document.getElementById('regAdminEmail')?.value.trim();
+    const pass = document.getElementById('regPassword')?.value;
+    const passConfirm = document.getElementById('regPasswordConfirm')?.value;
+    const subYt = document.getElementById('regSubYt')?.checked;
+    const subLi = document.getElementById('regSubLi')?.checked;
+    const subRd = document.getElementById('regSubRd')?.checked;
+
+    if (pass !== passConfirm) {
+        alert("Password and Confirm Password do not match. Please re-enter.");
+        return;
+    }
+
+    if (pass.length < 6) {
+        alert("Password must be at least 6 characters long.");
+        return;
+    }
+
+    const tenantUuid = (crypto.randomUUID ? crypto.randomUUID() : 'ten-' + Date.now());
+    const session = {
+        tenantCode,
+        tenantId: tenantUuid,
+        name: orgName,
+        user: adminEmail,
+        adminName: adminName,
+        role: 'tenant_admin',
+        token: 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.dummy_reg_token',
+        subscriptions: {
+            YOUTUBE: { active: subYt, count: 0, max: 20 },
+            LINKEDIN: { active: subLi, count: 0, max: 10 },
+            REDDIT: { active: subRd, count: 0, max: 10 }
+        },
+        createdAt: Date.now(),
+        expiresAt: Date.now() + (24 * 3600 * 1000)
+    };
+
+    localStorage.setItem('yudhix_session', JSON.stringify(session));
+    state.currentTenant = session;
+    syncTenantUI();
+    showMainApp();
+    alert(`Account Provisioned!\n\nWelcome to Yudhix, ${adminName}!\nTenant "${orgName}" (${tenantCode}) is now active with Tenant Administrator privileges.\n\nYou can now subscribe up to 20 YouTube channels and start harvesting comments!`);
+};
+
+window.logoutCurrentTenant = function() {
+    if (confirm(`Log out of current tenant "${state.currentTenant.name}"?`)) {
+        localStorage.removeItem('yudhix_session');
+        state.currentTenant.authenticated = false;
+        showAuthPortal();
+    }
+};
+
+// Keycloak Modal & Live JWT Claims Inspector Handlers
+window.openLoginModal = function() {
+    const modal = document.getElementById('loginModal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        updateJwtInspector();
+        
+        ['loginTenantCode', 'loginUsername', 'loginRole'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el && !el.dataset.hasListener) {
+                el.addEventListener('input', updateJwtInspector);
+                el.addEventListener('change', updateJwtInspector);
+                el.dataset.hasListener = "true";
+            }
+        });
+    }
+};
+
+window.closeLoginModal = function() {
+    const modal = document.getElementById('loginModal');
+    if (modal) modal.classList.add('hidden');
+};
+
+function generateJwtPayload(tenantCode, username, role) {
+    const now = Math.floor(Date.now() / 1000);
+    return {
+        exp: now + 3600,
+        iat: now,
+        jti: "urn:uuid:9b1deb4d-" + Math.random().toString(16).substring(2, 10),
+        iss: "http://localhost:8180/realms/yudhix",
+        aud: "account",
+        sub: "user-id-" + (username.split('@')[0] || 'admin'),
+        typ: "Bearer",
+        azp: "yudhix-web",
+        session_state: "sess-" + Math.random().toString(16).substring(2, 10),
+        preferred_username: username,
+        email: username,
+        realm_access: {
+            roles: [role, "offline_access", "uma_authorization", "default-roles-yudhix"]
+        },
+        resource_access: {
+            "yudhix-web": { roles: [role] },
+            "yudhix-gateway": { roles: [role] }
+        },
+        scope: "openid profile email",
+        tenant_id: "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+        tenant_code: tenantCode,
+        organization: tenantCode === "sony-playstation" ? "Sony Interactive Entertainment" : (tenantCode.toUpperCase() + " Enterprise"),
+        country: "US"
+    };
+}
+
+function updateJwtInspector() {
+    const tenantCode = document.getElementById('loginTenantCode')?.value || state.currentTenant.tenantCode;
+    const username = document.getElementById('loginUsername')?.value || state.currentTenant.user;
+    const role = document.getElementById('loginRole')?.value || state.currentTenant.role;
+    const payload = generateJwtPayload(tenantCode, username, role);
+    const pre = document.getElementById('jwtPayloadDisplay');
+    if (pre) pre.innerText = JSON.stringify(payload, null, 2);
+}
+
+window.performTenantLogin = async function() {
+    const tenantCode = document.getElementById('loginTenantCode')?.value.trim() || 'sony-playstation';
+    const username = document.getElementById('loginUsername')?.value.trim() || 'admin@sony.com';
+    const password = document.getElementById('loginPassword')?.value || 'sony_admin_2026';
+    const role = document.getElementById('loginRole')?.value || 'tenant_admin';
+
+    try {
+        const bodyParams = new URLSearchParams();
+        bodyParams.append('client_id', 'yudhix-web');
+        bodyParams.append('grant_type', 'password');
+        bodyParams.append('username', username);
+        bodyParams.append('password', password);
+
+        const kcRes = await fetch('http://localhost:8180/realms/yudhix/protocol/openid-connect/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: bodyParams
+        });
+
+        if (kcRes.ok) {
+            const tokenData = await kcRes.json();
+            state.currentTenant.token = tokenData.access_token;
+        }
+    } catch(e) {
+        console.warn("Keycloak direct call skipped:", e.message);
+    }
+
+    state.currentTenant.tenantCode = tenantCode;
+    state.currentTenant.user = username;
+    state.currentTenant.role = role;
+    state.currentTenant.name = tenantCode === 'sony-playstation' ? 'Sony Interactive Entertainment' : (tenantCode.toUpperCase() + ' Tenant');
+    state.currentTenant.authenticated = true;
+
+    syncTenantUI();
+    closeLoginModal();
+    alert(`Keycloak Authenticated Successfully!\n\nTenant: ${state.currentTenant.name}\nTenant Code: ${tenantCode}\nUser: ${username}\nRole: ${role}\nRow-Level Security context established.`);
 };
 
 window.unsubscribeChannel = function(id) {

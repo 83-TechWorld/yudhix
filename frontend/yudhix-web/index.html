@@ -15,10 +15,187 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
 
-  <link rel="stylesheet" href="css/index.css">
+  <link rel="stylesheet" href="css/index.css?v=5.0">
 </head>
 <body>
-  <div class="app-container">
+  <!-- Full-Page SaaS Auth Portal (Sign In & Sign Up) -->
+  <div id="authPortalContainer" class="auth-portal-container hidden">
+    <div class="auth-card">
+      <!-- Left Branding Panel -->
+      <div class="auth-brand-side">
+        <div>
+          <div style="display:flex; align-items:center; gap:12px; margin-bottom:24px;">
+            <div class="brand-icon" style="width:40px; height:40px; font-size:1.25rem;">Y</div>
+            <div>
+              <h2 style="font-size:1.35rem; font-weight:800; color:#fff; letter-spacing:-0.5px;">Yudhix</h2>
+              <span style="font-size:0.75rem; color:var(--orange-primary); font-weight:700; text-transform:uppercase; letter-spacing:1px;">Multi-Tenant SaaS Platform</span>
+            </div>
+          </div>
+
+          <h3 style="font-size:1.35rem; font-weight:800; line-height:1.3; color:#fff; margin-bottom:12px;">
+            Autonomous Social Comment Intelligence & Turnaround
+          </h3>
+          <p style="font-size:0.86rem; color:var(--text-secondary); line-height:1.5;">
+            Protect brand value, eliminate viral PR crises, and recover high-LTV churn risks across YouTube, LinkedIn, and Reddit with local Ollama Llama 3.1 inference.
+          </p>
+
+          <div class="auth-feature-list">
+            <div class="auth-feature-item">
+              <div class="auth-feature-icon"><i data-lucide="shield-alert"></i></div>
+              <div>
+                <strong style="font-size:0.84rem; color:#fff;">P1 Crisis & Churn Defense</strong>
+                <p style="font-size:0.78rem; color:var(--text-muted);">Real-time idiom, sarcasm, and veteran gamer boycott detection.</p>
+              </div>
+            </div>
+
+            <div class="auth-feature-item">
+              <div class="auth-feature-icon"><i data-lucide="building"></i></div>
+              <div>
+                <strong style="font-size:0.84rem; color:#fff;">Strict Tenant Isolation</strong>
+                <p style="font-size:0.78rem; color:var(--text-muted);">Keycloak OIDC authentication with PostgreSQL Row-Level Security.</p>
+              </div>
+            </div>
+
+            <div class="auth-feature-item">
+              <div class="auth-feature-icon"><i data-lucide="check-circle-2"></i></div>
+              <div>
+                <strong style="font-size:0.84rem; color:#fff;">Separation-of-Duties Approvals</strong>
+                <p style="font-size:0.78rem; color:var(--text-muted);">Agent drafting with brand executive sign-off and SHA-256 audit ledger.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="font-size:0.75rem; color:var(--text-muted); border-top:1px solid #282828; padding-top:16px;">
+          Powered by Keycloak 25+, Ollama Llama 3.1, & PostgreSQL 16 (RLS)
+        </div>
+      </div>
+
+      <!-- Right Form Panel -->
+      <div class="auth-form-side">
+        <!-- Tab Bar -->
+        <div class="auth-tab-bar">
+          <button id="tabBtnSignIn" class="auth-tab-btn active" onclick="switchAuthTab('signin')">
+            <i data-lucide="log-in"></i> Sign In to Tenant
+          </button>
+          <button id="tabBtnSignUp" class="auth-tab-btn" onclick="switchAuthTab('signup')">
+            <i data-lucide="user-plus"></i> Register New Tenant
+          </button>
+        </div>
+
+        <!-- 1. SIGN IN FORM -->
+        <form id="formSignIn" onsubmit="handlePortalSignIn(event)" style="display:flex; flex-direction:column; gap:16px;">
+          <div>
+            <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Tenant Code / Organization Slug</label>
+            <input id="portalTenantCode" type="text" value="sony-playstation" required placeholder="e.g. sony-playstation"
+                   style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-family:var(--font-mono); font-size:0.88rem;">
+          </div>
+
+          <div>
+            <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Admin Email / Username</label>
+            <input id="portalEmail" type="email" value="admin@sony.com" required placeholder="admin@sony.com"
+                   style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.88rem;">
+          </div>
+
+          <div>
+            <div style="display:flex; justify-content:space-between;">
+              <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Password</label>
+              <span style="font-size:0.75rem; color:var(--orange-primary); cursor:pointer;" onclick="alert('Default demo password: sony_admin_2026')">Forgot password?</span>
+            </div>
+            <input id="portalPassword" type="password" value="sony_admin_2026" required placeholder="••••••••"
+                   style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.88rem;">
+          </div>
+
+          <div>
+            <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Tenant Role</label>
+            <select id="portalRole" style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.88rem;">
+              <option value="tenant_admin" selected>tenant_admin (Full Admin & Platform Control)</option>
+              <option value="approver">approver (Authorized Reviewer)</option>
+              <option value="agent">agent (Triage & Response Agent)</option>
+              <option value="analyst">analyst (Data & Insights)</option>
+            </select>
+          </div>
+
+          <div style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" id="portalRememberSession" checked style="accent-color:var(--orange-primary);">
+            <label for="portalRememberSession" style="font-size:0.8rem; color:var(--text-secondary); cursor:pointer;">
+              Maintain persistent session on this device
+            </label>
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="width:100%; padding:12px; font-size:0.9rem;">
+            <i data-lucide="shield-check"></i> Sign In via Keycloak
+          </button>
+
+          <button type="button" class="btn btn-secondary" onclick="quickFillDemoTenant('sony-playstation', 'admin@sony.com', 'sony_admin_2026', 'tenant_admin')" style="width:100%; font-size:0.8rem;">
+            <i data-lucide="zap"></i> Quick Fill: Sony PlayStation Demo
+          </button>
+        </form>
+
+        <!-- 2. SIGN UP FORM (Register New Tenant) -->
+        <form id="formSignUp" class="hidden" onsubmit="handlePortalSignUp(event)" style="display:flex; flex-direction:column; gap:14px;">
+          <div>
+            <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Company / Organization Name</label>
+            <input id="regOrgName" type="text" required placeholder="e.g. Nintendo Co., Ltd." oninput="autoGenerateTenantCode(this.value)"
+                   style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.88rem;">
+          </div>
+
+          <div>
+            <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Tenant Code / URL Slug</label>
+            <input id="regTenantCode" type="text" required placeholder="e.g. nintendo-global"
+                   style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-family:var(--font-mono); font-size:0.88rem;">
+          </div>
+
+          <div style="display:flex; gap:12px;">
+            <div style="flex:1;">
+              <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Admin Full Name</label>
+              <input id="regAdminName" type="text" required placeholder="e.g. Alex Morgan"
+                     style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.88rem;">
+            </div>
+            <div style="flex:1;">
+              <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Admin Work Email</label>
+              <input id="regAdminEmail" type="email" required placeholder="alex@company.com"
+                     style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.88rem;">
+            </div>
+          </div>
+
+          <div style="display:flex; gap:12px;">
+            <div style="flex:1;">
+              <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Password</label>
+              <input id="regPassword" type="password" required placeholder="Minimum 8 characters"
+                     style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.88rem;">
+            </div>
+            <div style="flex:1;">
+              <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Confirm Password</label>
+              <input id="regPasswordConfirm" type="password" required placeholder="Re-enter password"
+                     style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.88rem;">
+            </div>
+          </div>
+
+          <div>
+            <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase; margin-bottom:6px; display:block;">Select Initial Platform Subscriptions</label>
+            <div style="display:flex; gap:12px;">
+              <label style="display:flex; align-items:center; gap:6px; font-size:0.8rem; color:#fff; cursor:pointer;">
+                <input type="checkbox" id="regSubYt" checked style="accent-color:var(--orange-primary);"> YouTube (20 Channels)
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:0.8rem; color:#fff; cursor:pointer;">
+                <input type="checkbox" id="regSubLi" checked style="accent-color:var(--orange-primary);"> LinkedIn
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:0.8rem; color:#fff; cursor:pointer;">
+                <input type="checkbox" id="regSubRd" checked style="accent-color:var(--orange-primary);"> Reddit
+              </label>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="width:100%; padding:12px; font-size:0.9rem; margin-top:6px;">
+            <i data-lucide="check-circle"></i> Create Tenant & Launch Workspace
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div id="mainAppContainer" class="app-container">
     <!-- Sidebar -->
     <aside class="sidebar">
       <div class="brand-header">
@@ -53,12 +230,17 @@
         </li>
       </ul>
 
-      <div class="sidebar-footer">
-        <div class="user-avatar">AD</div>
-        <div class="user-info">
-          <span class="user-name">Admin Officer</span>
-          <span class="user-role">Tenant: Sony Global (IN)</span>
+      <div class="sidebar-footer" style="display:flex; justify-content:space-between; align-items:center;">
+        <div style="display:flex; align-items:center; gap:10px; cursor:pointer;" onclick="openLoginModal()" title="Manage Tenant / Keycloak">
+          <div class="user-avatar" id="sidebarAvatar">SO</div>
+          <div class="user-info">
+            <span class="user-name" id="sidebarUserName">admin@sony.com</span>
+            <span class="user-role" id="sidebarTenantRole">sony-playstation (Admin)</span>
+          </div>
         </div>
+        <button class="btn btn-secondary" style="padding:6px; border:none; background:transparent; color:#ff4444;" onclick="logoutCurrentTenant()" title="Log Out">
+          <i data-lucide="log-out" style="width:16px; height:16px;"></i>
+        </button>
       </div>
     </aside>
 
@@ -69,12 +251,19 @@
           <h2 class="view-heading" id="viewTitle">Executive Intelligence Overview</h2>
           <span class="view-sub">Real-time comment velocity, AI sentiment, and turnaround metrics</span>
         </div>
-        <div class="top-actions">
+        <div class="top-actions" style="display:flex; align-items:center; gap:10px;">
+          <div class="tenant-badge active" id="headerTenantBadge" title="Click to view tenant details" onclick="openLoginModal()" style="cursor:pointer;">
+            <i data-lucide="building-2"></i>
+            <span id="headerTenantText">sony-playstation (Admin)</span>
+          </div>
+          <button class="btn btn-secondary" onclick="openLoginModal()" title="View Token Claims">
+            <i data-lucide="key-round"></i> Token
+          </button>
           <button class="btn btn-secondary" onclick="window.location.reload()">
             <i data-lucide="refresh-cw"></i> Refresh
           </button>
-          <button class="btn btn-primary" onclick="alert('Airflow batch ingestion triggered successfully!')">
-            <i data-lucide="play"></i> Run Ingest DAG
+          <button class="btn btn-outline-orange" onclick="logoutCurrentTenant()" title="Sign out of current tenant">
+            <i data-lucide="log-out"></i> Log Out
           </button>
         </div>
       </header>
@@ -365,6 +554,36 @@
                 </div>
               </div>
             </div>
+
+            <!-- Reddit Subreddit Subscription Box -->
+            <div class="panel-card" style="border-top: 3px solid #ff4500;">
+              <div class="panel-header">
+                <h3 class="panel-title">
+                  <i data-lucide="message-square" style="color:#ff4500;"></i> Subscribe Reddit Community
+                </h3>
+                <span class="badge" style="background:rgba(255, 69, 0, 0.15); border:1px solid #ff4500; color:#ff4500;">Reddit SPI</span>
+              </div>
+              <p style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:14px;">
+                Listen to gaming community threads, user complaints, and product sentiment on Reddit in real-time.
+              </p>
+              <div style="display:flex; flex-direction:column; gap:12px;">
+                <div>
+                  <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Subreddit Name or URL</label>
+                  <input id="rdInput" type="text" value="r/playstation" placeholder="e.g. r/playstation or r/gaming" 
+                         style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-family:var(--font-mono); font-size:0.85rem;">
+                </div>
+                <div>
+                  <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Associated Product</label>
+                  <input id="rdProductInput" type="text" value="PlayStation Ecosystem" placeholder="e.g. PlayStation 5 Hardware"
+                         style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.85rem;">
+                </div>
+                <div style="margin-top:4px;">
+                  <button class="btn btn-secondary" onclick="subscribeChannel('REDDIT')">
+                    <i data-lucide="plus"></i> Subscribe Subreddit
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Active Subscribed Channels Grid -->
@@ -373,7 +592,7 @@
               <h3 class="panel-title">
                 <i data-lucide="list"></i> Subscribed Channels & Monitored Feeds
               </h3>
-              <span style="font-size:0.8rem; color:var(--text-secondary);">Automated 5-minute incremental ingestion active</span>
+              <span style="font-size:0.8rem; color:var(--text-secondary);">Automated 5-minute incremental ingestion active across microservices</span>
             </div>
             <div id="subscribedChannelsGrid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:16px;"></div>
           </div>
@@ -382,9 +601,78 @@
     </main>
   </div>
 
-  <script src="js/app.js"></script>
+  <!-- SaaS Keycloak Multi-Tenant Authentication Modal -->
+  <div id="loginModal" class="modal-overlay hidden">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div class="brand-icon" style="width:32px; height:32px; font-size:1rem;">Y</div>
+          <div>
+            <h3 style="font-size:1.05rem; font-weight:800; color:#fff;">SaaS Tenant Authentication</h3>
+            <span style="font-size:0.75rem; color:var(--text-secondary);">Keycloak 25+ OIDC / OAuth2 Multi-Tenancy</span>
+          </div>
+        </div>
+        <button class="btn btn-secondary" style="padding:4px 8px;" onclick="closeLoginModal()">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div style="background:var(--black-surface); border:1px solid var(--black-border); border-radius:var(--radius-sm); padding:12px; font-size:0.8rem; color:var(--text-secondary);">
+          <strong style="color:var(--orange-primary);">Multi-Tenant Isolation:</strong> Each tenant logs in using their unique <code>tenant_code</code>. Keycloak maps the user to their designated organization and issues a signed JWT containing <code>tenant_id</code> and RLS claims.
+        </div>
+
+        <div>
+          <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Tenant Code / Organization Slug</label>
+          <input id="loginTenantCode" type="text" value="sony-playstation" placeholder="e.g. sony-playstation or acme-corp"
+                 style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-family:var(--font-mono); font-size:0.88rem;">
+        </div>
+
+        <div style="display:flex; gap:12px;">
+          <div style="flex:1;">
+            <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Username / Admin Email</label>
+            <input id="loginUsername" type="text" value="admin@sony.com" placeholder="admin@sony.com"
+                   style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.88rem;">
+          </div>
+          <div style="flex:1;">
+            <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Admin Password</label>
+            <input id="loginPassword" type="password" value="sony_admin_2026" placeholder="••••••••"
+                   style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.88rem;">
+          </div>
+        </div>
+
+        <div>
+          <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Assigned Tenant Role</label>
+          <select id="loginRole" style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.88rem;">
+            <option value="tenant_admin" selected>tenant_admin (Full Tenant, Platforms, & Rules Control)</option>
+            <option value="approver">approver (Authorized Turnaround Approver)</option>
+            <option value="agent">agent (Triage & Response Agent)</option>
+            <option value="analyst">analyst (Intelligence & Metrics Analyst)</option>
+          </select>
+        </div>
+
+        <!-- Live Keycloak JWT Inspector -->
+        <div id="jwtInspectorBox" style="background:#0a0a0a; border:1px solid #222; border-radius:var(--radius-sm); padding:12px; font-family:var(--font-mono); font-size:0.75rem;">
+          <div style="display:flex; justify-content:space-between; margin-bottom:6px; color:var(--orange-primary); font-weight:700;">
+            <span>ACTIVE KEYCLOAK JWT CLAIMS</span>
+            <span id="jwtStatus">TOKEN ACTIVE</span>
+          </div>
+          <pre id="jwtPayloadDisplay" style="color:#aaa; white-space:pre-wrap; margin:0; max-height:120px; overflow-y:auto;"></pre>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeLoginModal()">Close</button>
+        <button class="btn btn-primary" onclick="performTenantLogin()">
+          <i data-lucide="log-in"></i> Authenticate with Keycloak
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/app.js?v=5.0"></script>
   <script>
-    lucide.createIcons();
+    if (window.lucide) lucide.createIcons();
   </script>
 </body>
 </html>

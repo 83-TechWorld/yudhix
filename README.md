@@ -20,6 +20,7 @@
 - **Privacy by Design**: Store insights, not identities. Social author IDs are immediately hashed using keyed HMAC-SHA256 (`author_hash`). Personal PII is masked before model inference or long-term persistence.
 - **Human-in-the-Loop**: No automated replies are ever posted without human approval (configurable 1- or 2-level approval with separation of duties).
 - **Tenant Isolation**: Strict logical multi-tenancy backed by `tenant_id` on every row, Keycloak organization tokens, and PostgreSQL Row-Level Security (RLS).
+- **Ground Truth Triangulation (Video RAG)**: Unlike basic keyword scrapers, Yudhix decodes the **creator's video context** (Whisper transcripts + atomic claims), cross-checks them against **authoritative brand knowledge (RAG)**, and determines whether audience outrage was caused by **actual product defects** or **creator misinformation / rage-bait**.
 - **Config over Code**: Discovery rules, SLA timers, impact weighting, and compliance policy packs (India DPDP 2023/2025, US CCPA/CPRA) are fully configuration-driven.
 
 ---
@@ -242,6 +243,42 @@ flowchart TD
         WORSENED --> DASH
     end
 ```
+
+---
+
+## 4.1 Ground Truth Triangulation: Influencer Video Decoding & RAG Fact-Check Engine
+
+A major architectural innovation of Yudhix is **Ground Truth Triangulation**. Unlike legacy monitoring tools that evaluate customer comments in a vacuum, Yudhix decodes the video narrative, verifies claims against official brand records, and links audience outrage to its root cause:
+
+```
+               ┌────────────────────────────────────────────────────────┐
+               │              OFFICIAL BRAND KNOWLEDGE RAG              │
+               │   (Sony Hardware Specs, EULAs, Discs Policy, Warranties)│
+               └───────────────────────────┬────────────────────────────┘
+                                           │ Semantic Cross-Encoder
+                                           ▼
+┌──────────────────────────────┐          ┌─────────────────────────────┐
+│  INFLUENCER VIDEO ANALYSIS   │ ───────► │    RAG FACT-CHECK MATRIX    │
+│  • Whisper Speech-to-Text    │          │  • Verified True            │
+│  • Atomic Chronological Quote│          │  • Misleading / False       │
+│  • Sensationalism / Rage-Bait│          │  • Unverified Speculation   │
+└──────────────────────────────┘          └──────────────┬──────────────┘
+                                                         │
+                                                         ▼
+                                          ┌─────────────────────────────┐
+                                          │  CAUSALITY OUTRAGE MAPPING  │
+                                          │  • 86.4% boycott comments   │
+                                          │    triggered by Claim @01:14│
+                                          │  • Action: Creator Outreach │
+                                          └─────────────────────────────┘
+```
+
+### Triangulation Capabilities
+1. **Atomic Claim Extraction**: Automatically identifies and timestamps key statements made in YouTube videos (e.g., *"Sony is revoking offline disc playability with a mandatory patch"*).
+2. **Product Knowledge RAG**: Semantically matches creator assertions against authoritative product engineering specs (`product_knowledge` table in PostgreSQL).
+3. **Automated Claim Verdicts**: Emits structured confidence scores, official document citations (e.g. *Section 4.2: Media Drive Verification*), and verdicts (`MISLEADING`, `UNVERIFIED_SPECULATION`, `FACTUALLY_CORRECT`).
+4. **Causality & Anger Attribution**: Proves to brand executives that public backlash was triggered by *creator misinformation* rather than a failure of the product itself.
+5. **Creator Clarification Kit**: Generates personalized, polite outreach notes citing official specifications so creators can update pinned comments and avoid viral PR crises.
 
 ---
 

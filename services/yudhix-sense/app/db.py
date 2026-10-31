@@ -475,3 +475,87 @@ def get_source_watermarks(tenant_id: str = DEFAULT_TENANT_ID) -> List[Dict[str, 
     finally:
         conn.close()
 
+
+def get_product_knowledge(tenant_id: str = DEFAULT_TENANT_ID, product_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """
+    Retrieves official brand knowledge records (RAG Ground Truth) from PostgreSQL.
+    """
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            if product_id:
+                cur.execute("""
+                    SELECT pk.id, pk.tenant_id, pk.product_id, p.name as product_name, p.code as product_code,
+                           pk.document_title, pk.category, pk.clause_ref, pk.official_statement, pk.citation_source,
+                           pk.verified_at
+                    FROM product_knowledge pk
+                    LEFT JOIN product p ON pk.product_id = p.id
+                    WHERE pk.tenant_id = %s AND pk.product_id = %s
+                    ORDER BY pk.category, pk.document_title;
+                """, (tenant_id, product_id))
+            else:
+                cur.execute("""
+                    SELECT pk.id, pk.tenant_id, pk.product_id, p.name as product_name, p.code as product_code,
+                           pk.document_title, pk.category, pk.clause_ref, pk.official_statement, pk.citation_source,
+                           pk.verified_at
+                    FROM product_knowledge pk
+                    LEFT JOIN product p ON pk.product_id = p.id
+                    WHERE pk.tenant_id = %s
+                    ORDER BY pk.category, pk.document_title;
+                """, (tenant_id,))
+            return [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        logger.error(f"Error retrieving product knowledge: {e}", exc_info=True)
+        return []
+    finally:
+        conn.close()
+
+
+def get_video_truth_analysis(tenant_id: str = DEFAULT_TENANT_ID, video_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """
+    Retrieves video truth analysis records with extracted claims and RAG verification.
+    """
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            if video_id:
+                cur.execute("""
+                    SELECT id, video_id, channel_title, video_title, video_url, published_date,
+                           duration_seconds, rage_bait_score, factual_accuracy_score, sensationalism_grade,
+                           total_claims, misleading_claims_count, summary, created_at
+                    FROM video_truth_analysis
+                    WHERE tenant_id = %s AND video_id = %s;
+                """, (tenant_id, video_id))
+            else:
+                cur.execute("""
+                    SELECT id, video_id, channel_title, video_title, video_url, published_date,
+                           duration_seconds, rage_bait_score, factual_accuracy_score, sensationalism_grade,
+                           total_claims, misleading_claims_count, summary, created_at
+                    FROM video_truth_analysis
+                    WHERE tenant_id = %s
+                    ORDER BY created_at DESC;
+                """, (tenant_id,))
+            rows = [dict(r) for r in cur.fetchall()]
+
+            # Attach atomic claims with RAG cross-references for each video
+            for row in rows:
+                cur.execute("""
+                    SELECT vc.id, vc.timestamp_start, vc.timestamp_seconds, vc.creator_quote,
+                           vc.topic, vc.verdict, vc.confidence_score, vc.fact_check_analysis,
+                           vc.official_citation, vc.incited_comments_count, vc.sentiment_impact,
+                           pk.document_title, pk.clause_ref, pk.official_statement
+                    FROM video_claim vc
+                    LEFT JOIN product_knowledge pk ON vc.rag_knowledge_id = pk.id
+                    WHERE vc.tenant_id = %s AND vc.video_analysis_id = %s
+                    ORDER BY vc.timestamp_seconds ASC;
+                """, (tenant_id, row["id"]))
+                row["claims"] = [dict(c) for c in cur.fetchall()]
+
+            return rows
+    except Exception as e:
+        logger.error(f"Error retrieving video truth analysis: {e}", exc_info=True)
+        return []
+    finally:
+        conn.close()
+
+

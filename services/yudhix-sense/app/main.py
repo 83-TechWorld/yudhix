@@ -17,7 +17,9 @@ from app.db import (
     save_source_watermark,
     get_source_watermarks,
     get_products_summary,
-    tag_comment_product
+    tag_comment_product,
+    get_product_knowledge,
+    get_video_truth_analysis
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -74,6 +76,24 @@ def tag_product(
         raise HTTPException(status_code=400, detail="product_id is required")
     success = tag_comment_product(comment_id=comment_id, product_id=product_id, tenant_id=tenant_id)
     return {"success": success, "commentId": comment_id, "productId": product_id}
+
+
+@app.get("/api/v1/truth/knowledge")
+def list_knowledge(tenant_id: str = "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d", product_id: Optional[str] = None):
+    """
+    Fetch authoritative brand ground truth specifications and policies for RAG verification.
+    """
+    records = get_product_knowledge(tenant_id=tenant_id, product_id=product_id)
+    return {"knowledge": records, "count": len(records)}
+
+
+@app.get("/api/v1/truth/videos")
+def list_video_truth(tenant_id: str = "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d", video_id: Optional[str] = None):
+    """
+    Fetch decoded videos, extracted atomic claims, and RAG fact-check cross-references.
+    """
+    videos = get_video_truth_analysis(tenant_id=tenant_id, video_id=video_id)
+    return {"videos": videos, "count": len(videos)}
 
 
 @app.get("/api/v1/comments")

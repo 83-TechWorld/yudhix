@@ -211,6 +211,11 @@
           <i data-lucide="layout-dashboard"></i>
           <span>Dashboard</span>
         </li>
+        <li class="nav-item" data-tab="truth-studio" id="nav-truth-studio">
+          <i data-lucide="scan-eye"></i>
+          <span>Video Truth Studio</span>
+          <span class="nav-badge" style="background:#25d366; color:#0b141a;">AI RAG</span>
+        </li>
         <li class="nav-item" data-tab="inbox" id="nav-inbox">
           <i data-lucide="inbox"></i>
           <span>Social Inbox</span>
@@ -445,6 +450,147 @@
                     <span class="badge" style="background:rgba(245,158,11,0.15); color:#f59e0b;">Ready (Polling Subscribed)</span>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- NEW: VIDEO TRUTH & GROUND TRUTH STUDIO VIEW -->
+        <div id="view-truth-studio" class="tab-view hidden">
+          <!-- Video Ingestion & Decoder Bar -->
+          <div class="truth-decoder-banner">
+            <div class="decoder-scanner-glow"></div>
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; position:relative; z-index:2;">
+              <div>
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                  <span class="badge" style="background:rgba(0,168,132,0.2); color:var(--theme-primary); border:1px solid var(--theme-border);">
+                    <i data-lucide="sparkles" style="width:12px; height:12px;"></i> AI Video & RAG Ground Truth Triangulation
+                  </span>
+                  <span style="font-size:0.75rem; color:var(--text-secondary);">Whisper Speech-to-Text · Atomic Claim Extractor · Brand Policy RAG</span>
+                </div>
+                <h3 style="font-size:1.15rem; font-weight:800; color:var(--text-pure);">
+                  Influencer Video Deconstruction & Fact-Check Studio
+                </h3>
+              </div>
+
+              <!-- Input and Decode Action -->
+              <div style="display:flex; gap:10px; flex:1; max-width:620px;">
+                <div style="flex:1; position:relative;">
+                  <input type="text" id="truthVideoUrlInput" value="https://www.youtube.com/watch?v=PTblI6oYfSU" 
+                         placeholder="Enter YouTube Video URL to decode & verify..." 
+                         style="width:100%; padding:10px 14px; background:var(--app-bg); border:1px solid var(--app-border); border-radius:8px; color:#fff; font-size:0.84rem;">
+                </div>
+                <button class="btn btn-primary" onclick="decodeActiveVideo()" id="btnDecodeVideo">
+                  <i data-lucide="scan" style="width:14px; height:14px;"></i> Decode & Verify Video
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Active Video Summary & Creator Credibility Header -->
+          <div class="video-meta-summary-card" id="videoMetaCard">
+            <!-- Dynamically populated from /api/v1/truth/videos -->
+          </div>
+
+          <!-- 3-PILLAR TRIANGULATED GROUND TRUTH STUDIO -->
+          <div class="truth-studio-tri-grid">
+            <!-- PILLAR 1: Video Player & Chronological Claim Navigator -->
+            <div class="panel-card truth-pillar">
+              <div class="panel-header">
+                <h3 class="panel-title">
+                  <i data-lucide="video" style="color:var(--theme-primary);"></i> 1. Video Narrative & Claims
+                </h3>
+                <span class="badge" style="background:rgba(239,68,68,0.15); color:#ef4444;" id="videoClaimsBadge">4 Claims Extracted</span>
+              </div>
+              <p style="font-size:0.78rem; color:var(--text-secondary); line-height:1.4;">
+                Select a timestamped claim below to inspect creator statements, trigger audience causality, and view brand RAG citations.
+              </p>
+
+              <!-- Video Embed / Mock Player -->
+              <div class="video-player-container">
+                <div class="video-player-mock">
+                  <img src="https://img.youtube.com/vi/PTblI6oYfSU/hqdefault.jpg" alt="SAMTIME Video Thumbnail" style="width:100%; height:100%; object-fit:cover; opacity:0.85;">
+                  <div class="video-play-overlay" onclick="window.open('https://www.youtube.com/watch?v=PTblI6oYfSU', '_blank')">
+                    <div class="play-btn-circle"><i data-lucide="play" style="width:20px; height:20px; color:#0b141a; fill:#0b141a;"></i></div>
+                    <span style="font-size:0.8rem; font-weight:700; color:#fff; margin-top:8px;">Watch Original Feed (10:48)</span>
+                  </div>
+                  <!-- Floating Timestamp Indicator -->
+                  <div class="video-current-timestamp" id="videoCurrentTimeDisplay">Active Scrub: 01:14</div>
+                </div>
+              </div>
+
+              <!-- Timestamp Claim Scrubber Pills -->
+              <div class="claim-scrubber-list" id="claimsTimelineList">
+                <!-- Dynamically populated claims -->
+              </div>
+            </div>
+
+            <!-- PILLAR 2: Brand Truth Matrix (RAG Knowledge Fact-Check) -->
+            <div class="panel-card truth-pillar" style="border-top:3px solid #25d366;">
+              <div class="panel-header">
+                <h3 class="panel-title">
+                  <i data-lucide="shield-alert" style="color:#25d366;"></i> 2. Brand Ground Truth (RAG)
+                </h3>
+                <span class="badge" style="background:rgba(37,211,102,0.15); color:#25d366;">Sony Hardware Spec §4.2</span>
+              </div>
+              <p style="font-size:0.78rem; color:var(--text-secondary); line-height:1.4;">
+                Real-time semantic retrieval against official Sony technical documentation and product policies.
+              </p>
+
+              <!-- Fact-Check Detailed Card -->
+              <div id="ragFactCheckContainer" class="rag-verdict-box">
+                <!-- Populated dynamically on claim click -->
+              </div>
+
+              <!-- Brand Turnaround Action Kit -->
+              <div class="brand-action-kit-box">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                  <strong style="font-size:0.82rem; color:var(--text-pure); display:flex; align-items:center; gap:6px;">
+                    <i data-lucide="send" style="width:13px; height:13px; color:var(--theme-primary);"></i> Creator Outreach & Clarification Kit
+                  </strong>
+                  <span class="badge" style="background:rgba(0,168,132,0.15); color:var(--theme-primary);">Pre-Drafted</span>
+                </div>
+                <div class="creator-outreach-preview" id="creatorOutreachText">
+                  "Hi Sam! We enjoyed your video breakdown. We noticed a misunderstanding regarding offline play at 01:14. Per Sony Hardware Spec §4.2, disc drives only need a one-time cryptographic pairing during setup and work 100% offline indefinitely without recurring server checks. We would love to provide the official spec sheet for your pinned comment!"
+                </div>
+                <div style="display:flex; gap:8px; margin-top:10px;">
+                  <button class="btn btn-primary" style="flex:1; font-size:0.75rem;" onclick="copyOutreachNote()">
+                    <i data-lucide="copy"></i> Copy Outreach Note
+                  </button>
+                  <button class="btn btn-secondary" style="font-size:0.75rem;" onclick="dispatchOutreachTicket()">
+                    <i data-lucide="mail"></i> Email YouTuber
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- PILLAR 3: Causal Audience Reaction & Anger Source -->
+            <div class="panel-card truth-pillar" style="border-top:3px solid #38bdf8;">
+              <div class="panel-header">
+                <h3 class="panel-title">
+                  <i data-lucide="users" style="color:#38bdf8;"></i> 3. Causal Audience Fallout
+                </h3>
+                <span class="badge" style="background:rgba(56,189,248,0.15); color:#38bdf8;" id="causalCommentsBadge">1,420 Comments Linked</span>
+              </div>
+              <p style="font-size:0.78rem; color:var(--text-secondary); line-height:1.4;">
+                Comments mapped directly to this specific claim. Proves anger is caused by <em>creator misinformation</em> rather than product failure.
+              </p>
+
+              <!-- Causality Stats Widget -->
+              <div class="causality-stats-widget">
+                <div class="causality-stat-item">
+                  <span class="stat-num" id="causalityBoycottPct">86.4%</span>
+                  <span class="stat-desc">Boycott Comments Triggered by Misleading Claim</span>
+                </div>
+                <div class="causality-stat-item">
+                  <span class="stat-num" style="color:#ef4444;" id="causalityMisinfoExposure">94.2k</span>
+                  <span class="stat-desc">Est. Gamer Misinformation Exposure</span>
+                </div>
+              </div>
+
+              <!-- Causality Comment Stream -->
+              <div class="causal-comments-stream" id="causalCommentsStream">
+                <!-- Dynamically populated from real comments -->
               </div>
             </div>
           </div>

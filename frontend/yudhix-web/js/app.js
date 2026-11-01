@@ -5,7 +5,7 @@ let timelineChartInstance = null;
 
 // Application State
 const state = {
-    activeTab: 'dashboard',
+    activeTab: 'platforms',
     selectedProduct: 'ALL',
     selectedDateRange: 'ALL',
     selectedGrain: 'day',
@@ -14,6 +14,7 @@ const state = {
     selectedPriority: 'ALL',
     selectedChannel: 'ALL',
     searchQuery: '',
+    videoCommentFilter: 'ALL',
     products: [],
     comments: [],
     currentTenant: {
@@ -25,9 +26,9 @@ const state = {
         token: null,
         authenticated: true,
         subscriptions: {
-            YOUTUBE: { active: true, count: 1, max: 20 },
-            LINKEDIN: { active: true, count: 1, max: 10 },
-            REDDIT: { active: true, count: 1, max: 10 }
+            YOUTUBE: { active: true, count: 1, max: 20, plan: 'paid' },
+            LINKEDIN: { active: true, count: 1, max: 10, plan: 'paid' },
+            REDDIT: { active: false, count: 0, max: 10, plan: 'unpaid' }
         }
     },
     subscribedChannels: [
@@ -144,24 +145,75 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderApprovals();
     renderLedger();
     renderSubscribedChannels();
+    renderPlatformSubscriptions();
+    navigateToStep(state.activeTab || 'platforms');
 });
+
+window.navigateToStep = function(stepId) {
+    if (!stepId) return;
+    state.activeTab = stepId;
+
+    // 1. Update Sidebar Active State
+    document.querySelectorAll('.nav-menu .nav-item').forEach(item => {
+        item.classList.remove('active');
+        if (item.getAttribute('data-tab') === stepId) {
+            item.classList.add('active');
+        }
+    });
+
+    // 2. Update Workflow Stepper Active State
+    document.querySelectorAll('.step-node').forEach(node => {
+        node.classList.remove('active');
+    });
+    const stepNode = document.getElementById(`stepNode-${stepId}`);
+    if (stepNode) stepNode.classList.add('active');
+
+    // 3. Toggle View Visibility
+    document.querySelectorAll('.tab-view').forEach(view => {
+        view.classList.add('hidden');
+    });
+    const targetView = document.getElementById(`view-${stepId}`);
+    if (targetView) {
+        targetView.classList.remove('hidden');
+    }
+
+    // 4. Update Header Subtitle
+    const viewTitle = document.getElementById('viewTitle');
+    const stepTitles = {
+        'platforms': 'Step 1: Apps & Application Subscriptions',
+        'video-decode': 'Step 2: Source Video Deconstruction & Fact-Check',
+        'comment-flow': 'Step 3: Audience Sentiment & Behavioral Flow',
+        'video-history': 'Step 4: Video Truth & Sentiment History',
+        'video-dashboard': 'Step 5: Executive Video & Comments Dashboard',
+        'approvals': 'Brand & Legal Turnaround Approvals Queue',
+        'compliance': 'Immutable Ledger & DPDP Compliance'
+    };
+    if (viewTitle && stepTitles[stepId]) {
+        viewTitle.innerText = stepTitles[stepId];
+    }
+
+    // 5. Trigger Step-Specific Renderers
+    if (stepId === 'platforms') {
+        renderPlatformSubscriptions();
+    } else if (stepId === 'video-decode') {
+        renderVideoTruthStudio();
+    } else if (stepId === 'comment-flow') {
+        renderCommentSplit();
+    } else if (stepId === 'video-history') {
+        renderVideoHistory();
+    } else if (stepId === 'video-dashboard') {
+        renderVideoDashboard();
+    }
+
+    if (window.lucide) window.lucide.createIcons();
+};
 
 function initNavigation() {
     const navItems = document.querySelectorAll('.nav-item');
     navItems.forEach(item => {
         item.addEventListener('click', () => {
             const tab = item.getAttribute('data-tab');
-            if (!tab) return;
-            navItems.forEach(n => n.classList.remove('active'));
-            item.classList.add('active');
-
-            document.querySelectorAll('.tab-view').forEach(view => {
-                view.classList.add('hidden');
-            });
-            const targetView = document.getElementById(`view-${tab}`);
-            if (targetView) {
-                targetView.classList.remove('hidden');
-            }
+            if (tab) navigateToStep(tab);
         });
     });
 }
@@ -235,7 +287,9 @@ function refreshAllViews() {
     updateTimelineChart(filtered);
     renderAspects(filtered);
     renderCountryDistribution(filtered);
-    renderInboxList(filtered);
+    renderCommentSplit();
+    renderVideoDashboard();
+    renderVideoHistory();
     updateChannelFilterOptions();
 }
 
@@ -980,6 +1034,11 @@ window.subscribeChannel = function(platform) {
         renderSubscribedChannels();
         alert(`Successfully subscribed LinkedIn profile! Ingestion active with HMAC pseudonymization.`);
     } else if (platform === 'REDDIT') {
+        if (!state.currentTenant.subscriptions.REDDIT?.active) {
+            openPaymentModal('REDDIT');
+            return;
+        }
+
         const input = document.getElementById('rdInput')?.value.trim();
         const product = document.getElementById('rdProductInput')?.value.trim() || 'PlayStation Ecosystem';
         if (!input) {
@@ -1008,6 +1067,106 @@ window.subscribeChannel = function(platform) {
         renderSubscribedChannels();
         alert(`Successfully subscribed Reddit community! Stream ingestion active.`);
     }
+};
+
+// ==============================================================================
+// Step 1: Platform Subscriptions & Payment Workflow Engine
+// ==============================================================================
+
+function renderPlatformSubscriptions() {
+    const isRedditPaid = state.currentTenant.subscriptions.REDDIT?.active;
+    const badgeStatus = document.getElementById('badgeRedditCardStatus');
+    const rdBadgeText = document.getElementById('rdSubscriptionBadgeText');
+    const rdSubText = document.getElementById('rdSubscriptionSubText');
+    const btnSubscribeReddit = document.getElementById('btnSubscribeReddit');
+    const navBadgeRedditStatus = document.getElementById('navBadgeRedditStatus');
+
+    if (isRedditPaid) {
+        if (badgeStatus) {
+            badgeStatus.className = 'platform-status-pill paid';
+            badgeStatus.innerHTML = '<i data-lucide="check-circle-2" style="width:13px; height:13px;"></i> ACTIVE / SUBSCRIBED';
+        }
+        if (rdBadgeText) {
+            rdBadgeText.innerText = 'SUBSCRIBED';
+            rdBadgeText.style.color = '#25d366';
+        }
+        if (rdSubText) {
+            rdSubText.className = 'metric-change green';
+            rdSubText.innerHTML = '<i data-lucide="check-circle"></i> Paid & Active ($249/mo)';
+        }
+        if (btnSubscribeReddit) {
+            btnSubscribeReddit.className = 'btn btn-secondary';
+            btnSubscribeReddit.innerHTML = '<i data-lucide="check"></i> Subscribed (Active)';
+            btnSubscribeReddit.onclick = () => alert("Reddit Community Monitor SPI is active and paid!");
+        }
+        if (navBadgeRedditStatus) {
+            navBadgeRedditStatus.innerText = 'Active';
+            navBadgeRedditStatus.style.background = '#25d366';
+            navBadgeRedditStatus.style.color = '#0b141a';
+        }
+    } else {
+        if (badgeStatus) {
+            badgeStatus.className = 'platform-status-pill unpaid';
+            badgeStatus.innerHTML = '<i data-lucide="lock" style="width:13px; height:13px;"></i> UNSUBSCRIBED / UNPAID';
+        }
+        if (rdBadgeText) {
+            rdBadgeText.innerText = 'UNPAID';
+            rdBadgeText.style.color = '#fbbf24';
+        }
+        if (rdSubText) {
+            rdSubText.className = 'metric-change alert';
+            rdSubText.innerHTML = '<i data-lucide="lock"></i> Add-on License Required ($249/mo)';
+        }
+        if (btnSubscribeReddit) {
+            btnSubscribeReddit.className = 'btn btn-primary';
+            btnSubscribeReddit.innerHTML = '<i data-lucide="credit-card" style="width:13px; height:13px;"></i> Subscribe Reddit';
+            btnSubscribeReddit.onclick = () => openPaymentModal('REDDIT');
+        }
+        if (navBadgeRedditStatus) {
+            navBadgeRedditStatus.innerText = 'Reddit Unpaid';
+            navBadgeRedditStatus.style.background = '#f59e0b';
+            navBadgeRedditStatus.style.color = '#0b141a';
+        }
+    }
+
+    renderSubscribedChannels();
+    if (window.lucide) window.lucide.createIcons();
+}
+
+window.openPaymentModal = function(platform) {
+    const modal = document.getElementById('paymentModal');
+    if (modal) modal.classList.remove('hidden');
+    if (window.lucide) window.lucide.createIcons();
+};
+
+window.closePaymentModal = function() {
+    const modal = document.getElementById('paymentModal');
+    if (modal) modal.classList.add('hidden');
+};
+
+window.handleSubscriptionPayment = function(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btnSubmitPayment');
+    if (btn) btn.innerHTML = '<i data-lucide="loader-2" class="spin" style="width:16px; height:16px;"></i> Authorizing $249.00 Payment...';
+
+    setTimeout(() => {
+        state.currentTenant.subscriptions.REDDIT.active = true;
+        state.currentTenant.subscriptions.REDDIT.plan = 'paid';
+
+        state.ledgerBlocks.push({
+            seq: state.ledgerBlocks.length + 1042,
+            actor: 'STRIPE_GATEWAY',
+            action: 'ENTERPRISE_ADDON_CHARGED',
+            entityId: 'REDDIT_SPI_MONTHLY_$249',
+            hash: '7a8f09d8e7c6b5a412345678abcdef9012345678abcdef9012345678abcdef90'
+        });
+
+        if (btn) btn.innerHTML = '<i data-lucide="check-circle"></i> Confirm Payment & Unlock Reddit ($249/mo)';
+        closePaymentModal();
+        renderPlatformSubscriptions();
+        renderLedger();
+        alert('🎉 Payment Succeeded ($249.00)!\n\nReddit Community Monitor SPI is now ACTIVE for tenant: sony-playstation.\nYou can now subscribe to gaming subreddits and track real-time community sentiment!');
+    }, 700);
 };
 
 // ==============================================================================
@@ -1138,7 +1297,12 @@ window.handlePortalSignIn = async function(event) {
         role: role,
         token: accessToken,
         createdAt: Date.now(),
-        expiresAt: Date.now() + (24 * 3600 * 1000) // 24 hours
+        expiresAt: Date.now() + (24 * 3600 * 1000), // 24 hours
+        subscriptions: {
+            YOUTUBE: { active: true, count: 1, max: 20, plan: 'paid' },
+            LINKEDIN: { active: true, count: 1, max: 10, plan: 'paid' },
+            REDDIT: { active: false, count: 0, max: 10, plan: 'unpaid' }
+        }
     };
 
     if (remember) {
@@ -1527,53 +1691,92 @@ function renderVideoTruthStudio() {
         `;
     }
 
-    // 2. Render Pillar 1: Chronological Claims Timeline
-    const claimsList = document.getElementById('claimsTimelineList');
-    const claimsBadge = document.getElementById('videoClaimsBadge');
-    if (claimsBadge) claimsBadge.innerText = `${video.claims.length} Claims Extracted`;
-
-    if (claimsList) {
-        claimsList.innerHTML = '';
-        video.claims.forEach((claim, idx) => {
-            const isSelected = state.videoTruth.selectedClaim && state.videoTruth.selectedClaim.id === claim.id;
-            const card = document.createElement('div');
-            card.className = `claim-scrubber-card ${isSelected ? 'active' : ''}`;
-            card.onclick = () => selectClaim(claim.id);
-
-            let verdictColor = '#ef4444';
-            let verdictLabel = '🔴 Misleading Claim';
-            if (claim.verdict === 'FACTUALLY_CORRECT') {
-                verdictColor = '#25d366';
-                verdictLabel = '🟢 Verified True';
-            } else if (claim.verdict === 'UNVERIFIED_SPECULATION') {
-                verdictColor = '#f59e0b';
-                verdictLabel = '🟡 Speculation';
-            }
-
-            card.innerHTML = `
-                <div class="claim-header-row">
-                    <span class="claim-ts-badge">⏱️ ${claim.timestamp_start}</span>
-                    <span style="font-size:0.72rem; font-weight:800; color:${verdictColor};">${verdictLabel}</span>
-                </div>
-                <div class="claim-quote-text">
-                    "${claim.creator_quote}"
-                </div>
-                <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.72rem; color:var(--text-secondary); margin-top:2px;">
-                    <span>Topic: <strong style="color:#fff;">${claim.topic}</strong></span>
-                    <span>Incited: <strong style="color:#ef4444;">${claim.incited_comments_count} comments</strong></span>
-                </div>
-            `;
-            claimsList.appendChild(card);
-        });
+    // Update active video thumbnail
+    const thumbImg = document.getElementById('activeVideoThumbImg');
+    if (thumbImg) {
+        thumbImg.src = `https://img.youtube.com/vi/${video.video_id}/hqdefault.jpg`;
     }
 
-    // 3. Render Pillar 2: RAG Ground Truth Verification Card
+    // 2. Render Positive vs Negative Split Claims
+    renderClaimsSplit(video);
+
+    // 3. Render RAG Ground Truth Verification Card
     renderRAGFactCheckCard();
 
-    // 4. Render Pillar 3: Causal Audience Fallout Comments
-    renderCausalComments();
-
     if (window.lucide) window.lucide.createIcons();
+}
+
+function renderClaimsSplit(video) {
+    const posContainer = document.getElementById('positiveClaimsList');
+    const negContainer = document.getElementById('negativeClaimsList');
+    const posBadge = document.getElementById('badgePositiveClaimsCount');
+    const negBadge = document.getElementById('badgeNegativeClaimsCount');
+
+    if (!video || !video.claims) return;
+
+    const positive = video.claims.filter(c => c.verdict === 'FACTUALLY_CORRECT');
+    const negative = video.claims.filter(c => c.verdict !== 'FACTUALLY_CORRECT');
+
+    if (posBadge) posBadge.innerText = `${positive.length} Verified Claim${positive.length === 1 ? '' : 's'}`;
+    if (negBadge) negBadge.innerText = `${negative.length} Misleading Claim${negative.length === 1 ? '' : 's'}`;
+
+    if (posContainer) {
+        if (positive.length === 0) {
+            posContainer.innerHTML = `<div style="font-size:0.8rem; color:var(--text-secondary); padding:14px; text-align:center;">No verified claims found in video.</div>`;
+        } else {
+            posContainer.innerHTML = positive.map(c => {
+                const isSelected = state.videoTruth.selectedClaim?.id === c.id;
+                return `
+                    <div class="split-claim-card ${isSelected ? 'active' : ''}" onclick="selectClaim('${c.id}')" style="border-left:3px solid #25d366;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span class="badge" style="background:rgba(37,211,102,0.15); color:#25d366; font-family:var(--font-mono);">
+                                ⏱️ ${c.timestamp_start}
+                            </span>
+                            <span style="font-size:0.75rem; color:#25d366; font-weight:800;">
+                                🟢 Verified Factual
+                            </span>
+                        </div>
+                        <div style="font-size:0.86rem; color:#fff; font-weight:600; line-height:1.4;">
+                            "${c.creator_quote}"
+                        </div>
+                        <div style="font-size:0.75rem; color:var(--text-secondary); background:var(--app-surface); padding:8px 10px; border-radius:6px; border:1px solid var(--app-border);">
+                            <strong style="color:var(--theme-accent);">Sony RAG Citation:</strong> ${c.official_citation || c.document_title || 'Sony Hardware Spec §4.2'}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+    }
+
+    if (negContainer) {
+        if (negative.length === 0) {
+            negContainer.innerHTML = `<div style="font-size:0.8rem; color:var(--text-secondary); padding:14px; text-align:center;">Zero misleading claims detected. Creator is 100% accurate!</div>`;
+        } else {
+            negContainer.innerHTML = negative.map(c => {
+                const isSelected = state.videoTruth.selectedClaim?.id === c.id;
+                const badgeLabel = c.verdict === 'FALSE' ? '🔴 False Claim' : (c.verdict === 'UNVERIFIED_SPECULATION' ? '🟡 Speculation' : '🔴 Misleading Claim');
+                const color = c.verdict === 'UNVERIFIED_SPECULATION' ? '#fbbf24' : '#ef4444';
+                return `
+                    <div class="split-claim-card ${isSelected ? 'active' : ''}" onclick="selectClaim('${c.id}')" style="border-left:3px solid ${color};">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span class="badge" style="background:rgba(239,68,68,0.15); color:${color}; font-family:var(--font-mono);">
+                                ⏱️ ${c.timestamp_start}
+                            </span>
+                            <span style="font-size:0.75rem; color:${color}; font-weight:800;">
+                                ${badgeLabel}
+                            </span>
+                        </div>
+                        <div style="font-size:0.86rem; color:#fff; font-weight:600; line-height:1.4;">
+                            "${c.creator_quote}"
+                        </div>
+                        <div style="font-size:0.75rem; color:#f87171; background:rgba(239,68,68,0.08); padding:8px 10px; border-radius:6px; border:1px solid rgba(239,68,68,0.25);">
+                            <strong>Fallout:</strong> Incited ${c.incited_comments_count} angry comments (${c.topic})
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+    }
 }
 
 window.selectClaim = function(claimId) {
@@ -1584,8 +1787,9 @@ window.selectClaim = function(claimId) {
     if (matched) {
         state.videoTruth.selectedClaim = matched;
         const timeDisplay = document.getElementById('videoCurrentTimeDisplay');
-        if (timeDisplay) timeDisplay.innerText = `Active Scrub: ${matched.timestamp_start}`;
-        renderVideoTruthStudio();
+        if (timeDisplay) timeDisplay.innerText = `Scrub: ${matched.timestamp_start}`;
+        renderClaimsSplit(video);
+        renderRAGFactCheckCard();
     }
 };
 
@@ -1625,7 +1829,7 @@ function renderRAGFactCheckCard() {
             </span>
         </div>
 
-        <div>
+        <div style="margin-top:10px;">
             <div style="font-size:0.72rem; color:var(--text-secondary); text-transform:uppercase; font-weight:700; margin-bottom:4px;">
                 Creator Assertion (${claim.timestamp_start}):
             </div>
@@ -1634,7 +1838,7 @@ function renderRAGFactCheckCard() {
             </div>
         </div>
 
-        <div>
+        <div style="margin-top:10px;">
             <div style="font-size:0.72rem; color:var(--text-secondary); text-transform:uppercase; font-weight:700; margin-bottom:4px;">
                 Official Brand Fact-Check & Knowledge RAG Match:
             </div>
@@ -1646,7 +1850,7 @@ function renderRAGFactCheckCard() {
             </div>
         </div>
 
-        <div style="font-size:0.76rem; color:var(--text-secondary); display:flex; align-items:center; gap:6px;">
+        <div style="font-size:0.76rem; color:var(--text-secondary); display:flex; align-items:center; gap:6px; margin-top:8px;">
             <i data-lucide="external-link" style="width:12px; height:12px; color:var(--theme-primary);"></i>
             <span>Citation: <strong style="color:var(--text-primary);">${claim.official_citation}</strong></span>
         </div>
@@ -1661,49 +1865,26 @@ function renderRAGFactCheckCard() {
             outreachEl.innerText = `"Hi Sam! Thanks for highlighting ${claim.topic} at ${claim.timestamp_start}. We appreciate honest creator reviews and are sharing your feedback directly with our product team."`;
         }
     }
-}
-
-function renderCausalComments() {
-    const container = document.getElementById('causalCommentsStream');
-    const badge = document.getElementById('causalCommentsBadge');
-    const claim = state.videoTruth.selectedClaim;
-    if (!container || !claim) return;
-
-    if (badge) badge.innerText = `${claim.incited_comments_count} Comments Linked`;
-
-    // Filter real comments matching the topic or priority
-    const matchedComments = state.comments.filter(c => {
-        const text = (c.maskedText || '').toLowerCase();
-        if (claim.topic.toLowerCase().includes('disc') && text.includes('disc')) return true;
-        if (claim.topic.toLowerCase().includes('cloud') && (text.includes('save') || text.includes('plus'))) return true;
-        if (text.includes('boycott') || text.includes('sony') || text.includes('done')) return true;
-        return false;
-    }).slice(0, 15);
-
-    container.innerHTML = '';
-    matchedComments.forEach(c => {
-        const card = document.createElement('div');
-        card.className = 'causal-comment-card';
-        card.innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span class="causal-trigger-pill">
-                    <i data-lucide="zap" style="width:10px; height:10px;"></i> Triggered by Claim @${claim.timestamp_start}
-                </span>
-                <span style="font-size:0.72rem; color:var(--text-secondary);">${c.timeAgo || 'Recent'}</span>
-            </div>
-            <div style="font-size:0.84rem; color:var(--text-primary); line-height:1.4;">
-                ${(c.maskedText || '').replace(/<PHONE>/g, '<span class="pii-tag">&lt;PHONE_MASKED&gt;</span>').replace(/<PERSON>/g, '<span class="pii-tag">&lt;NAME_MASKED&gt;</span>')}
-            </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.72rem; color:var(--text-secondary);">
-                <span>Pseudonym: <code style="color:#aaa;">${(c.authorHash || 'anon').slice(0, 14)}...</code></span>
-                <span style="color:var(--theme-accent); font-weight:700;">👍 ${c.likes || 0} likes</span>
-            </div>
-        `;
-        container.appendChild(card);
-    });
 
     if (window.lucide) window.lucide.createIcons();
 }
+
+window.quickLoadVideoPreset = function(videoId) {
+    const video = state.videoTruth.videos.find(v => v.video_id === videoId);
+    if (video) {
+        state.videoTruth.activeVideo = video;
+        if (video.claims && video.claims.length > 0) {
+            state.videoTruth.selectedClaim = video.claims[0];
+        }
+        const urlInput = document.getElementById('truthVideoUrlInput');
+        if (urlInput) urlInput.value = video.video_url || `https://www.youtube.com/watch?v=${video.video_id}`;
+
+        const thumbImg = document.getElementById('activeVideoThumbImg');
+        if (thumbImg) thumbImg.src = `https://img.youtube.com/vi/${video.video_id}/hqdefault.jpg`;
+
+        renderVideoTruthStudio();
+    }
+};
 
 window.decodeActiveVideo = async function() {
     const input = document.getElementById('truthVideoUrlInput')?.value.trim();
@@ -1718,14 +1899,303 @@ window.decodeActiveVideo = async function() {
     try {
         await new Promise(r => setTimeout(r, 1200));
         await loadVideoTruthData();
-        alert(`Video analysis complete! Extracted 4 atomic claims with RAG cross-references from official Sony specs.`);
+        alert(`Video analysis complete! Extracted atomic claims with RAG cross-references from official Sony specs.`);
     } catch (e) {
         alert(`Error decoding video: ${e.message}`);
     } finally {
-        if (btn) btn.innerHTML = `<i data-lucide="scan" style="width:14px; height:14px;"></i> Decode & Verify Video`;
+        if (btn) btn.innerHTML = `<i data-lucide="scan" style="width:14px; height:14px;"></i> Decode Video`;
         if (window.lucide) window.lucide.createIcons();
     }
 };
+
+// ==============================================================================
+// Step 3: Audience Sentiment & Behavioral Split Comment Streams
+// ==============================================================================
+
+function renderCommentSplit() {
+    const filtered = getFilteredComments();
+    const positiveComments = filtered.filter(c => c.sentiment === 'POSITIVE');
+    const negativeComments = filtered.filter(c => c.sentiment === 'NEGATIVE' || c.priority === 'P1');
+
+    const posCountBadge = document.getElementById('positiveStreamCountBadge');
+    const negCountBadge = document.getElementById('negativeStreamCountBadge');
+
+    if (posCountBadge) posCountBadge.innerText = `${positiveComments.length.toLocaleString()} Comments`;
+    if (negCountBadge) negCountBadge.innerText = `${negativeComments.length.toLocaleString()} Comments`;
+
+    const posContainer = document.getElementById('positiveCommentsStream');
+    const negContainer = document.getElementById('negativeCommentsStream');
+
+    if (posContainer) {
+        const slicePos = positiveComments.slice(0, 40);
+        posContainer.innerHTML = slicePos.map(c => `
+            <div class="comment-flow-card positive">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <span class="badge" style="background:rgba(37,211,102,0.15); color:#25d366; font-size:0.7rem;">POSITIVE</span>
+                        <span class="country-pill">${c.country === 'US' ? '🇺🇸 US' : (c.country === 'JP' ? '🇯🇵 JP' : '🌐 ' + (c.country || 'Global'))}</span>
+                        <span class="author-pseudonym">${(c.authorHash || 'anon').slice(0, 14)}...</span>
+                    </div>
+                    <span style="font-size:0.72rem; color:var(--text-secondary);">${c.timeAgo || 'Recent'}</span>
+                </div>
+                <div style="font-size:0.84rem; color:var(--text-primary); line-height:1.45;">
+                    ${(c.maskedText || '').replace(/<PHONE>/g, '<span class="pii-tag">&lt;PHONE_MASKED&gt;</span>').replace(/<PERSON>/g, '<span class="pii-tag">&lt;NAME_MASKED&gt;</span>')}
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.72rem; color:var(--text-secondary); border-top:1px solid var(--app-border); padding-top:6px;">
+                    <div style="display:flex; gap:4px;">
+                        ${(c.aspects || []).slice(0, 2).map(a => `<span style="font-size:0.68rem; padding:1px 6px; border-radius:4px; background:var(--app-bg); color:var(--theme-accent);">#${a.name}</span>`).join('')}
+                    </div>
+                    <span style="color:var(--theme-accent); font-weight:700;">👍 ${c.likes || 0} likes</span>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    if (negContainer) {
+        const sliceNeg = negativeComments.slice(0, 40);
+        negContainer.innerHTML = sliceNeg.map(c => `
+            <div class="comment-flow-card negative">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <span class="badge" style="background:rgba(239,68,68,0.15); color:#ef4444; font-size:0.7rem;">${c.priority || 'P1'}</span>
+                        <span class="causal-trigger-pill">
+                            <i data-lucide="zap" style="width:10px; height:10px;"></i> Triggered by Claim @01:14
+                        </span>
+                        ${c.isRepeatAuthor ? `<span class="repeat-author-pill"><i data-lucide="alert-circle" style="width:11px; height:11px;"></i> Repeat</span>` : ''}
+                    </div>
+                    <span style="font-size:0.72rem; color:var(--text-secondary);">${c.timeAgo || 'Recent'}</span>
+                </div>
+                <div style="font-size:0.84rem; color:var(--text-primary); line-height:1.45;">
+                    ${(c.maskedText || '').replace(/<PHONE>/g, '<span class="pii-tag">&lt;PHONE_MASKED&gt;</span>').replace(/<PERSON>/g, '<span class="pii-tag">&lt;NAME_MASKED&gt;</span>')}
+                </div>
+                <div style="background:var(--app-bg); border:1px solid var(--app-border); border-radius:6px; padding:8px 10px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                    <div style="font-size:0.75rem; color:var(--text-secondary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;">
+                        <strong style="color:#fff;">AI Turnaround:</strong> "${c.aiSuggestedReply || 'We hear you on game preservation. Disc drives continue to operate 100% offline.'}"
+                    </div>
+                    <button class="btn btn-primary" style="padding:3px 8px; font-size:0.7rem; flex-shrink:0;" onclick="submitDraft('${c.id}')">
+                        Submit
+                    </button>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.72rem; color:var(--text-secondary);">
+                    <span>Pseudonym: <code>${(c.authorHash || 'anon').slice(0, 14)}...</code></span>
+                    <span style="color:#ef4444; font-weight:700;">👎 Reaction Velocity: ${c.likes || 0} likes</span>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    if (window.lucide) window.lucide.createIcons();
+}
+
+// ==============================================================================
+// Step 4: Video History & Archive Engine
+// ==============================================================================
+
+function renderVideoHistory() {
+    const grid = document.getElementById('historyVideosGrid');
+    const badge = document.getElementById('navBadgeHistoryCount');
+    if (badge) badge.innerText = `${state.videoTruth.videos.length} Videos`;
+
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    const commentTotalsMap = {
+        'PTblI6oYfSU': { pos: 428, neg: 2234, total: 2662 },
+        'v89_F25E5s8': { pos: 1840, neg: 320, total: 2160 },
+        'kP5t6K6m9s0': { pos: 910, neg: 640, total: 1550 }
+    };
+
+    state.videoTruth.videos.forEach(v => {
+        const claims = v.claims || [];
+        const posClaims = claims.filter(c => c.verdict === 'FACTUALLY_CORRECT').length;
+        const negClaims = claims.filter(c => c.verdict !== 'FACTUALLY_CORRECT').length;
+
+        const commData = commentTotalsMap[v.video_id] || { pos: 300, neg: 500, total: 800 };
+        const accuracyPct = Math.round((v.factual_accuracy_score || 0.5) * 100);
+        const durationMin = Math.floor((v.duration_seconds || 600) / 60);
+        const durationSec = ((v.duration_seconds || 600) % 60).toString().padStart(2, '0');
+
+        const card = document.createElement('div');
+        card.className = 'history-video-card';
+        card.innerHTML = `
+            <div class="history-video-thumb-wrap">
+                <img src="https://img.youtube.com/vi/${v.video_id}/hqdefault.jpg" class="history-video-thumb" alt="${v.video_title}">
+                <div class="history-video-duration">${durationMin}:${durationSec}</div>
+            </div>
+            <div class="history-card-body">
+                <div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                        <span style="font-size:0.75rem; color:var(--theme-accent); font-weight:800;">🎬 ${v.channel_title}</span>
+                        <span class="badge" style="background:rgba(56,189,248,0.15); color:#38bdf8;">
+                            ${accuracyPct}% Truth Index
+                        </span>
+                    </div>
+                    <h4 style="font-size:0.95rem; font-weight:800; color:var(--text-pure); line-height:1.35;">
+                        ${v.video_title}
+                    </h4>
+                </div>
+
+                <!-- Simple Numbers Row: Positive and Negative Claims, Positive and Negative Comments -->
+                <div class="history-numbers-row">
+                    <div class="history-number-item">
+                        <span class="history-number-label">Claims Extracted</span>
+                        <div style="display:flex; gap:8px;">
+                            <span class="history-number-val" style="color:#25d366;">🟢 ${posClaims}</span>
+                            <span class="history-number-val" style="color:#ef4444;">🔴 ${negClaims}</span>
+                        </div>
+                        <span style="font-size:0.68rem; color:var(--text-muted);">Verified vs Misleading</span>
+                    </div>
+
+                    <div class="history-number-item">
+                        <span class="history-number-label">Audience Sentiment</span>
+                        <div style="display:flex; gap:8px;">
+                            <span class="history-number-val" style="color:#25d366;">🟢 ${commData.pos.toLocaleString()}</span>
+                            <span class="history-number-val" style="color:#ef4444;">🔴 ${commData.neg.toLocaleString()}</span>
+                        </div>
+                        <span style="font-size:0.68rem; color:var(--text-muted);">Positive vs Negative</span>
+                    </div>
+                </div>
+
+                <div style="margin-top:auto;">
+                    <button class="btn btn-primary" style="width:100%; font-size:0.82rem;" onclick="loadHistoricalVideo('${v.video_id}')">
+                        <i data-lucide="layout-dashboard"></i> Load Video & Comments Dashboard ➔
+                    </button>
+                </div>
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+
+    if (window.lucide) window.lucide.createIcons();
+}
+
+window.loadHistoricalVideo = function(videoId) {
+    const video = state.videoTruth.videos.find(v => v.video_id === videoId);
+    if (video) {
+        state.videoTruth.activeVideo = video;
+        if (video.claims && video.claims.length > 0) {
+            state.videoTruth.selectedClaim = video.claims[0];
+        }
+        const urlInput = document.getElementById('truthVideoUrlInput');
+        if (urlInput) urlInput.value = video.video_url || `https://www.youtube.com/watch?v=${video.video_id}`;
+        
+        const thumbImg = document.getElementById('activeVideoThumbImg');
+        if (thumbImg) thumbImg.src = `https://img.youtube.com/vi/${video.video_id}/hqdefault.jpg`;
+    }
+    navigateToStep('video-dashboard');
+};
+
+// ==============================================================================
+// Step 5: Video & Comments Dashboard Engine
+// ==============================================================================
+
+function renderVideoDashboard() {
+    const video = state.videoTruth.activeVideo;
+    if (!video) return;
+
+    // 1. Update Video KPI cards
+    const commentTotalsMap = {
+        'PTblI6oYfSU': { pos: 428, neg: 2234, total: 2662, likes: 21637, p1: 121, repeat: 76 },
+        'v89_F25E5s8': { pos: 1840, neg: 320, total: 2160, likes: 38240, p1: 14, repeat: 42 },
+        'kP5t6K6m9s0': { pos: 910, neg: 640, total: 1550, likes: 14210, p1: 38, repeat: 29 }
+    };
+    const totals = commentTotalsMap[video.video_id] || { pos: 300, neg: 500, total: 800, likes: 5000, p1: 10, repeat: 12 };
+
+    const cEl = document.getElementById('kpiDashVideoComments');
+    const lEl = document.getElementById('kpiDashVideoLikes');
+    const pEl = document.getElementById('kpiDashVideoP1');
+    const rEl = document.getElementById('kpiDashVideoRepeat');
+
+    if (cEl) cEl.innerText = totals.total.toLocaleString();
+    if (lEl) lEl.innerText = totals.likes.toLocaleString();
+    if (pEl) pEl.innerText = totals.p1.toLocaleString();
+    if (rEl) rEl.innerText = totals.repeat.toLocaleString();
+
+    // 2. Render Timeline Chart & Aspects
+    const filtered = getFilteredComments();
+    updateTimelineChart(filtered);
+    renderAspects(filtered);
+    renderCountryDistribution(filtered);
+
+    // 3. Render Claims Breakdown Widget
+    const veracityBox = document.getElementById('claimsVeracityBreakdownBox');
+    if (veracityBox) {
+        const claims = video.claims || [];
+        const posClaims = claims.filter(c => c.verdict === 'FACTUALLY_CORRECT').length;
+        const negClaims = claims.filter(c => c.verdict !== 'FACTUALLY_CORRECT').length;
+        const accuracyPct = Math.round((video.factual_accuracy_score || 0.5) * 100);
+
+        veracityBox.innerHTML = `
+            <div style="background:var(--app-bg); border:1px solid var(--app-border); border-radius:8px; padding:12px; display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <strong style="color:#fff; font-size:0.85rem;">Channel: ${video.channel_title}</strong>
+                    <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:2px;">Video: "${video.video_title}"</div>
+                </div>
+                <span class="badge" style="background:rgba(37,211,102,0.15); color:#25d366; font-size:0.85rem;">
+                    Truth Index: ${accuracyPct}%
+                </span>
+            </div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                <div style="background:var(--app-bg); border:1px solid var(--app-border); border-radius:6px; padding:10px; border-left:3px solid #25d366;">
+                    <span style="font-size:0.72rem; color:var(--text-secondary); text-transform:uppercase;">Verified Claims</span>
+                    <div style="font-size:1.2rem; font-weight:800; color:#25d366;">${posClaims}</div>
+                </div>
+                <div style="background:var(--app-bg); border:1px solid var(--app-border); border-radius:6px; padding:10px; border-left:3px solid #ef4444;">
+                    <span style="font-size:0.72rem; color:var(--text-secondary); text-transform:uppercase;">Misleading Claims</span>
+                    <div style="font-size:1.2rem; font-weight:800; color:#ef4444;">${negClaims}</div>
+                </div>
+            </div>
+        `;
+    }
+
+    // 4. Render Respective Video Comments Below
+    renderRespectiveVideoComments();
+    if (window.lucide) window.lucide.createIcons();
+}
+
+window.filterVideoComments = function(sentiment) {
+    state.videoCommentFilter = sentiment;
+    document.querySelectorAll('#view-video-dashboard .filter-chip').forEach(btn => btn.classList.remove('active'));
+    if (window.event && window.event.target) window.event.target.classList.add('active');
+    renderRespectiveVideoComments();
+};
+
+function renderRespectiveVideoComments() {
+    const list = document.getElementById('videoRespectiveCommentsList');
+    if (!list) return;
+
+    let videoComments = state.comments;
+    if (state.videoCommentFilter === 'POSITIVE') {
+        videoComments = videoComments.filter(c => c.sentiment === 'POSITIVE');
+    } else if (state.videoCommentFilter === 'NEGATIVE') {
+        videoComments = videoComments.filter(c => c.sentiment === 'NEGATIVE' || c.priority === 'P1');
+    }
+
+    const slice = videoComments.slice(0, 30);
+    list.innerHTML = slice.map(c => `
+        <div class="comment-card ${c.priority ? c.priority.toLowerCase() : 'p2'}" style="margin-bottom:0;">
+            <div class="comment-top-row">
+                <div class="comment-meta-left">
+                    <span class="badge ${c.sentiment === 'NEGATIVE' ? 'badge-neg' : 'badge-pos'}">${c.sentiment || 'NEUTRAL'}</span>
+                    <span class="badge badge-${(c.priority || 'p2').toLowerCase()}">${c.priority || 'P2'}</span>
+                    <span class="country-pill">${c.country === 'US' ? '🇺🇸 US' : '🌐 ' + (c.country || 'Global')}</span>
+                    ${c.isRepeatAuthor ? `<span class="repeat-author-pill">⚠️ Repeat Author</span>` : ''}
+                    <span class="author-pseudonym">${(c.authorHash || 'anon').slice(0, 16)}...</span>
+                </div>
+                <span style="font-size:0.75rem; color:var(--text-secondary);">${c.timeAgo || 'Recent'}</span>
+            </div>
+            <div class="comment-text">
+                ${(c.maskedText || '').replace(/<PHONE>/g, '<span class="pii-tag">&lt;PHONE_MASKED&gt;</span>').replace(/<PERSON>/g, '<span class="pii-tag">&lt;NAME_MASKED&gt;</span>')}
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.75rem; color:var(--text-secondary);">
+                <span>Product Tag: <strong style="color:#fff;">${c.productName || 'PlayStation'}</strong></span>
+                <span style="color:var(--theme-accent); font-weight:700;">👍 ${c.likes || 0} likes</span>
+            </div>
+        </div>
+    `).join('');
+
+    if (window.lucide) window.lucide.createIcons();
+}
 
 window.copyOutreachNote = function() {
     const text = document.getElementById('creatorOutreachText')?.innerText;

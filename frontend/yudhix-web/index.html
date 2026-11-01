@@ -207,31 +207,37 @@
       </div>
 
       <ul class="nav-menu">
-        <li class="nav-item active" data-tab="dashboard" id="nav-dashboard">
-          <i data-lucide="layout-dashboard"></i>
-          <span>Dashboard</span>
+        <li class="nav-item active" data-tab="platforms" id="nav-platforms">
+          <i data-lucide="layers"></i>
+          <span>1. Apps & Subscriptions</span>
+          <span class="nav-badge" id="navBadgeRedditStatus" style="background:#f59e0b; color:#0b141a;">Reddit Unpaid</span>
         </li>
-        <li class="nav-item" data-tab="truth-studio" id="nav-truth-studio">
+        <li class="nav-item" data-tab="video-decode" id="nav-video-decode">
           <i data-lucide="scan-eye"></i>
-          <span>Video Truth Studio</span>
+          <span>2. Video Truth & Claims</span>
           <span class="nav-badge" style="background:#25d366; color:#0b141a;">AI RAG</span>
         </li>
-        <li class="nav-item" data-tab="inbox" id="nav-inbox">
-          <i data-lucide="inbox"></i>
-          <span>Social Inbox</span>
-          <span class="nav-badge">1 P1</span>
+        <li class="nav-item" data-tab="comment-flow" id="nav-comment-flow">
+          <i data-lucide="git-merge"></i>
+          <span>3. Audience Sentiment Flow</span>
+          <span class="nav-badge" style="background:#ef4444; color:#fff;">P1 Crisis</span>
+        </li>
+        <li class="nav-item" data-tab="video-history" id="nav-video-history">
+          <i data-lucide="history"></i>
+          <span>4. Video History & Archive</span>
+          <span class="nav-badge" id="navBadgeHistoryCount" style="background:rgba(56,189,248,0.2); color:#38bdf8;">3 Videos</span>
+        </li>
+        <li class="nav-item" data-tab="video-dashboard" id="nav-video-dashboard">
+          <i data-lucide="layout-dashboard"></i>
+          <span>5. Video & Comments Dashboard</span>
         </li>
         <li class="nav-item" data-tab="approvals" id="nav-approvals">
           <i data-lucide="check-circle-2"></i>
-          <span>Approval Queue</span>
+          <span>Approvals Queue</span>
         </li>
         <li class="nav-item" data-tab="compliance" id="nav-compliance">
           <i data-lucide="shield-check"></i>
           <span>Privacy & Ledger</span>
-        </li>
-        <li class="nav-item" data-tab="connectors" id="nav-connectors">
-          <i data-lucide="network"></i>
-          <span>Platform Links</span>
         </li>
       </ul>
 
@@ -274,7 +280,54 @@
       </header>
 
       <section class="content-body">
-        <!-- MASTER SPLUNK-STYLE SEARCH & FILTER TOOLBAR -->
+        <!-- 5-STEP WORKFLOW STEPPER BAR -->
+        <div class="workflow-stepper">
+          <div class="step-node active" id="stepNode-platforms" onclick="navigateToStep('platforms')">
+            <div class="step-circle">1</div>
+            <div class="step-label">
+              <span class="step-title">Apps & Billing</span>
+              <span class="step-sub">Platform Subscriptions</span>
+            </div>
+          </div>
+          <div class="step-arrow-divider"><i data-lucide="chevron-right" style="width:14px; height:14px;"></i></div>
+
+          <div class="step-node" id="stepNode-video-decode" onclick="navigateToStep('video-decode')">
+            <div class="step-circle">2</div>
+            <div class="step-label">
+              <span class="step-title">Video Source & Decode</span>
+              <span class="step-sub">Positive vs Negative Claims</span>
+            </div>
+          </div>
+          <div class="step-arrow-divider"><i data-lucide="chevron-right" style="width:14px; height:14px;"></i></div>
+
+          <div class="step-node" id="stepNode-comment-flow" onclick="navigateToStep('comment-flow')">
+            <div class="step-circle">3</div>
+            <div class="step-label">
+              <span class="step-title">Audience Sentiment Flow</span>
+              <span class="step-sub">Behavioral Split Streams</span>
+            </div>
+          </div>
+          <div class="step-arrow-divider"><i data-lucide="chevron-right" style="width:14px; height:14px;"></i></div>
+
+          <div class="step-node" id="stepNode-video-history" onclick="navigateToStep('video-history')">
+            <div class="step-circle">4</div>
+            <div class="step-label">
+              <span class="step-title">Video History & Archive</span>
+              <span class="step-sub">Claims & Sentiment Totals</span>
+            </div>
+          </div>
+          <div class="step-arrow-divider"><i data-lucide="chevron-right" style="width:14px; height:14px;"></i></div>
+
+          <div class="step-node" id="stepNode-video-dashboard" onclick="navigateToStep('video-dashboard')">
+            <div class="step-circle">5</div>
+            <div class="step-label">
+              <span class="step-title">Video & Comments Dashboard</span>
+              <span class="step-sub">Channel Veracity & Comments</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- MASTER SPLUNK-STYLE SEARCH & FILTER TOOLBAR (Accessible across intelligence views) -->
         <div class="splunk-toolbar">
           <div class="splunk-toolbar-top">
             <div class="splunk-search-box">
@@ -294,7 +347,7 @@
           </div>
 
           <div class="splunk-filter-row">
-            <!-- 1. PRODUCT SELECTOR (Categorized with comment counts) -->
+            <!-- 1. PRODUCT SELECTOR -->
             <div class="splunk-control-group">
               <span class="splunk-label"><i data-lucide="package" style="width:13px; height:13px;"></i> Product:</span>
               <select id="productFilterSelect" class="splunk-select" onchange="handleProductFilterChange(this.value)">
@@ -302,7 +355,7 @@
               </select>
             </div>
 
-            <!-- 2. DATE RANGE PRESETS (SPLUNK PRESETS) -->
+            <!-- 2. DATE RANGE PRESETS -->
             <div class="splunk-control-group">
               <span class="splunk-label"><i data-lucide="calendar" style="width:13px; height:13px;"></i> Time Range:</span>
               <select id="dateRangeSelect" class="splunk-select" onchange="handleDateRangeChange(this.value)">
@@ -350,13 +403,487 @@
           </div>
         </div>
 
-        <!-- 1. DASHBOARD VIEW -->
-        <div id="view-dashboard" class="tab-view">
-          <!-- Dynamic Metric KPI Cards from Real PostgreSQL Data -->
+        <!-- ==================================================================== -->
+        <!-- STEP 1 VIEW: PLATFORMS & APPLICATION SUBSCRIPTIONS -->
+        <!-- ==================================================================== -->
+        <div id="view-platforms" class="tab-view">
+          <!-- Quota & Subscription Status Bar -->
+          <div class="metrics-grid" style="margin-bottom: 24px;">
+            <div class="metric-card turnaround">
+              <span class="metric-title">YouTube Monitored Channels</span>
+              <div class="metric-value" id="ytChannelCount">1 / 20</div>
+              <div class="metric-change green">
+                <i data-lucide="check-circle"></i> Active & Ingesting
+              </div>
+            </div>
+
+            <div class="metric-card sla">
+              <span class="metric-title">LinkedIn Monitored Profiles</span>
+              <div class="metric-value" id="liProfileCount">1 / 10</div>
+              <div class="metric-change blue">
+                <i data-lucide="briefcase"></i> OAuth 2.0 Connected
+              </div>
+            </div>
+
+            <div class="metric-card crisis">
+              <span class="metric-title">Reddit Community Monitor</span>
+              <div class="metric-value" id="rdSubscriptionBadgeText" style="color:#fbbf24;">UNPAID</div>
+              <div class="metric-change alert" id="rdSubscriptionSubText">
+                <i data-lucide="lock"></i> Add-on License Required ($249/mo)
+              </div>
+            </div>
+
+            <div class="metric-card compliance">
+              <span class="metric-title">Ingestion Watermark Cursor</span>
+              <div class="metric-value" style="font-size: 0.95rem; font-family: var(--font-mono); color: #25d366;" id="activeWatermarkText">Ugzm8Tx... (Recorded)</div>
+              <div class="metric-change" style="color:var(--text-secondary);">
+                <i data-lucide="shield-check" style="color:#25d366;"></i> Zero-duplicate crawler cursor
+              </div>
+            </div>
+          </div>
+
+          <!-- Application Subscription Hub Cards -->
+          <div class="platforms-grid">
+            <!-- 1. YouTube SPI -->
+            <div class="platform-hub-card">
+              <div class="platform-card-header">
+                <div class="platform-icon-wrap" style="background:rgba(239,68,68,0.15); color:#ef4444;">
+                  <i data-lucide="video"></i>
+                </div>
+                <span class="platform-status-pill paid">
+                  <i data-lucide="check-circle-2" style="width:13px; height:13px;"></i> ACTIVE / SUBSCRIBED
+                </span>
+              </div>
+              <div>
+                <h4 style="font-size:1.05rem; font-weight:800; color:var(--text-pure);">YouTube Video & Comment SPI</h4>
+                <p style="font-size:0.8rem; color:var(--text-secondary); margin-top:4px;">
+                  Real-time comment velocity, automated audio transcription, Presidio PII redaction, and atomic claim extraction.
+                </p>
+              </div>
+              <div class="platform-features-list">
+                <div class="platform-feature-item"><i data-lucide="check" style="width:14px; height:14px; color:#25d366;"></i> 2,662 Comments Ingested & Analyzed</div>
+                <div class="platform-feature-item"><i data-lucide="check" style="width:14px; height:14px; color:#25d366;"></i> Incremental 5-minute cursor watermark</div>
+                <div class="platform-feature-item"><i data-lucide="check" style="width:14px; height:14px; color:#25d366;"></i> Included in Base Enterprise Plan</div>
+              </div>
+              <div style="margin-top:auto; display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:0.75rem; color:#25d366; font-weight:700;">● Plan Active ($0 Extra)</span>
+                <button class="btn btn-secondary" onclick="navigateToStep('video-decode')" style="font-size:0.78rem;">
+                  Open Video Truth ➔
+                </button>
+              </div>
+            </div>
+
+            <!-- 2. LinkedIn SPI -->
+            <div class="platform-hub-card">
+              <div class="platform-card-header">
+                <div class="platform-icon-wrap" style="background:rgba(0,132,255,0.15); color:#0084ff;">
+                  <i data-lucide="briefcase"></i>
+                </div>
+                <span class="platform-status-pill paid">
+                  <i data-lucide="check-circle-2" style="width:13px; height:13px;"></i> ACTIVE / SUBSCRIBED
+                </span>
+              </div>
+              <div>
+                <h4 style="font-size:1.05rem; font-weight:800; color:var(--text-pure);">LinkedIn Corporate Brand Feed</h4>
+                <p style="font-size:0.8rem; color:var(--text-secondary); margin-top:4px;">
+                  Harvest executive feedback and enterprise reactions with HMAC-SHA256 author pseudonymization.
+                </p>
+              </div>
+              <div class="platform-features-list">
+                <div class="platform-feature-item"><i data-lucide="check" style="width:14px; height:14px; color:#25d366;"></i> Official Sony Company Page Connected</div>
+                <div class="platform-feature-item"><i data-lucide="check" style="width:14px; height:14px; color:#25d366;"></i> B2B sentiment & employee advocacy</div>
+                <div class="platform-feature-item"><i data-lucide="check" style="width:14px; height:14px; color:#25d366;"></i> Included in Base Enterprise Plan</div>
+              </div>
+              <div style="margin-top:auto; display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:0.75rem; color:#0084ff; font-weight:700;">● OAuth 2.0 Synced</span>
+                <button class="btn btn-secondary" style="font-size:0.78rem;" onclick="alert('LinkedIn Company Feed SPI connected and active.')">
+                  Manage Feeds
+                </button>
+              </div>
+            </div>
+
+            <!-- 3. Reddit SPI (UNSUBSCRIBED / REQUIRES PAYMENT) -->
+            <div class="platform-hub-card" id="cardRedditPlatform" style="border-top:3px solid #ff4500;">
+              <div class="platform-card-header">
+                <div class="platform-icon-wrap" style="background:rgba(255,69,0,0.15); color:#ff4500;">
+                  <i data-lucide="message-square"></i>
+                </div>
+                <span class="platform-status-pill unpaid" id="badgeRedditCardStatus">
+                  <i data-lucide="lock" style="width:13px; height:13px;"></i> UNSUBSCRIBED / UNPAID
+                </span>
+              </div>
+              <div>
+                <h4 style="font-size:1.05rem; font-weight:800; color:var(--text-pure);">Reddit Community Monitor SPI</h4>
+                <p style="font-size:0.8rem; color:var(--text-secondary); margin-top:4px;">
+                  Monitor gaming subreddits (r/playstation, r/gaming), track boycott surges, and identify vocal dissent.
+                </p>
+              </div>
+              <div class="platform-features-list">
+                <div class="platform-feature-item" id="rdFeature1"><i data-lucide="circle-dashed" style="width:14px; height:14px; color:#fbbf24;"></i> Subreddit thread sentiment listener</div>
+                <div class="platform-feature-item" id="rdFeature2"><i data-lucide="circle-dashed" style="width:14px; height:14px; color:#fbbf24;"></i> Crisis & thread velocity alerts</div>
+                <div class="platform-feature-item" id="rdFeature3"><i data-lucide="circle-dashed" style="width:14px; height:14px; color:#fbbf24;"></i> Dedicated Add-on License ($249/month)</div>
+              </div>
+              <div style="margin-top:auto; display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:0.85rem; font-weight:800; color:#ff4500;" id="redditPriceText">$249 / month</span>
+                <button id="btnSubscribeReddit" class="btn btn-primary" onclick="openPaymentModal('REDDIT')" style="font-size:0.82rem;">
+                  <i data-lucide="credit-card" style="width:13px; height:13px;"></i> Subscribe Reddit
+                </button>
+              </div>
+            </div>
+
+            <!-- 4. X / Twitter Pulse (Enterprise Roadmap) -->
+            <div class="platform-hub-card" style="opacity:0.75;">
+              <div class="platform-card-header">
+                <div class="platform-icon-wrap" style="background:rgba(255,255,255,0.1); color:#fff;">
+                  𝕏
+                </div>
+                <span class="platform-status-pill" style="background:rgba(255,255,255,0.1); color:#aaa;">
+                  COMING SOON
+                </span>
+              </div>
+              <div>
+                <h4 style="font-size:1.05rem; font-weight:800; color:var(--text-pure);">𝕏 (Twitter) Enterprise Firehose</h4>
+                <p style="font-size:0.8rem; color:var(--text-secondary); margin-top:4px;">
+                  High-throughput live stream ingestion for trending gaming controversies and viral hashtags.
+                </p>
+              </div>
+              <div class="platform-features-list">
+                <div class="platform-feature-item"><i data-lucide="clock" style="width:14px; height:14px; color:#888;"></i> Filtered Stream API integration</div>
+                <div class="platform-feature-item"><i data-lucide="clock" style="width:14px; height:14px; color:#888;"></i> Enterprise tier add-on</div>
+              </div>
+              <div style="margin-top:auto; display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:0.75rem; color:#888;">In Certification</span>
+                <button class="btn btn-secondary" disabled style="font-size:0.78rem;">Waitlist</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Subscription Action Forms -->
+          <div class="dashboard-grid">
+            <!-- YouTube Channel/Video Subscription Box -->
+            <div class="panel-card" style="border-top: 3px solid var(--theme-primary);">
+              <div class="panel-header">
+                <h3 class="panel-title">
+                  <i data-lucide="video" style="color:var(--theme-primary);"></i> Subscribe YouTube Channel / Video
+                </h3>
+                <span class="badge" style="background:rgba(37,211,102,0.15); color:#25d366;">Active SPI</span>
+              </div>
+              <p style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:14px;">
+                Enter any YouTube Video URL, Video ID, or Channel ID to monitor comment sentiment and run AI turnaround analysis.
+              </p>
+              <div style="display:flex; flex-direction:column; gap:12px;">
+                <div>
+                  <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">YouTube Video URL or Channel ID</label>
+                  <input id="ytInput" type="text" value="https://www.youtube.com/watch?v=PTblI6oYfSU" placeholder="e.g. https://www.youtube.com/watch?v=... or @PlayStation" 
+                         style="width:100%; margin-top:4px; padding:10px 14px; background:var(--app-bg); border:1px solid var(--app-border); border-radius:6px; color:#fff; font-family:var(--font-mono); font-size:0.85rem;">
+                </div>
+                <div style="display:flex; gap:12px;">
+                  <div style="flex:1;">
+                    <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Associated Product</label>
+                    <input id="ytProductInput" type="text" value="PlayStation Discs & PS Store" placeholder="e.g. PS5 DualSense Controller"
+                           style="width:100%; margin-top:4px; padding:10px 14px; background:var(--app-bg); border:1px solid var(--app-border); border-radius:6px; color:#fff; font-size:0.85rem;">
+                  </div>
+                  <div style="width:140px;">
+                    <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Batch Limit</label>
+                    <select id="ytBatchLimit" style="width:100%; margin-top:4px; padding:10px 14px; background:var(--app-bg); border:1px solid var(--app-border); border-radius:6px; color:#fff; font-size:0.85rem;">
+                      <option value="100">100 Comments</option>
+                      <option value="50">50 Comments</option>
+                      <option value="20">20 Comments</option>
+                      <option value="ALL">All (Multi-Page)</option>
+                    </select>
+                  </div>
+                </div>
+                <div style="display:flex; gap:10px; margin-top:4px;">
+                  <button class="btn btn-primary" onclick="subscribeChannel('YOUTUBE')">
+                    <i data-lucide="plus"></i> Subscribe Channel
+                  </button>
+                  <button class="btn btn-outline-green" id="btnLiveFetch" onclick="fetchLiveYouTubeComments()">
+                    <i data-lucide="zap"></i> Fetch & Analyze Live Comments
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Subscribed Feeds Overview -->
+            <div class="panel-card" style="border-top: 3px solid #38bdf8;">
+              <div class="panel-header">
+                <h3 class="panel-title">
+                  <i data-lucide="list"></i> Subscribed Feeds & Active Monitoring
+                </h3>
+                <span class="badge" style="background:rgba(56,189,248,0.15); color:#38bdf8;">Real-Time Polling</span>
+              </div>
+              <div id="subscribedChannelsGrid" style="display:flex; flex-direction:column; gap:12px;"></div>
+            </div>
+          </div>
+
+          <div style="text-align:right; margin-top:24px;">
+            <button class="btn-flow-next" onclick="navigateToStep('video-decode')">
+              <span>Next Step: Decode Video & Inspect Claims</span>
+              <i data-lucide="arrow-right"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- ==================================================================== -->
+        <!-- STEP 2 VIEW: VIDEO SOURCE & TRUTH STUDIO (SPLIT POSITIVE VS NEGATIVE CLAIMS) -->
+        <!-- ==================================================================== -->
+        <div id="view-video-decode" class="tab-view hidden">
+          <!-- Video Ingestion & Decoder Bar -->
+          <div class="truth-decoder-banner">
+            <div class="decoder-scanner-glow"></div>
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; position:relative; z-index:2;">
+              <div>
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                  <span class="badge" style="background:rgba(0,168,132,0.2); color:var(--theme-primary); border:1px solid var(--theme-border);">
+                    <i data-lucide="sparkles" style="width:12px; height:12px;"></i> Step 2: Source Video Deconstruction & Fact-Check
+                  </span>
+                  <span style="font-size:0.75rem; color:var(--text-secondary);">Whisper Speech-to-Text · Atomic Claim Extractor · Sony Policy RAG</span>
+                </div>
+                <h3 style="font-size:1.15rem; font-weight:800; color:var(--text-pure);">
+                  Influencer Video Deconstruction & Claim Truth Split
+                </h3>
+              </div>
+
+              <!-- Input and Decode Action -->
+              <div style="display:flex; gap:10px; flex:1; max-width:640px;">
+                <div style="flex:1; position:relative;">
+                  <input type="text" id="truthVideoUrlInput" value="https://www.youtube.com/watch?v=PTblI6oYfSU" 
+                         placeholder="Enter YouTube Video URL to decode & verify..." 
+                         style="width:100%; padding:10px 14px; background:var(--app-bg); border:1px solid var(--app-border); border-radius:8px; color:#fff; font-size:0.84rem;">
+                </div>
+                <button class="btn btn-primary" onclick="decodeActiveVideo()" id="btnDecodeVideo">
+                  <i data-lucide="scan" style="width:14px; height:14px;"></i> Decode Video
+                </button>
+              </div>
+            </div>
+
+            <!-- Quick Load Preset Sample Videos -->
+            <div style="display:flex; align-items:center; gap:8px; margin-top:12px; font-size:0.75rem; color:var(--text-secondary); position:relative; z-index:2;">
+              <span>Quick Load Presets:</span>
+              <button class="filter-chip" onclick="quickLoadVideoPreset('PTblI6oYfSU')">SAMTIME (PlayStation Discs)</button>
+              <button class="filter-chip" onclick="quickLoadVideoPreset('v89_F25E5s8')">Digital Foundry (PS5 Pro PSSR)</button>
+              <button class="filter-chip" onclick="quickLoadVideoPreset('kP5t6K6m9s0')">Austin Evans (PlayStation Portal)</button>
+            </div>
+          </div>
+
+          <!-- Active Video Summary & Creator Credibility Header -->
+          <div class="video-meta-summary-card" id="videoMetaCard"></div>
+
+          <!-- Video Player Mock & Timestamp Scrubber -->
+          <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; margin-top:16px;">
+            <div class="panel-card">
+              <div class="panel-header">
+                <h3 class="panel-title">
+                  <i data-lucide="play-circle" style="color:var(--theme-primary);"></i> Video Feed & Scrubber
+                </h3>
+                <span class="badge" style="background:rgba(37,211,102,0.15); color:#25d366;" id="videoCurrentTimeDisplay">Scrub: 01:14</span>
+              </div>
+              <div class="video-player-container">
+                <div class="video-player-mock">
+                  <img id="activeVideoThumbImg" src="https://img.youtube.com/vi/PTblI6oYfSU/hqdefault.jpg" alt="Video Thumbnail" style="width:100%; height:100%; object-fit:cover; opacity:0.85;">
+                  <div class="video-play-overlay" onclick="window.open(document.getElementById('truthVideoUrlInput').value, '_blank')">
+                    <div class="play-btn-circle"><i data-lucide="play" style="width:20px; height:20px; color:#0b141a; fill:#0b141a;"></i></div>
+                    <span style="font-size:0.8rem; font-weight:700; color:#fff; margin-top:8px;">Watch on YouTube</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Active Claim RAG Fact-Check Matrix -->
+            <div class="panel-card" style="border-top:3px solid #25d366;">
+              <div class="panel-header">
+                <h3 class="panel-title">
+                  <i data-lucide="shield-alert" style="color:#25d366;"></i> Brand Ground Truth RAG Match
+                </h3>
+                <span class="badge" style="background:rgba(37,211,102,0.15); color:#25d366;">Sony Hardware Spec</span>
+              </div>
+              <!-- Fact-Check Detailed Card -->
+              <div id="ragFactCheckContainer" class="rag-verdict-box" style="margin-bottom:12px;"></div>
+
+              <!-- Brand Turnaround Action Kit -->
+              <div class="brand-action-kit-box">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                  <strong style="font-size:0.8rem; color:var(--text-pure); display:flex; align-items:center; gap:6px;">
+                    <i data-lucide="send" style="width:13px; height:13px; color:var(--theme-primary);"></i> YouTuber Clarification Note
+                  </strong>
+                  <span class="badge" style="background:rgba(0,168,132,0.15); color:var(--theme-primary);">Pre-Drafted</span>
+                </div>
+                <div class="creator-outreach-preview" id="creatorOutreachText">
+                  "Hi Sam! We noticed a misunderstanding at 01:14 regarding disc drive pairing. Per Sony Hardware Spec §4.2, disc drives require only an initial setup handshake and work 100% offline indefinitely."
+                </div>
+                <div style="display:flex; gap:8px; margin-top:10px;">
+                  <button class="btn btn-primary" style="flex:1; font-size:0.75rem;" onclick="copyOutreachNote()">
+                    <i data-lucide="copy"></i> Copy Clarification Note
+                  </button>
+                  <button class="btn btn-secondary" style="font-size:0.75rem;" onclick="dispatchOutreachTicket()">
+                    <i data-lucide="mail"></i> Email Creator
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SPLIT CLAIMS SECTION: POSITIVE CLAIMS VS NEGATIVE/MISLEADING CLAIMS -->
+          <div class="claims-split-container">
+            <!-- Left Column: Positive / Verified Claims -->
+            <div class="claims-split-column claims-col-positive">
+              <div class="claims-col-header">
+                <div class="claims-col-title">
+                  <i data-lucide="check-circle-2" style="color:#25d366;"></i>
+                  <span>🟢 Positive & Factual Claims</span>
+                </div>
+                <span class="badge" style="background:rgba(37,211,102,0.15); color:#25d366;" id="badgePositiveClaimsCount">1 Verified Claim</span>
+              </div>
+              <p style="font-size:0.78rem; color:var(--text-secondary); line-height:1.4;">
+                Statements by the creator that accurately reflect Sony product specifications and official policies.
+              </p>
+              <div id="positiveClaimsList" style="display:flex; flex-direction:column; gap:12px;"></div>
+            </div>
+
+            <!-- Right Column: Negative / Misleading Claims -->
+            <div class="claims-split-column claims-col-negative">
+              <div class="claims-col-header">
+                <div class="claims-col-title">
+                  <i data-lucide="alert-triangle" style="color:#ef4444;"></i>
+                  <span>🔴 Negative & Misleading Claims</span>
+                </div>
+                <span class="badge" style="background:rgba(239,68,68,0.15); color:#ef4444;" id="badgeNegativeClaimsCount">3 Misleading Claims</span>
+              </div>
+              <p style="font-size:0.78rem; color:var(--text-secondary); line-height:1.4;">
+                Inaccurate assertions or rage-bait speculation that contradict verified Sony technical documentation.
+              </p>
+              <div id="negativeClaimsList" style="display:flex; flex-direction:column; gap:12px;"></div>
+            </div>
+          </div>
+
+          <!-- PROMINENT BUTTON TO MOVE TO STEP 3 -->
+          <div style="text-align:center; margin-top:28px;">
+            <button class="btn-flow-next" onclick="navigateToStep('comment-flow')">
+              <span>Next Step: Analyze Audience Comments Flow</span>
+              <i data-lucide="arrow-right"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- ==================================================================== -->
+        <!-- STEP 3 VIEW: AUDIENCE SENTIMENT & BEHAVIORAL FLOW (SPLIT COMMENT STREAMS) -->
+        <!-- ==================================================================== -->
+        <div id="view-comment-flow" class="tab-view hidden">
+          <!-- Top Behavioral Causality Pipeline -->
+          <div class="behavioral-flow-banner">
+            <div class="flow-node-step">
+              <div class="flow-node-icon" style="background:rgba(239,68,68,0.15); color:#ef4444;">
+                <i data-lucide="video"></i>
+              </div>
+              <div class="flow-node-info">
+                <span class="flow-node-title">1. Creator Assertion</span>
+                <span class="flow-node-desc">Misleading claim @01:14</span>
+              </div>
+            </div>
+            <div class="flow-connector-arrow"><i data-lucide="arrow-right"></i></div>
+
+            <div class="flow-node-step">
+              <div class="flow-node-icon" style="background:rgba(245,158,11,0.15); color:#f59e0b;">
+                <i data-lucide="share-2"></i>
+              </div>
+              <div class="flow-node-info">
+                <span class="flow-node-title">2. Viral Exposure</span>
+                <span class="flow-node-desc">94.2k Gamers Incited</span>
+              </div>
+            </div>
+            <div class="flow-connector-arrow"><i data-lucide="arrow-right"></i></div>
+
+            <div class="flow-node-step">
+              <div class="flow-node-icon" style="background:rgba(239,68,68,0.2); color:#ef4444;">
+                <i data-lucide="flame"></i>
+              </div>
+              <div class="flow-node-info">
+                <span class="flow-node-title">3. Anger & Boycott</span>
+                <span class="flow-node-desc">86.4% Fallout Sentiment</span>
+              </div>
+            </div>
+            <div class="flow-connector-arrow"><i data-lucide="arrow-right"></i></div>
+
+            <div class="flow-node-step">
+              <div class="flow-node-icon" style="background:rgba(37,211,102,0.15); color:#25d366;">
+                <i data-lucide="shield-check"></i>
+              </div>
+              <div class="flow-node-info">
+                <span class="flow-node-title">4. AI Brand Save</span>
+                <span class="flow-node-desc">RAG Fact Sheet Outreach</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- SIDE-BY-SIDE SPLIT COMMENT STREAMS (POSITIVE VS NEGATIVE) -->
+          <div class="comment-split-grid">
+            <!-- Left Stream: Positive Feedback & Praises -->
+            <div class="comment-stream-col">
+              <div class="comment-stream-header positive">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <i data-lucide="thumbs-up" style="color:#25d366; width:16px; height:16px;"></i>
+                  <strong style="color:var(--text-pure); font-size:0.92rem;">🟢 Positive Community Feedback & Praise</strong>
+                </div>
+                <span class="badge" style="background:rgba(37,211,102,0.15); color:#25d366;" id="positiveStreamCountBadge">428 Comments</span>
+              </div>
+              <div id="positiveCommentsStream" style="display:flex; flex-direction:column; gap:12px;"></div>
+            </div>
+
+            <!-- Right Stream: Negative Fallout & Crisis Comments -->
+            <div class="comment-stream-col">
+              <div class="comment-stream-header negative">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <i data-lucide="alert-octagon" style="color:#ef4444; width:16px; height:16px;"></i>
+                  <strong style="color:var(--text-pure); font-size:0.92rem;">🔴 Negative Fallout & Misinformation Incited</strong>
+                </div>
+                <span class="badge" style="background:rgba(239,68,68,0.15); color:#ef4444;" id="negativeStreamCountBadge">2,234 Comments</span>
+              </div>
+              <div id="negativeCommentsStream" style="display:flex; flex-direction:column; gap:12px;"></div>
+            </div>
+          </div>
+
+          <!-- PROMINENT BUTTON TO MOVE TO STEP 4 -->
+          <div style="text-align:center; margin-top:28px;">
+            <button class="btn-flow-next" onclick="navigateToStep('video-history')">
+              <span>Next Step: View Video History & Archive</span>
+              <i data-lucide="arrow-right"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- ==================================================================== -->
+        <!-- STEP 4 VIEW: VIDEO ANALYSIS HISTORY & ARCHIVES -->
+        <!-- ==================================================================== -->
+        <div id="view-video-history" class="tab-view hidden">
+          <div class="panel-header" style="margin-bottom:20px;">
+            <div>
+              <h3 class="panel-title">
+                <i data-lucide="history" style="color:var(--theme-primary);"></i> Video Truth & Comment Intelligence History
+              </h3>
+              <span style="font-size:0.8rem; color:var(--text-secondary);">
+                Browse previously decoded YouTube source videos with simple summary metrics of positive and negative claims & comments.
+              </span>
+            </div>
+            <button class="btn btn-secondary" onclick="loadVideoTruthData()">
+              <i data-lucide="refresh-cw"></i> Refresh History
+            </button>
+          </div>
+
+          <!-- Video History Cards Grid -->
+          <div class="history-cards-grid" id="historyVideosGrid">
+            <!-- Dynamically populated from state.videoTruth.videos -->
+          </div>
+        </div>
+
+        <!-- ==================================================================== -->
+        <!-- STEP 5 VIEW: VIDEO & COMMENTS DASHBOARD -->
+        <!-- ==================================================================== -->
+        <div id="view-video-dashboard" class="tab-view hidden">
+          <!-- Top Section: Selected Video Dashboard -->
           <div class="metrics-grid">
             <div class="metric-card turnaround">
-              <span class="metric-title">Product Comments Volume</span>
-              <div class="metric-value" id="kpiTotalComments">2,662</div>
+              <span class="metric-title">Active Video Ingested</span>
+              <div class="metric-value" id="kpiDashVideoComments">2,662</div>
               <div class="metric-change green">
                 <i data-lucide="trending-up"></i> 100% Ingested & Analyzed
               </div>
@@ -364,7 +891,7 @@
 
             <div class="metric-card engagement">
               <span class="metric-title">Total Reaction Velocity (Likes)</span>
-              <div class="metric-value" id="kpiTotalLikes">21,637</div>
+              <div class="metric-value" id="kpiDashVideoLikes">21,637</div>
               <div class="metric-change green">
                 <i data-lucide="thumbs-up"></i> Authentic YouTube engagement
               </div>
@@ -372,7 +899,7 @@
 
             <div class="metric-card crisis">
               <span class="metric-title">P1 Crisis Comments</span>
-              <div class="metric-value" id="kpiP1Crisis" style="color:var(--status-p1);">121</div>
+              <div class="metric-value" id="kpiDashVideoP1" style="color:var(--status-p1);">121</div>
               <div class="metric-change alert">
                 <i data-lucide="alert-triangle"></i> Boycott & churn risks identified
               </div>
@@ -380,7 +907,7 @@
 
             <div class="metric-card compliance">
               <span class="metric-title">Repeat Cross-Channel Users</span>
-              <div class="metric-value" id="kpiRepeatAuthors" style="color:var(--repeat-author-text);">76</div>
+              <div class="metric-value" id="kpiDashVideoRepeat" style="color:var(--repeat-author-text);">76</div>
               <div class="metric-change blue">
                 <i data-lucide="users"></i> Multi-channel active commenters
               </div>
@@ -407,222 +934,55 @@
                   <i data-lucide="pie-chart"></i> Product Aspect Sentiment
                 </h3>
               </div>
-              <div class="aspect-list" id="aspectListContainer">
-                <!-- Dynamically populated from real comments -->
-              </div>
+              <div class="aspect-list" id="aspectListContainer"></div>
             </div>
           </div>
 
           <!-- Regional & Platform Breakdown Grid -->
-          <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr;">
+          <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; margin-bottom:24px;">
             <div class="panel-card">
               <div class="panel-header">
                 <h3 class="panel-title">
                   <i data-lucide="globe"></i> Geographic Distribution (Channel & Author Origin)
                 </h3>
               </div>
-              <div id="countryDistributionList" style="display:flex; flex-direction:column; gap:10px;">
-                <!-- Populated dynamically -->
-              </div>
+              <div id="countryDistributionList" style="display:flex; flex-direction:column; gap:10px;"></div>
             </div>
 
             <div class="panel-card">
               <div class="panel-header">
                 <h3 class="panel-title">
-                  <i data-lucide="shield-check"></i> Enterprise Connector Pipeline Status
+                  <i data-lucide="bar-chart-3"></i> Channel Claims Veracity Breakdown
                 </h3>
               </div>
-              <div style="display:flex; flex-direction:column; gap:12px; font-size:0.82rem; color:var(--text-secondary); line-height:1.5;">
-                <p>
-                  <strong style="color:var(--text-pure);">Universal Intelligence Architecture:</strong> The sentiment inference engine, Presidio PII sanitizer, aspect extraction, and repeat author tracking are <em>100% platform-agnostic</em>.
-                </p>
-                <div style="display:flex; flex-direction:column; gap:8px;">
-                  <div style="display:flex; justify-content:space-between; align-items:center; background:var(--app-bg); padding:8px 12px; border-radius:6px; border:1px solid var(--app-border);">
-                    <span>🎬 YouTube Connector SPI</span>
-                    <span class="badge" style="background:rgba(37,211,102,0.15); color:#25d366;">Active (2,662 comments)</span>
-                  </div>
-                  <div style="display:flex; justify-content:space-between; align-items:center; background:var(--app-bg); padding:8px 12px; border-radius:6px; border:1px solid var(--app-border);">
-                    <span>💼 LinkedIn Company Feed SPI</span>
-                    <span class="badge" style="background:rgba(0,132,255,0.15); color:#0084ff;">Ready (OAuth 2.0 Connected)</span>
-                  </div>
-                  <div style="display:flex; justify-content:space-between; align-items:center; background:var(--app-bg); padding:8px 12px; border-radius:6px; border:1px solid var(--app-border);">
-                    <span>👾 Reddit Subreddit Monitor SPI</span>
-                    <span class="badge" style="background:rgba(245,158,11,0.15); color:#f59e0b;">Ready (Polling Subscribed)</span>
-                  </div>
-                </div>
-              </div>
+              <div id="claimsVeracityBreakdownBox" style="display:flex; flex-direction:column; gap:12px;"></div>
             </div>
           </div>
-        </div>
 
-        <!-- NEW: VIDEO TRUTH & GROUND TRUTH STUDIO VIEW -->
-        <div id="view-truth-studio" class="tab-view hidden">
-          <!-- Video Ingestion & Decoder Bar -->
-          <div class="truth-decoder-banner">
-            <div class="decoder-scanner-glow"></div>
-            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; position:relative; z-index:2;">
+          <!-- Bottom Section: Respective Comments for Selected Video -->
+          <div class="panel-card">
+            <div class="panel-header">
               <div>
-                <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
-                  <span class="badge" style="background:rgba(0,168,132,0.2); color:var(--theme-primary); border:1px solid var(--theme-border);">
-                    <i data-lucide="sparkles" style="width:12px; height:12px;"></i> AI Video & RAG Ground Truth Triangulation
-                  </span>
-                  <span style="font-size:0.75rem; color:var(--text-secondary);">Whisper Speech-to-Text · Atomic Claim Extractor · Brand Policy RAG</span>
-                </div>
-                <h3 style="font-size:1.15rem; font-weight:800; color:var(--text-pure);">
-                  Influencer Video Deconstruction & Fact-Check Studio
-                </h3>
-              </div>
-
-              <!-- Input and Decode Action -->
-              <div style="display:flex; gap:10px; flex:1; max-width:620px;">
-                <div style="flex:1; position:relative;">
-                  <input type="text" id="truthVideoUrlInput" value="https://www.youtube.com/watch?v=PTblI6oYfSU" 
-                         placeholder="Enter YouTube Video URL to decode & verify..." 
-                         style="width:100%; padding:10px 14px; background:var(--app-bg); border:1px solid var(--app-border); border-radius:8px; color:#fff; font-size:0.84rem;">
-                </div>
-                <button class="btn btn-primary" onclick="decodeActiveVideo()" id="btnDecodeVideo">
-                  <i data-lucide="scan" style="width:14px; height:14px;"></i> Decode & Verify Video
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Active Video Summary & Creator Credibility Header -->
-          <div class="video-meta-summary-card" id="videoMetaCard">
-            <!-- Dynamically populated from /api/v1/truth/videos -->
-          </div>
-
-          <!-- 3-PILLAR TRIANGULATED GROUND TRUTH STUDIO -->
-          <div class="truth-studio-tri-grid">
-            <!-- PILLAR 1: Video Player & Chronological Claim Navigator -->
-            <div class="panel-card truth-pillar">
-              <div class="panel-header">
                 <h3 class="panel-title">
-                  <i data-lucide="video" style="color:var(--theme-primary);"></i> 1. Video Narrative & Claims
+                  <i data-lucide="message-square"></i> Respective Video Comments (Positive & Negative)
                 </h3>
-                <span class="badge" style="background:rgba(239,68,68,0.15); color:#ef4444;" id="videoClaimsBadge">4 Claims Extracted</span>
+                <span style="font-size:0.78rem; color:var(--text-secondary);" id="activeVideoCommentsSubtitle">
+                  Filtered specifically for active video comments stream
+                </span>
               </div>
-              <p style="font-size:0.78rem; color:var(--text-secondary); line-height:1.4;">
-                Select a timestamped claim below to inspect creator statements, trigger audience causality, and view brand RAG citations.
-              </p>
-
-              <!-- Video Embed / Mock Player -->
-              <div class="video-player-container">
-                <div class="video-player-mock">
-                  <img src="https://img.youtube.com/vi/PTblI6oYfSU/hqdefault.jpg" alt="SAMTIME Video Thumbnail" style="width:100%; height:100%; object-fit:cover; opacity:0.85;">
-                  <div class="video-play-overlay" onclick="window.open('https://www.youtube.com/watch?v=PTblI6oYfSU', '_blank')">
-                    <div class="play-btn-circle"><i data-lucide="play" style="width:20px; height:20px; color:#0b141a; fill:#0b141a;"></i></div>
-                    <span style="font-size:0.8rem; font-weight:700; color:#fff; margin-top:8px;">Watch Original Feed (10:48)</span>
-                  </div>
-                  <!-- Floating Timestamp Indicator -->
-                  <div class="video-current-timestamp" id="videoCurrentTimeDisplay">Active Scrub: 01:14</div>
-                </div>
-              </div>
-
-              <!-- Timestamp Claim Scrubber Pills -->
-              <div class="claim-scrubber-list" id="claimsTimelineList">
-                <!-- Dynamically populated claims -->
+              <div style="display:flex; gap:8px;">
+                <button class="filter-chip active" onclick="filterVideoComments('ALL')">All Comments</button>
+                <button class="filter-chip" onclick="filterVideoComments('POSITIVE')">Positive Praise</button>
+                <button class="filter-chip" onclick="filterVideoComments('NEGATIVE')">Negative / Crisis</button>
               </div>
             </div>
-
-            <!-- PILLAR 2: Brand Truth Matrix (RAG Knowledge Fact-Check) -->
-            <div class="panel-card truth-pillar" style="border-top:3px solid #25d366;">
-              <div class="panel-header">
-                <h3 class="panel-title">
-                  <i data-lucide="shield-alert" style="color:#25d366;"></i> 2. Brand Ground Truth (RAG)
-                </h3>
-                <span class="badge" style="background:rgba(37,211,102,0.15); color:#25d366;">Sony Hardware Spec §4.2</span>
-              </div>
-              <p style="font-size:0.78rem; color:var(--text-secondary); line-height:1.4;">
-                Real-time semantic retrieval against official Sony technical documentation and product policies.
-              </p>
-
-              <!-- Fact-Check Detailed Card -->
-              <div id="ragFactCheckContainer" class="rag-verdict-box">
-                <!-- Populated dynamically on claim click -->
-              </div>
-
-              <!-- Brand Turnaround Action Kit -->
-              <div class="brand-action-kit-box">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                  <strong style="font-size:0.82rem; color:var(--text-pure); display:flex; align-items:center; gap:6px;">
-                    <i data-lucide="send" style="width:13px; height:13px; color:var(--theme-primary);"></i> Creator Outreach & Clarification Kit
-                  </strong>
-                  <span class="badge" style="background:rgba(0,168,132,0.15); color:var(--theme-primary);">Pre-Drafted</span>
-                </div>
-                <div class="creator-outreach-preview" id="creatorOutreachText">
-                  "Hi Sam! We enjoyed your video breakdown. We noticed a misunderstanding regarding offline play at 01:14. Per Sony Hardware Spec §4.2, disc drives only need a one-time cryptographic pairing during setup and work 100% offline indefinitely without recurring server checks. We would love to provide the official spec sheet for your pinned comment!"
-                </div>
-                <div style="display:flex; gap:8px; margin-top:10px;">
-                  <button class="btn btn-primary" style="flex:1; font-size:0.75rem;" onclick="copyOutreachNote()">
-                    <i data-lucide="copy"></i> Copy Outreach Note
-                  </button>
-                  <button class="btn btn-secondary" style="font-size:0.75rem;" onclick="dispatchOutreachTicket()">
-                    <i data-lucide="mail"></i> Email YouTuber
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- PILLAR 3: Causal Audience Reaction & Anger Source -->
-            <div class="panel-card truth-pillar" style="border-top:3px solid #38bdf8;">
-              <div class="panel-header">
-                <h3 class="panel-title">
-                  <i data-lucide="users" style="color:#38bdf8;"></i> 3. Causal Audience Fallout
-                </h3>
-                <span class="badge" style="background:rgba(56,189,248,0.15); color:#38bdf8;" id="causalCommentsBadge">1,420 Comments Linked</span>
-              </div>
-              <p style="font-size:0.78rem; color:var(--text-secondary); line-height:1.4;">
-                Comments mapped directly to this specific claim. Proves anger is caused by <em>creator misinformation</em> rather than product failure.
-              </p>
-
-              <!-- Causality Stats Widget -->
-              <div class="causality-stats-widget">
-                <div class="causality-stat-item">
-                  <span class="stat-num" id="causalityBoycottPct">86.4%</span>
-                  <span class="stat-desc">Boycott Comments Triggered by Misleading Claim</span>
-                </div>
-                <div class="causality-stat-item">
-                  <span class="stat-num" style="color:#ef4444;" id="causalityMisinfoExposure">94.2k</span>
-                  <span class="stat-desc">Est. Gamer Misinformation Exposure</span>
-                </div>
-              </div>
-
-              <!-- Causality Comment Stream -->
-              <div class="causal-comments-stream" id="causalCommentsStream">
-                <!-- Dynamically populated from real comments -->
-              </div>
-            </div>
+            <div id="videoRespectiveCommentsList" style="display:flex; flex-direction:column; gap:12px; margin-top:12px;"></div>
           </div>
         </div>
 
-        <!-- 2. SOCIAL INBOX VIEW -->
-        <div id="view-inbox" class="tab-view hidden">
-          <div class="inbox-container">
-            <div class="filters-bar" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                <button class="filter-chip active" onclick="filterInbox('ALL')">All Comments</button>
-                <button class="filter-chip" onclick="filterInbox('NEGATIVE')">Negative Sentiments</button>
-                <button class="filter-chip" onclick="filterInbox('P1')">P1 Critical</button>
-                <button class="filter-chip" onclick="filterInbox('P2')">P2 High Priority</button>
-                <button class="filter-chip" onclick="filterInbox('POSITIVE')">Positive Praise</button>
-                <button class="filter-chip" onclick="filterInbox('REPEAT_ONLY')">⚠️ Repeat Commenters</button>
-              </div>
-              <div style="display:flex; gap:10px; align-items:center;">
-                <label style="font-size:0.8rem; color:var(--text-secondary); display:flex; align-items:center; gap:4px;">
-                  <i data-lucide="filter" style="width:14px; height:14px;"></i> Channel:
-                </label>
-                <select id="channelFilter" onchange="filterByChannel(this.value)" 
-                        style="padding:6px 12px; background:var(--app-surface); border:1px solid var(--app-border); border-radius:6px; color:#fff; font-size:0.82rem; max-width:320px;">
-                  <option value="ALL">All Channels & Sources</option>
-                </select>
-              </div>
-            </div>
-            <div id="inboxList" style="display: flex; flex-direction: column; gap: 14px;"></div>
-          </div>
-        </div>
-
-        <!-- 3. APPROVAL QUEUE VIEW -->
+        <!-- ==================================================================== -->
+        <!-- APPROVALS QUEUE VIEW -->
+        <!-- ==================================================================== -->
         <div id="view-approvals" class="tab-view hidden">
           <div class="panel-header">
             <h3 class="panel-title">
@@ -633,7 +993,9 @@
           <div id="approvalList"></div>
         </div>
 
-        <!-- 4. PRIVACY & COMPLIANCE LEDGER VIEW -->
+        <!-- ==================================================================== -->
+        <!-- PRIVACY & COMPLIANCE LEDGER VIEW -->
+        <!-- ==================================================================== -->
         <div id="view-compliance" class="tab-view hidden">
           <div class="dashboard-grid">
             <div class="panel-card">
@@ -676,156 +1038,85 @@
             </div>
           </div>
         </div>
-
-        <!-- 5. PLATFORM CHANNELS & SUBSCRIPTIONS VIEW -->
-        <div id="view-connectors" class="tab-view hidden">
-          <!-- Quota & Subscription Status Bar -->
-          <div class="metrics-grid" style="margin-bottom: 24px;">
-            <div class="metric-card turnaround">
-              <span class="metric-title">YouTube Monitored Channels</span>
-              <div class="metric-value" id="ytChannelCount">1 / 20</div>
-              <div class="metric-change orange">
-                <i data-lucide="radio"></i> Max 20 channels per tenant
-              </div>
-            </div>
-
-            <div class="metric-card sla">
-              <span class="metric-title">LinkedIn Monitored Profiles</span>
-              <div class="metric-value" id="liProfileCount">1 / 10</div>
-              <div class="metric-change white">
-                <i data-lucide="briefcase"></i> Max 10 company pages/profiles
-              </div>
-            </div>
-
-            <div class="metric-card">
-              <span class="metric-title">Ingestion Watermark (Cursor)</span>
-              <div class="metric-value" style="font-size: 0.95rem; font-family: var(--font-mono); color: #10b981; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" id="activeWatermarkText">Ugzm8Tx... (Recorded)</div>
-              <div class="metric-change" style="color:var(--text-secondary);">
-                <i data-lucide="check-circle" style="color:#10b981;"></i> Zero-duplicate crawler cursor
-              </div>
-            </div>
-          </div>
-
-          <!-- Subscription Action Forms -->
-          <div class="dashboard-grid">
-            <!-- YouTube Channel/Video Subscription Box -->
-            <div class="panel-card" style="border-top: 3px solid var(--orange-primary);">
-              <div class="panel-header">
-                <h3 class="panel-title">
-                  <i data-lucide="video" style="color:var(--orange-primary);"></i> Subscribe YouTube Channel / Video
-                </h3>
-                <span class="badge badge-p1">YouTube v3 SPI</span>
-              </div>
-              <p style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:14px;">
-                Enter any YouTube Video URL, Video ID, or Channel ID to monitor comment sentiment and run AI turnaround analysis.
-              </p>
-              <div style="display:flex; flex-direction:column; gap:12px;">
-                <div>
-                  <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">YouTube Video URL or Channel ID</label>
-                  <input id="ytInput" type="text" value="https://www.youtube.com/watch?v=PTblI6oYfSU" placeholder="e.g. https://www.youtube.com/watch?v=... or @PlayStation" 
-                         style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-family:var(--font-mono); font-size:0.85rem;">
-                </div>
-                <div style="display:flex; gap:12px;">
-                  <div style="flex:1;">
-                    <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Associated Product</label>
-                    <input id="ytProductInput" type="text" value="PlayStation Discs & PS Store" placeholder="e.g. PS5 DualSense Controller"
-                           style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.85rem;">
-                  </div>
-                  <div style="width:140px;">
-                    <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Batch Limit</label>
-                    <select id="ytBatchLimit" style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.85rem;">
-                      <option value="100">100 Comments</option>
-                      <option value="50">50 Comments</option>
-                      <option value="20">20 Comments</option>
-                      <option value="ALL">All (Multi-Page)</option>
-                    </select>
-                  </div>
-                </div>
-                <div style="display:flex; gap:10px; margin-top:4px;">
-                  <button class="btn btn-primary" onclick="subscribeChannel('YOUTUBE')">
-                    <i data-lucide="plus"></i> Subscribe Channel
-                  </button>
-                  <button class="btn btn-outline-orange" id="btnLiveFetch" onclick="fetchLiveYouTubeComments()">
-                    <i data-lucide="zap"></i> Fetch & Analyze Live Comments
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- LinkedIn Profile/Company Page Subscription Box -->
-            <div class="panel-card" style="border-top: 3px solid #ffffff;">
-              <div class="panel-header">
-                <h3 class="panel-title">
-                  <i data-lucide="briefcase"></i> Subscribe LinkedIn Profile / Page
-                </h3>
-                <span class="badge badge-p2">LinkedIn SPI</span>
-              </div>
-              <p style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:14px;">
-                Add company page or executive profile URLs to harvest professional comments with HMAC author pseudonymization.
-              </p>
-              <div style="display:flex; flex-direction:column; gap:12px;">
-                <div>
-                  <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">LinkedIn Profile / Company URL</label>
-                  <input id="liInput" type="text" value="https://www.linkedin.com/company/sony" placeholder="e.g. https://www.linkedin.com/company/..." 
-                         style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-family:var(--font-mono); font-size:0.85rem;">
-                </div>
-                <div>
-                  <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Associated Product</label>
-                  <input id="liProductInput" type="text" value="Sony Cloud Platform" placeholder="e.g. Enterprise Cloud API"
-                         style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.85rem;">
-                </div>
-                <div style="margin-top:4px;">
-                  <button class="btn btn-secondary" onclick="subscribeChannel('LINKEDIN')">
-                    <i data-lucide="plus"></i> Subscribe Profile
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Reddit Subreddit Subscription Box -->
-            <div class="panel-card" style="border-top: 3px solid #ff4500;">
-              <div class="panel-header">
-                <h3 class="panel-title">
-                  <i data-lucide="message-square" style="color:#ff4500;"></i> Subscribe Reddit Community
-                </h3>
-                <span class="badge" style="background:rgba(255, 69, 0, 0.15); border:1px solid #ff4500; color:#ff4500;">Reddit SPI</span>
-              </div>
-              <p style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:14px;">
-                Listen to gaming community threads, user complaints, and product sentiment on Reddit in real-time.
-              </p>
-              <div style="display:flex; flex-direction:column; gap:12px;">
-                <div>
-                  <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Subreddit Name or URL</label>
-                  <input id="rdInput" type="text" value="r/playstation" placeholder="e.g. r/playstation or r/gaming" 
-                         style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-family:var(--font-mono); font-size:0.85rem;">
-                </div>
-                <div>
-                  <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Associated Product</label>
-                  <input id="rdProductInput" type="text" value="PlayStation Ecosystem" placeholder="e.g. PlayStation 5 Hardware"
-                         style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.85rem;">
-                </div>
-                <div style="margin-top:4px;">
-                  <button class="btn btn-secondary" onclick="subscribeChannel('REDDIT')">
-                    <i data-lucide="plus"></i> Subscribe Subreddit
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Active Subscribed Channels Grid -->
-          <div class="panel-card" style="margin-top:20px;">
-            <div class="panel-header">
-              <h3 class="panel-title">
-                <i data-lucide="list"></i> Subscribed Channels & Monitored Feeds
-              </h3>
-              <span style="font-size:0.8rem; color:var(--text-secondary);">Automated 5-minute incremental ingestion active across microservices</span>
-            </div>
-            <div id="subscribedChannelsGrid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:16px;"></div>
-          </div>
-        </div>
       </section>
     </main>
+  </div>
+
+  <!-- ========================================================================== -->
+  <!-- ENTERPRISE PAYMENT CHECKOUT MODAL (For Unlocking Reddit Monitoring) -->
+  <!-- ========================================================================== -->
+  <div id="paymentModal" class="modal-overlay hidden">
+    <div class="payment-modal-dialog">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div class="brand-icon" style="width:34px; height:34px; font-size:1rem; background:linear-gradient(135deg, #ff4500 0%, #cc3700 100%);">
+            <i data-lucide="credit-card" style="width:16px; height:16px; color:#fff;"></i>
+          </div>
+          <div>
+            <h3 style="font-size:1.1rem; font-weight:800; color:#fff;">Enterprise Subscription Checkout</h3>
+            <span style="font-size:0.75rem; color:var(--text-secondary);">Unlock Reddit Community Monitoring SPI</span>
+          </div>
+        </div>
+        <button class="btn btn-secondary" style="padding:4px 8px;" onclick="closePaymentModal()">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div class="payment-plan-highlight">
+          <div>
+            <strong style="color:var(--text-pure); font-size:0.95rem;">Reddit Community Monitor SPI</strong>
+            <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:2px;">
+              Subreddit thread listener, sentiment extraction & boycott surge tracking
+            </div>
+          </div>
+          <div style="text-align:right;">
+            <span style="font-size:1.3rem; font-weight:800; color:#25d366;">$249</span>
+            <span style="font-size:0.75rem; color:var(--text-secondary);">/month</span>
+          </div>
+        </div>
+
+        <form id="paymentForm" onsubmit="handleSubscriptionPayment(event)" style="display:flex; flex-direction:column; gap:14px;">
+          <div>
+            <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Cardholder Full Name</label>
+            <input type="text" id="payCardName" required value="Hiroshi Tanaka" class="payment-input">
+          </div>
+
+          <div>
+            <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Corporate Credit Card Number</label>
+            <div style="position:relative;">
+              <input type="text" id="payCardNum" required value="4242 •••• •••• 4242" class="payment-input" style="font-family:var(--font-mono);">
+              <span style="position:absolute; right:12px; top:13px; font-size:0.75rem; color:#25d366; font-weight:700;">VISA</span>
+            </div>
+          </div>
+
+          <div class="payment-form-row">
+            <div style="flex:1;">
+              <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Expiration</label>
+              <input type="text" id="payExp" required value="12/28" class="payment-input" style="font-family:var(--font-mono);">
+            </div>
+            <div style="flex:1;">
+              <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">CVC / CVV</label>
+              <input type="password" id="payCvc" required value="888" class="payment-input" style="font-family:var(--font-mono);">
+            </div>
+          </div>
+
+          <div>
+            <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Billing Tenant Organization</label>
+            <input type="text" id="payTenant" readonly value="Sony Interactive Entertainment (sony-playstation)" class="payment-input" style="opacity:0.75;">
+          </div>
+
+          <div style="font-size:0.75rem; color:var(--text-secondary); line-height:1.4; display:flex; align-items:center; gap:8px;">
+            <i data-lucide="shield-check" style="width:16px; height:16px; color:#25d366; flex-shrink:0;"></i>
+            <span>256-bit TLS Cryptographic Encryption · PCI-DSS Level 1 Certified</span>
+          </div>
+
+          <button type="submit" class="btn btn-primary" id="btnSubmitPayment" style="width:100%; padding:14px; font-size:0.95rem; margin-top:6px;">
+            <i data-lucide="check-circle"></i> Confirm Payment & Unlock Reddit ($249/mo)
+          </button>
+        </form>
+      </div>
+    </div>
   </div>
 
   <!-- SaaS Keycloak Multi-Tenant Authentication Modal -->

@@ -27,12 +27,12 @@
           <div style="display:flex; align-items:center; gap:12px; margin-bottom:24px;">
             <div class="brand-icon" style="width:40px; height:40px; font-size:1.25rem;">Y</div>
             <div>
-              <h2 style="font-size:1.35rem; font-weight:800; color:#fff; letter-spacing:-0.5px;">Yudhix</h2>
-              <span style="font-size:0.75rem; color:var(--orange-primary); font-weight:700; text-transform:uppercase; letter-spacing:1px;">Multi-Tenant SaaS Platform</span>
+              <h2 style="font-size:1.35rem; font-weight:800; color:var(--text-pure); letter-spacing:-0.5px;">Yudhix</h2>
+              <span style="font-size:0.75rem; color:var(--theme-primary); font-weight:700; text-transform:uppercase; letter-spacing:1px;">Multi-Tenant SaaS Platform</span>
             </div>
           </div>
 
-          <h3 style="font-size:1.35rem; font-weight:800; line-height:1.3; color:#fff; margin-bottom:12px;">
+          <h3 style="font-size:1.35rem; font-weight:800; line-height:1.3; color:var(--text-pure); margin-bottom:12px;">
             Enterprise Comment Intelligence & Brand Resolution
           </h3>
           <p style="font-size:0.86rem; color:var(--text-secondary); line-height:1.5;">
@@ -43,7 +43,7 @@
             <div class="auth-feature-item">
               <div class="auth-feature-icon"><i data-lucide="shield-alert"></i></div>
               <div>
-                <strong style="font-size:0.84rem; color:#fff;">P1 Crisis & Churn Defense</strong>
+                <strong style="font-size:0.84rem; color:var(--text-pure);">P1 Crisis & Churn Defense</strong>
                 <p style="font-size:0.78rem; color:var(--text-muted);">Real-time idiom, sarcasm, and veteran gamer boycott detection.</p>
               </div>
             </div>
@@ -51,7 +51,7 @@
             <div class="auth-feature-item">
               <div class="auth-feature-icon"><i data-lucide="building"></i></div>
               <div>
-                <strong style="font-size:0.84rem; color:#fff;">Strict Tenant Isolation</strong>
+                <strong style="font-size:0.84rem; color:var(--text-pure);">Strict Tenant Isolation</strong>
                 <p style="font-size:0.78rem; color:var(--text-muted);">Keycloak OIDC authentication with PostgreSQL Row-Level Security.</p>
               </div>
             </div>
@@ -59,14 +59,14 @@
             <div class="auth-feature-item">
               <div class="auth-feature-icon"><i data-lucide="check-circle-2"></i></div>
               <div>
-                <strong style="font-size:0.84rem; color:#fff;">Separation-of-Duties Approvals</strong>
+                <strong style="font-size:0.84rem; color:var(--text-pure);">Separation-of-Duties Approvals</strong>
                 <p style="font-size:0.78rem; color:var(--text-muted);">Agent drafting with brand executive sign-off and SHA-256 audit ledger.</p>
               </div>
             </div>
           </div>
         </div>
 
-        <div style="font-size:0.75rem; color:var(--text-muted); border-top:1px solid #282828; padding-top:16px;">
+        <div style="font-size:0.75rem; color:var(--text-muted); border-top:1px solid var(--app-border); padding-top:16px;">
           Powered by Keycloak 25+, Ollama Llama 3.1, & PostgreSQL 16 (RLS)
         </div>
       </div>
@@ -88,27 +88,27 @@
           <div>
             <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Tenant Code / Organization Slug</label>
             <input id="portalTenantCode" type="text" value="sony-playstation" required placeholder="e.g. sony-playstation"
-                   style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-family:var(--font-mono); font-size:0.88rem;">
+                   style="width:100%; margin-top:4px; padding:10px 14px; border-radius:6px; font-family:var(--font-mono); font-size:0.88rem;">
           </div>
 
           <div>
             <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Admin Email / Username</label>
             <input id="portalEmail" type="email" value="admin@sony.com" required placeholder="admin@sony.com"
-                   style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.88rem;">
+                   style="width:100%; margin-top:4px; padding:10px 14px; border-radius:6px; font-size:0.88rem;">
           </div>
 
           <div>
             <div style="display:flex; justify-content:space-between;">
               <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Password</label>
-              <span style="font-size:0.75rem; color:var(--orange-primary); cursor:pointer;" onclick="alert('Default demo password: sony_admin_2026')">Forgot password?</span>
+              <span style="font-size:0.75rem; color:var(--theme-primary); cursor:pointer;" onclick="alert('Default demo password: sony_admin_2026')">Forgot password?</span>
             </div>
             <input id="portalPassword" type="password" value="sony_admin_2026" required placeholder="••••••••"
-                   style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.88rem;">
+                   style="width:100%; margin-top:4px; padding:10px 14px; border-radius:6px; font-size:0.88rem;">
           </div>
 
           <div>
             <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Tenant Role</label>
-            <select id="portalRole" style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.88rem;">
+            <select id="portalRole" style="width:100%; margin-top:4px; padding:10px 14px; border-radius:6px; font-size:0.88rem;">
               <option value="tenant_admin" selected>tenant_admin (Full Admin & Platform Control)</option>
               <option value="approver">approver (Authorized Reviewer)</option>
               <option value="agent">agent (Triage & Response Agent)</option>
@@ -117,7 +117,7 @@
           </div>
 
           <div style="display:flex; align-items:center; gap:8px;">
-            <input type="checkbox" id="portalRememberSession" checked style="accent-color:var(--orange-primary);">
+            <input type="checkbox" id="portalRememberSession" checked style="accent-color:var(--theme-primary);">
             <label for="portalRememberSession" style="font-size:0.8rem; color:var(--text-secondary); cursor:pointer;">
               Maintain persistent session on this device
             </label>
@@ -137,25 +137,25 @@
           <div>
             <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Company / Organization Name</label>
             <input id="regOrgName" type="text" required placeholder="e.g. Nintendo Co., Ltd." oninput="autoGenerateTenantCode(this.value)"
-                   style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.88rem;">
+                   style="width:100%; margin-top:4px; padding:10px 14px; border-radius:6px; font-size:0.88rem;">
           </div>
 
           <div>
             <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Tenant Code / URL Slug</label>
             <input id="regTenantCode" type="text" required placeholder="e.g. nintendo-global"
-                   style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-family:var(--font-mono); font-size:0.88rem;">
+                   style="width:100%; margin-top:4px; padding:10px 14px; border-radius:6px; font-family:var(--font-mono); font-size:0.88rem;">
           </div>
 
           <div style="display:flex; gap:12px;">
             <div style="flex:1;">
               <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Admin Full Name</label>
               <input id="regAdminName" type="text" required placeholder="e.g. Alex Morgan"
-                     style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.88rem;">
+                     style="width:100%; margin-top:4px; padding:10px 14px; border-radius:6px; font-size:0.88rem;">
             </div>
             <div style="flex:1;">
               <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Admin Work Email</label>
               <input id="regAdminEmail" type="email" required placeholder="alex@company.com"
-                     style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.88rem;">
+                     style="width:100%; margin-top:4px; padding:10px 14px; border-radius:6px; font-size:0.88rem;">
             </div>
           </div>
 
@@ -163,26 +163,26 @@
             <div style="flex:1;">
               <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Password</label>
               <input id="regPassword" type="password" required placeholder="Minimum 8 characters"
-                     style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.88rem;">
+                     style="width:100%; margin-top:4px; padding:10px 14px; border-radius:6px; font-size:0.88rem;">
             </div>
             <div style="flex:1;">
               <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Confirm Password</label>
               <input id="regPasswordConfirm" type="password" required placeholder="Re-enter password"
-                     style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.88rem;">
+                     style="width:100%; margin-top:4px; padding:10px 14px; border-radius:6px; font-size:0.88rem;">
             </div>
           </div>
 
           <div>
             <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase; margin-bottom:6px; display:block;">Select Initial Platform Subscriptions</label>
             <div style="display:flex; gap:12px;">
-              <label style="display:flex; align-items:center; gap:6px; font-size:0.8rem; color:#fff; cursor:pointer;">
-                <input type="checkbox" id="regSubYt" checked style="accent-color:var(--orange-primary);"> YouTube (20 Channels)
+              <label style="display:flex; align-items:center; gap:6px; font-size:0.8rem; color:var(--text-primary); cursor:pointer;">
+                <input type="checkbox" id="regSubYt" checked style="accent-color:var(--theme-primary);"> YouTube (20 Channels)
               </label>
-              <label style="display:flex; align-items:center; gap:6px; font-size:0.8rem; color:#fff; cursor:pointer;">
-                <input type="checkbox" id="regSubLi" checked style="accent-color:var(--orange-primary);"> LinkedIn
+              <label style="display:flex; align-items:center; gap:6px; font-size:0.8rem; color:var(--text-primary); cursor:pointer;">
+                <input type="checkbox" id="regSubLi" checked style="accent-color:var(--theme-primary);"> LinkedIn
               </label>
-              <label style="display:flex; align-items:center; gap:6px; font-size:0.8rem; color:#fff; cursor:pointer;">
-                <input type="checkbox" id="regSubRd" checked style="accent-color:var(--orange-primary);"> Reddit
+              <label style="display:flex; align-items:center; gap:6px; font-size:0.8rem; color:var(--text-primary); cursor:pointer;">
+                <input type="checkbox" id="regSubRd" checked style="accent-color:var(--theme-primary);"> Reddit
               </label>
             </div>
           </div>
@@ -472,10 +472,10 @@
             <!-- 4. X / Twitter Pulse (Enterprise Roadmap) -->
             <div class="platform-hub-card" style="opacity:0.75;">
               <div class="platform-card-header">
-                <div class="platform-icon-wrap" style="background:rgba(255,255,255,0.1); color:#fff;">
+                <div class="platform-icon-wrap" style="background:#0f172a; color:#fff;">
                   𝕏
                 </div>
-                <span class="platform-status-pill" style="background:rgba(255,255,255,0.1); color:#aaa;">
+                <span class="platform-status-pill" style="background:#f1f5f9; color:#64748b; border:1px solid #cbd5e1;">
                   COMING SOON
                 </span>
               </div>
@@ -513,17 +513,17 @@
                 <div>
                   <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">YouTube Video URL or Channel ID</label>
                   <input id="ytInput" type="text" value="https://www.youtube.com/watch?v=PTblI6oYfSU" placeholder="e.g. https://www.youtube.com/watch?v=... or @PlayStation" 
-                         style="width:100%; margin-top:4px; padding:10px 14px; background:var(--app-bg); border:1px solid var(--app-border); border-radius:6px; color:#fff; font-family:var(--font-mono); font-size:0.85rem;">
+                         style="width:100%; margin-top:4px; padding:10px 14px; border-radius:6px; font-family:var(--font-mono); font-size:0.85rem;">
                 </div>
                 <div style="display:flex; gap:12px;">
                   <div style="flex:1;">
                     <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Associated Product</label>
                     <input id="ytProductInput" type="text" value="PlayStation Discs & PS Store" placeholder="e.g. PS5 DualSense Controller"
-                           style="width:100%; margin-top:4px; padding:10px 14px; background:var(--app-bg); border:1px solid var(--app-border); border-radius:6px; color:#fff; font-size:0.85rem;">
+                           style="width:100%; margin-top:4px; padding:10px 14px; border-radius:6px; font-size:0.85rem;">
                   </div>
                   <div style="width:140px;">
                     <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Batch Limit</label>
-                    <select id="ytBatchLimit" style="width:100%; margin-top:4px; padding:10px 14px; background:var(--app-bg); border:1px solid var(--app-border); border-radius:6px; color:#fff; font-size:0.85rem;">
+                    <select id="ytBatchLimit" style="width:100%; margin-top:4px; padding:10px 14px; border-radius:6px; font-size:0.85rem;">
                       <option value="100">100 Comments</option>
                       <option value="50">50 Comments</option>
                       <option value="20">20 Comments</option>
@@ -733,7 +733,7 @@
                 <div style="flex:1; position:relative;">
                   <input type="text" id="truthVideoUrlInput" value="https://www.youtube.com/watch?v=PTblI6oYfSU" 
                          placeholder="Enter YouTube Video URL to decode & verify..." 
-                         style="width:100%; padding:10px 14px; background:var(--app-bg); border:1px solid var(--app-border); border-radius:8px; color:#fff; font-size:0.84rem;">
+                         style="width:100%; padding:10px 14px; border-radius:8px; font-size:0.84rem;">
                 </div>
                 <button class="btn btn-primary" onclick="decodeActiveVideo()" id="btnDecodeVideo">
                   <i data-lucide="scan" style="width:14px; height:14px;"></i> Decode Video
@@ -1190,7 +1190,7 @@
               </p>
               <div style="display:flex; flex-direction:column; gap:12px;">
                 <input id="dsrInput" type="text" placeholder="Enter Author Pseudonym Hash (e.g. sha256:7f4a...)" 
-                       style="padding:12px; background:rgba(0,0,0,0.3); border:1px solid var(--border-subtle); border-radius:8px; color:#fff; font-family:var(--font-mono); font-size:0.85rem;">
+                       style="padding:12px; border-radius:8px; font-family:var(--font-mono); font-size:0.85rem;">
                 <button class="btn btn-danger" onclick="executeDsrErasure()">
                   <i data-lucide="trash-2"></i> Execute Right to be Forgotten
                 </button>
@@ -1213,7 +1213,7 @@
             <i data-lucide="credit-card" style="width:16px; height:16px; color:#fff;"></i>
           </div>
           <div>
-            <h3 style="font-size:1.1rem; font-weight:800; color:#fff;">Enterprise Subscription Checkout</h3>
+            <h3 style="font-size:1.1rem; font-weight:800; color:var(--text-pure);">Enterprise Subscription Checkout</h3>
             <span style="font-size:0.75rem; color:var(--text-secondary);">Unlock Reddit Community Monitoring SPI</span>
           </div>
         </div>
@@ -1286,7 +1286,7 @@
         <div style="display:flex; align-items:center; gap:10px;">
           <div class="brand-icon" style="width:32px; height:32px; font-size:1rem;">Y</div>
           <div>
-            <h3 style="font-size:1.05rem; font-weight:800; color:#fff;">SaaS Tenant Authentication</h3>
+            <h3 style="font-size:1.05rem; font-weight:800; color:var(--text-pure);">SaaS Tenant Authentication</h3>
             <span style="font-size:0.75rem; color:var(--text-secondary);">Keycloak 25+ OIDC / OAuth2 Multi-Tenancy</span>
           </div>
         </div>
@@ -1296,32 +1296,32 @@
       </div>
 
       <div class="modal-body">
-        <div style="background:var(--black-surface); border:1px solid var(--black-border); border-radius:var(--radius-sm); padding:12px; font-size:0.8rem; color:var(--text-secondary);">
-          <strong style="color:var(--orange-primary);">Multi-Tenant Isolation:</strong> Each tenant logs in using their unique <code>tenant_code</code>. Keycloak maps the user to their designated organization and issues a signed JWT containing <code>tenant_id</code> and RLS claims.
+        <div style="background:var(--app-bg); border:1px solid var(--app-border); border-radius:var(--radius-sm); padding:12px; font-size:0.8rem; color:var(--text-secondary);">
+          <strong style="color:var(--theme-primary);">Multi-Tenant Isolation:</strong> Each tenant logs in using their unique <code>tenant_code</code>. Keycloak maps the user to their designated organization and issues a signed JWT containing <code>tenant_id</code> and RLS claims.
         </div>
 
         <div>
           <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Tenant Code / Organization Slug</label>
           <input id="loginTenantCode" type="text" value="sony-playstation" placeholder="e.g. sony-playstation or acme-corp"
-                 style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-family:var(--font-mono); font-size:0.88rem;">
+                 style="width:100%; margin-top:4px; padding:10px 14px; border-radius:6px; font-family:var(--font-mono); font-size:0.88rem;">
         </div>
 
         <div style="display:flex; gap:12px;">
           <div style="flex:1;">
             <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Username / Admin Email</label>
             <input id="loginUsername" type="text" value="admin@sony.com" placeholder="admin@sony.com"
-                   style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.88rem;">
+                   style="width:100%; margin-top:4px; padding:10px 14px; border-radius:6px; font-size:0.88rem;">
           </div>
           <div style="flex:1;">
             <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Admin Password</label>
             <input id="loginPassword" type="password" value="sony_admin_2026" placeholder="••••••••"
-                   style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.88rem;">
+                   style="width:100%; margin-top:4px; padding:10px 14px; border-radius:6px; font-size:0.88rem;">
           </div>
         </div>
 
         <div>
           <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Assigned Tenant Role</label>
-          <select id="loginRole" style="width:100%; margin-top:4px; padding:10px 14px; background:var(--black-surface); border:1px solid var(--black-border); border-radius:6px; color:#fff; font-size:0.88rem;">
+          <select id="loginRole" style="width:100%; margin-top:4px; padding:10px 14px; border-radius:6px; font-size:0.88rem;">
             <option value="tenant_admin" selected>tenant_admin (Full Tenant, Platforms, & Rules Control)</option>
             <option value="approver">approver (Authorized Turnaround Approver)</option>
             <option value="agent">agent (Triage & Response Agent)</option>
@@ -1330,12 +1330,12 @@
         </div>
 
         <!-- Live Keycloak JWT Inspector -->
-        <div id="jwtInspectorBox" style="background:#0a0a0a; border:1px solid #222; border-radius:var(--radius-sm); padding:12px; font-family:var(--font-mono); font-size:0.75rem;">
-          <div style="display:flex; justify-content:space-between; margin-bottom:6px; color:var(--orange-primary); font-weight:700;">
+        <div id="jwtInspectorBox" style="background:#0f172a; border:1px solid #1e293b; border-radius:var(--radius-sm); padding:12px; font-family:var(--font-mono); font-size:0.75rem;">
+          <div style="display:flex; justify-content:space-between; margin-bottom:6px; color:#38bdf8; font-weight:700;">
             <span>ACTIVE KEYCLOAK JWT CLAIMS</span>
-            <span id="jwtStatus">TOKEN ACTIVE</span>
+            <span id="jwtStatus" style="color:#22c55e;">TOKEN ACTIVE</span>
           </div>
-          <pre id="jwtPayloadDisplay" style="color:#aaa; white-space:pre-wrap; margin:0; max-height:120px; overflow-y:auto;"></pre>
+          <pre id="jwtPayloadDisplay" style="color:#cbd5e1; white-space:pre-wrap; margin:0; max-height:120px; overflow-y:auto;"></pre>
         </div>
       </div>
 
@@ -1372,7 +1372,7 @@
         <div style="display:flex; gap:12px;">
           <div style="flex:1;">
             <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Source Type</label>
-            <select id="schedSourceType" style="width:100%; margin-top:4px; padding:10px 12px; background:var(--app-bg); border:1px solid var(--app-border); border-radius:6px; color:#fff; font-size:0.85rem;" onchange="updateScheduleUrlPlaceholder(this.value)">
+            <select id="schedSourceType" style="width:100%; margin-top:4px; padding:10px 12px; border-radius:6px; font-size:0.85rem;" onchange="updateScheduleUrlPlaceholder(this.value)">
               <option value="YOUTUBE_CHANNEL" selected>📺 YouTube Channel (Upload & Comment Watcher)</option>
               <option value="YOUTUBE_VIDEO">🎬 Specific YouTube Video (Batch Monitor)</option>
               <option value="SUBREDDIT">💬 Subreddit Community (r/playstation)</option>
@@ -1381,7 +1381,7 @@
           </div>
           <div style="flex:1;">
             <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Polling Frequency (Cron)</label>
-            <select id="schedCadence" style="width:100%; margin-top:4px; padding:10px 12px; background:var(--app-bg); border:1px solid var(--app-border); border-radius:6px; color:#fff; font-size:0.85rem;">
+            <select id="schedCadence" style="width:100%; margin-top:4px; padding:10px 12px; border-radius:6px; font-size:0.85rem;">
               <option value="Every 5m">⚡ Every 5 Minutes (Real-Time Burst)</option>
               <option value="Every 15m" selected>⏱️ Every 15 Minutes (Standard Enterprise)</option>
               <option value="Every 30m">🕒 Every 30 Minutes</option>
@@ -1393,13 +1393,13 @@
         <div>
           <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Source Name / Display Label</label>
           <input id="schedSourceName" type="text" required placeholder="e.g. PlayStation Official or Digital Foundry" value="PlayStation Official"
-                 style="width:100%; margin-top:4px; padding:10px 14px; background:var(--app-bg); border:1px solid var(--app-border); border-radius:6px; color:#fff; font-size:0.85rem;">
+                 style="width:100%; margin-top:4px; padding:10px 14px; border-radius:6px; font-size:0.85rem;">
         </div>
 
         <div>
           <label style="font-size:0.75rem; color:var(--text-secondary); font-weight:700; text-transform:uppercase;">Target Channel / Website URL</label>
           <input id="schedSourceUrl" type="url" required placeholder="https://www.youtube.com/@PlayStation" value="https://www.youtube.com/@PlayStation"
-                 style="width:100%; margin-top:4px; padding:10px 14px; background:var(--app-bg); border:1px solid var(--app-border); border-radius:6px; color:#fff; font-family:var(--font-mono); font-size:0.85rem;">
+                 style="width:100%; margin-top:4px; padding:10px 14px; border-radius:6px; font-family:var(--font-mono); font-size:0.85rem;">
         </div>
 
         <div style="background:var(--app-bg); border:1px solid var(--app-border); border-radius:6px; padding:12px; display:flex; flex-direction:column; gap:8px;">

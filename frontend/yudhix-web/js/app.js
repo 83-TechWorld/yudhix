@@ -855,34 +855,34 @@ function updateTimelineChart(filtered) {
             },
             plugins: {
                 legend: {
-                    labels: { color: '#8696a0', font: { family: 'Plus Jakarta Sans', size: 11 } }
+                    labels: { color: '#475569', font: { family: 'Plus Jakarta Sans', size: 11, weight: '600' } }
                 },
                 tooltip: {
-                    backgroundColor: '#111b21',
-                    titleColor: '#fff',
-                    bodyColor: '#e9edef',
-                    borderColor: '#2a3942',
+                    backgroundColor: '#0f172a',
+                    titleColor: '#ffffff',
+                    bodyColor: '#cbd5e1',
+                    borderColor: '#334155',
                     borderWidth: 1
                 }
             },
             scales: {
                 x: {
-                    grid: { color: 'rgba(255, 255, 255, 0.04)' },
-                    ticks: { color: '#8696a0', maxRotation: 45, autoSkip: true, maxTicksLimit: 12 }
+                    grid: { color: 'rgba(0, 0, 0, 0.05)' },
+                    ticks: { color: '#64748b', maxRotation: 45, autoSkip: true, maxTicksLimit: 12 }
                 },
                 y: {
                     type: 'linear',
                     position: 'left',
-                    grid: { color: 'rgba(255, 255, 255, 0.04)' },
-                    ticks: { color: '#8696a0' },
-                    title: { display: true, text: 'Comments', color: '#8696a0' }
+                    grid: { color: 'rgba(0, 0, 0, 0.05)' },
+                    ticks: { color: '#64748b' },
+                    title: { display: true, text: 'Comments', color: '#64748b' }
                 },
                 y1: {
                     type: 'linear',
                     position: 'right',
                     grid: { drawOnChartArea: false },
-                    ticks: { color: '#38bdf8' },
-                    title: { display: true, text: 'Likes', color: '#38bdf8' }
+                    ticks: { color: '#0284c7' },
+                    title: { display: true, text: 'Likes', color: '#0284c7' }
                 }
             }
         }
@@ -1196,11 +1196,11 @@ function renderApprovals() {
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                 <div>
                     <span class="badge badge-p1">${app.platform}</span>
-                    <span style="font-weight:700; margin-left:8px; color:#fff;">Reply Ref: ${app.id}</span>
+                    <span style="font-weight:700; margin-left:8px; color:var(--text-pure);">Reply Ref: ${app.id}</span>
                 </div>
                 <span style="color:var(--theme-primary); font-weight:800; font-size:0.85rem;">SLA: ${app.slaCountdown}</span>
             </div>
-            <p style="font-size:0.92rem; color:#fff; line-height:1.5; margin-bottom:14px; background:#141414; border:1px solid #2a2a2a; padding:12px; border-radius:6px;">
+            <p style="font-size:0.92rem; color:var(--text-primary); line-height:1.5; margin-bottom:14px; background:var(--app-bg); border:1px solid var(--app-border); padding:12px; border-radius:6px;">
                 "${app.replyText}"
             </p>
             <div style="display:flex; gap:10px; justify-content:flex-end;">
@@ -1233,13 +1233,13 @@ function renderLedger() {
     tableBody.innerHTML = '';
     state.ledgerBlocks.forEach(b => {
         const tr = document.createElement('tr');
-        tr.style.borderBottom = '1px solid #222';
+        tr.style.borderBottom = '1px solid var(--app-border)';
         tr.innerHTML = `
             <td style="padding:10px; font-family:var(--font-mono); color:var(--text-muted); font-size:0.82rem;">#${b.seq}</td>
             <td style="padding:10px; font-weight:700; font-size:0.85rem; color:var(--theme-primary);">${b.actor}</td>
-            <td style="padding:10px; font-size:0.85rem;">${b.action}</td>
-            <td style="padding:10px; font-family:var(--font-mono); font-size:0.8rem; color:#fff;">${b.entityId}</td>
-            <td style="padding:10px; font-family:var(--font-mono); font-size:0.75rem; color:#666;">${b.hash.slice(0, 16)}...</td>
+            <td style="padding:10px; font-size:0.85rem; color:var(--text-primary);">${b.action}</td>
+            <td style="padding:10px; font-family:var(--font-mono); font-size:0.8rem; color:var(--text-pure); font-weight:600;">${b.entityId}</td>
+            <td style="padding:10px; font-family:var(--font-mono); font-size:0.75rem; color:var(--text-muted);">${b.hash.slice(0, 16)}...</td>
         `;
         tableBody.appendChild(tr);
     });
@@ -1300,17 +1300,17 @@ function renderSubscribedChannels() {
         card.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <span class="badge ${badgeStyle}">${ch.platform}</span>
-                <span style="font-size:0.75rem; color:#25d366; font-weight:700;">● ACTIVE LISTENING</span>
+                <span style="font-size:0.75rem; color:#059669; font-weight:700;">● ACTIVE LISTENING</span>
             </div>
             <div>
-                <h4 style="font-size:0.95rem; font-weight:800; color:#fff; margin-bottom:2px;">${ch.name}</h4>
-                <div style="font-size:0.78rem; font-family:var(--font-mono); color:#888; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                <h4 style="font-size:0.95rem; font-weight:800; color:var(--text-pure); margin-bottom:2px;">${ch.name}</h4>
+                <div style="font-size:0.78rem; font-family:var(--font-mono); color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
                     Ref: ${ch.ref}
                 </div>
             </div>
-            <div style="display:flex; justify-content:space-between; font-size:0.78rem; color:#bbb; border-top:1px solid #222; padding-top:8px;">
-                <span>Product: <strong style="color:#fff;">${ch.product}</strong></span>
-                <span>Ingested: <strong style="color:var(--theme-accent);">${ch.commentsIngested}</strong></span>
+            <div style="display:flex; justify-content:space-between; font-size:0.78rem; color:var(--text-secondary); border-top:1px solid var(--app-border); padding-top:8px;">
+                <span>Product: <strong style="color:var(--text-pure);">${ch.product}</strong></span>
+                <span>Ingested: <strong style="color:var(--theme-primary);">${ch.commentsIngested}</strong></span>
             </div>
             <div style="display:flex; gap:8px; margin-top:4px;">
                 <button class="btn btn-primary" style="flex:1; padding:6px 10px; font-size:0.78rem;" onclick="fetchLiveYouTubeComments('${ch.ref}', '${ch.id}')">
@@ -2020,7 +2020,7 @@ function renderVideoTruthStudio() {
                         </span>
                     </div>
                     <div style="font-size:0.82rem; color:var(--text-secondary); margin-top:2px;">
-                        Analyzed Video: <strong style="color:#fff;">"${video.video_title}"</strong> · Published ${video.published_date || 'July 2026'}
+                        Analyzed Video: <strong style="color:var(--text-pure);">"${video.video_title}"</strong> · Published ${video.published_date || 'July 2026'}
                     </div>
                 </div>
             </div>
@@ -2028,15 +2028,15 @@ function renderVideoTruthStudio() {
             <div style="display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
                 <div style="text-align:right;">
                     <div style="font-size:0.72rem; color:var(--text-secondary); text-transform:uppercase; font-weight:700;">Sensationalism Score</div>
-                    <div style="font-size:1.35rem; font-weight:800; color:#ef4444;">${rageBaitPct}% <span style="font-size:0.75rem; color:#888;">(Rage-Bait)</span></div>
+                    <div style="font-size:1.35rem; font-weight:800; color:#dc2626;">${rageBaitPct}% <span style="font-size:0.75rem; color:#94a3b8;">(Rage-Bait)</span></div>
                 </div>
                 <div style="text-align:right; border-left:1px solid var(--app-border); padding-left:16px;">
                     <div style="font-size:0.72rem; color:var(--text-secondary); text-transform:uppercase; font-weight:700;">Factual Truth Index</div>
-                    <div style="font-size:1.35rem; font-weight:800; color:#38bdf8;">${accuracyPct}% <span style="font-size:0.75rem; color:#888;">(Sony Spec Match)</span></div>
+                    <div style="font-size:1.35rem; font-weight:800; color:#0284c7;">${accuracyPct}% <span style="font-size:0.75rem; color:#94a3b8;">(Sony Spec Match)</span></div>
                 </div>
                 <div style="text-align:right; border-left:1px solid var(--app-border); padding-left:16px;">
                     <div style="font-size:0.72rem; color:var(--text-secondary); text-transform:uppercase; font-weight:700;">Misleading Claims</div>
-                    <div style="font-size:1.35rem; font-weight:800; color:#f59e0b;">${misleadingCount} / ${totalClaims}</div>
+                    <div style="font-size:1.35rem; font-weight:800; color:#d97706;">${misleadingCount} / ${totalClaims}</div>
                 </div>
             </div>
         `;
@@ -2078,20 +2078,20 @@ function renderClaimsSplit(video) {
             posContainer.innerHTML = positive.map(c => {
                 const isSelected = state.videoTruth.selectedClaim?.id === c.id;
                 return `
-                    <div class="split-claim-card ${isSelected ? 'active' : ''}" onclick="selectClaim('${c.id}')" style="border-left:3px solid #25d366;">
+                    <div class="split-claim-card ${isSelected ? 'active' : ''}" onclick="selectClaim('${c.id}')" style="border-left:3px solid #059669;">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <span class="badge" style="background:rgba(37,211,102,0.15); color:#25d366; font-family:var(--font-mono);">
+                            <span class="badge" style="background:#dcfce7; color:#059669; border:1px solid #86efac; font-family:var(--font-mono);">
                                 ⏱️ ${c.timestamp_start}
                             </span>
-                            <span style="font-size:0.75rem; color:#25d366; font-weight:800;">
+                            <span style="font-size:0.75rem; color:#059669; font-weight:800;">
                                 🟢 Verified Factual
                             </span>
                         </div>
-                        <div style="font-size:0.86rem; color:#fff; font-weight:600; line-height:1.4;">
+                        <div style="font-size:0.86rem; color:var(--text-pure); font-weight:600; line-height:1.4;">
                             "${c.creator_quote}"
                         </div>
-                        <div style="font-size:0.75rem; color:var(--text-secondary); background:var(--app-surface); padding:8px 10px; border-radius:6px; border:1px solid var(--app-border);">
-                            <strong style="color:var(--theme-accent);">Sony RAG Citation:</strong> ${c.official_citation || c.document_title || 'Sony Hardware Spec §4.2'}
+                        <div style="font-size:0.75rem; color:var(--text-secondary); background:var(--app-bg); padding:8px 10px; border-radius:6px; border:1px solid var(--app-border);">
+                            <strong style="color:var(--theme-primary);">Sony RAG Citation:</strong> ${c.official_citation || c.document_title || 'Sony Hardware Spec §4.2'}
                         </div>
                     </div>
                 `;
@@ -2106,21 +2106,23 @@ function renderClaimsSplit(video) {
             negContainer.innerHTML = negative.map(c => {
                 const isSelected = state.videoTruth.selectedClaim?.id === c.id;
                 const badgeLabel = c.verdict === 'FALSE' ? '🔴 False Claim' : (c.verdict === 'UNVERIFIED_SPECULATION' ? '🟡 Speculation' : '🔴 Misleading Claim');
-                const color = c.verdict === 'UNVERIFIED_SPECULATION' ? '#fbbf24' : '#ef4444';
+                const color = c.verdict === 'UNVERIFIED_SPECULATION' ? '#d97706' : '#dc2626';
+                const bg = c.verdict === 'UNVERIFIED_SPECULATION' ? '#fef3c7' : '#fee2e2';
+                const bdr = c.verdict === 'UNVERIFIED_SPECULATION' ? '#fde68a' : '#fecaca';
                 return `
                     <div class="split-claim-card ${isSelected ? 'active' : ''}" onclick="selectClaim('${c.id}')" style="border-left:3px solid ${color};">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <span class="badge" style="background:rgba(239,68,68,0.15); color:${color}; font-family:var(--font-mono);">
+                            <span class="badge" style="background:${bg}; color:${color}; border:1px solid ${bdr}; font-family:var(--font-mono);">
                                 ⏱️ ${c.timestamp_start}
                             </span>
                             <span style="font-size:0.75rem; color:${color}; font-weight:800;">
                                 ${badgeLabel}
                             </span>
                         </div>
-                        <div style="font-size:0.86rem; color:#fff; font-weight:600; line-height:1.4;">
+                        <div style="font-size:0.86rem; color:var(--text-pure); font-weight:600; line-height:1.4;">
                             "${c.creator_quote}"
                         </div>
-                        <div style="font-size:0.75rem; color:#f87171; background:rgba(239,68,68,0.08); padding:8px 10px; border-radius:6px; border:1px solid rgba(239,68,68,0.25);">
+                        <div style="font-size:0.75rem; color:#dc2626; background:#fef2f2; padding:8px 10px; border-radius:6px; border:1px solid #fee2e2;">
                             <strong>Fallout:</strong> Incited ${c.incited_comments_count} angry comments (${c.topic})
                         </div>
                     </div>
@@ -2175,7 +2177,7 @@ function renderRAGFactCheckCard() {
                     <div style="font-size:0.72rem; opacity:0.9;">${verdictSub}</div>
                 </div>
             </div>
-            <span class="badge" style="background:#0b141a; color:#fff; font-family:var(--font-mono);">
+            <span class="badge" style="background:var(--app-bg); color:var(--text-pure); border:1px solid var(--app-border); font-family:var(--font-mono);">
                 Confidence: ${Math.round((claim.confidence_score || 0.95) * 100)}%
             </span>
         </div>
@@ -2184,7 +2186,7 @@ function renderRAGFactCheckCard() {
             <div style="font-size:0.72rem; color:var(--text-secondary); text-transform:uppercase; font-weight:700; margin-bottom:4px;">
                 Creator Assertion (${claim.timestamp_start}):
             </div>
-            <div style="font-size:0.88rem; color:#fff; font-weight:600; line-height:1.45; background:var(--app-surface); padding:10px 12px; border-radius:6px; border:1px solid var(--app-border);">
+            <div style="font-size:0.88rem; color:var(--text-pure); font-weight:600; line-height:1.45; background:var(--app-bg); padding:10px 12px; border-radius:6px; border:1px solid var(--app-border);">
                 "${claim.creator_quote}"
             </div>
         </div>
@@ -2321,7 +2323,7 @@ function renderCommentSplit() {
                 </div>
                 <div style="background:var(--app-bg); border:1px solid var(--app-border); border-radius:6px; padding:8px 10px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
                     <div style="font-size:0.75rem; color:var(--text-secondary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;">
-                        <strong style="color:#fff;">AI Turnaround:</strong> "${c.aiSuggestedReply || 'We hear you on game preservation. Disc drives continue to operate 100% offline.'}"
+                        <strong style="color:var(--text-pure);">AI Turnaround:</strong> "${c.aiSuggestedReply || 'We hear you on game preservation. Disc drives continue to operate 100% offline.'}"
                     </div>
                     <button class="btn btn-primary" style="padding:3px 8px; font-size:0.7rem; flex-shrink:0;" onclick="submitDraft('${c.id}')">
                         Submit
@@ -2486,21 +2488,21 @@ function renderVideoDashboard() {
         veracityBox.innerHTML = `
             <div style="background:var(--app-bg); border:1px solid var(--app-border); border-radius:8px; padding:12px; display:flex; justify-content:space-between; align-items:center;">
                 <div>
-                    <strong style="color:#fff; font-size:0.85rem;">Channel: ${video.channel_title}</strong>
+                    <strong style="color:var(--text-pure); font-size:0.85rem;">Channel: ${video.channel_title}</strong>
                     <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:2px;">Video: "${video.video_title}"</div>
                 </div>
-                <span class="badge" style="background:rgba(37,211,102,0.15); color:#25d366; font-size:0.85rem;">
+                <span class="badge" style="background:#dcfce7; color:#059669; font-size:0.85rem;">
                     Truth Index: ${accuracyPct}%
                 </span>
             </div>
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-                <div style="background:var(--app-bg); border:1px solid var(--app-border); border-radius:6px; padding:10px; border-left:3px solid #25d366;">
+                <div style="background:var(--app-bg); border:1px solid var(--app-border); border-radius:6px; padding:10px; border-left:3px solid #059669;">
                     <span style="font-size:0.72rem; color:var(--text-secondary); text-transform:uppercase;">Verified Claims</span>
-                    <div style="font-size:1.2rem; font-weight:800; color:#25d366;">${posClaims}</div>
+                    <div style="font-size:1.2rem; font-weight:800; color:#059669;">${posClaims}</div>
                 </div>
-                <div style="background:var(--app-bg); border:1px solid var(--app-border); border-radius:6px; padding:10px; border-left:3px solid #ef4444;">
+                <div style="background:var(--app-bg); border:1px solid var(--app-border); border-radius:6px; padding:10px; border-left:3px solid #dc2626;">
                     <span style="font-size:0.72rem; color:var(--text-secondary); text-transform:uppercase;">Misleading Claims</span>
-                    <div style="font-size:1.2rem; font-weight:800; color:#ef4444;">${negClaims}</div>
+                    <div style="font-size:1.2rem; font-weight:800; color:#dc2626;">${negClaims}</div>
                 </div>
             </div>
         `;
@@ -2546,8 +2548,8 @@ function renderRespectiveVideoComments() {
                 ${(c.maskedText || '').replace(/<PHONE>/g, '<span class="pii-tag">&lt;PHONE_MASKED&gt;</span>').replace(/<PERSON>/g, '<span class="pii-tag">&lt;NAME_MASKED&gt;</span>')}
             </div>
             <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.75rem; color:var(--text-secondary);">
-                <span>Product Tag: <strong style="color:#fff;">${c.productName || 'PlayStation'}</strong></span>
-                <span style="color:var(--theme-accent); font-weight:700;">👍 ${c.likes || 0} likes</span>
+                <span>Product Tag: <strong style="color:var(--text-pure);">${c.productName || 'PlayStation'}</strong></span>
+                <span style="color:var(--theme-primary); font-weight:700;">👍 ${c.likes || 0} likes</span>
             </div>
         </div>
     `).join('');

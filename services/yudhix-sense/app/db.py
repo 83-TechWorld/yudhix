@@ -166,23 +166,11 @@ def persist_comment_and_analysis(data: Dict[str, Any]) -> Dict[str, Any]:
                     ) VALUES (%s, %s, %s, %s, %s, %s);
                 """, (tenant_id, actual_comment_id, asp_name, asp_sent, asp_score, asp_evidence))
 
-            # 4. Insert cryptographic audit ledger entry
-            row_hash = hashlib.sha256(f"{tenant_id}:{actual_comment_id}:{content_hash}".encode()).hexdigest()
-            cur.execute("""
-                INSERT INTO audit_event (
-                    tenant_id, actor_id, actor_type, action, entity_type,
-                    entity_id, before_state, after_state, prev_hash, row_hash
-                ) VALUES (
-                    %s, 'system-ai-pipeline', 'SYSTEM', 'INGEST_AND_ANALYZE', 'COMMENT',
-                    %s, '{}'::jsonb, %s::jsonb,
-                    '0000000000000000000000000000000000000000000000000000000000000000',
-                    %s
-                );
-            """, (
-                tenant_id, actual_comment_id,
-                json.dumps({"sentiment": sentiment, "priority": priority, "content_hash": content_hash}),
-                row_hash
-            ))
+            # 4. Append to the tenant's hash-chained audit ledger
+            from app.core.database import append_audit  # local import avoids a circular import
+            append_audit(cur, tenant_id, "system-ai-pipeline", "SYSTEM", "INGEST_AND_ANALYZE", "COMMENT",
+                         actual_comment_id,
+                         {"sentiment": sentiment, "priority": priority, "content_hash": content_hash})
 
         conn.commit()
         logger.info(f"Successfully persisted comment {actual_comment_id} ({platform}:{platform_comment_id}) into database.")

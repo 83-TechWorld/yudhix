@@ -1,0 +1,46 @@
+.hero { display: flex; flex-direction: column; gap: 10px; margin: 12px 0 28px; }
+.hero h1 { font-size: 30px; letter-spacing: -0.025em; max-width: 640px; }
+.hero > p { max-width: 640px; font-size: 16px; margin-bottom: 10px; }
+@media (max-width: 639px) { .hero h1 { font-size: 23px; } .hero > p { font-size: 15px; } }
+
+.analyze-form { display: flex; flex-direction: column; gap: 14px; }
+.url-row { display: flex; gap: 10px; }
+.grow { flex: 1; min-width: 0; }
+.input-lg { height: 48px; font-size: 16px; }
+@media (max-width: 639px) { .url-row { flex-direction: column; } .url-row .btn { width: 100%; } }
+.link-btn { border: 0; background: none; padding: 0; color: var(--text-2); font-weight: 600; font-size: 13.5px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; align-self: flex-start; }
+.link-btn:hover { color: var(--text); }
+.caps { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.progress-card { display: flex; flex-direction: column; gap: 14px; }
+.pct { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.progress { height: 10px; }
+.progress span { transition: width .5s ease; }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.steps li { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; color: var(--text-3); text-align: center; font-weight: 600; }
+.steps li.done { color: var(--text-2); }
+.steps li.current { color: var(--brand-text); }
+.step-dot { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-3); color: var(--text-3); }
+.done .step-dot { background: var(--ok); color: #fff; }
+.current .step-dot { background: var(--brand-soft); color: var(--brand-text); box-shadow: 0 0 0 2px var(--brand); }
+@media (max-width: 639px) {
+  .steps { grid-template-columns: repeat(3, 1fr); row-gap: 14px; }
+}
+
+.how { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 32px; }
+.how-item { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; }
+.how-n { width: 26px; height: 26px; border-radius: 8px; flex: none; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand-text); font-weight: 700; font-size: 13px; }
+@media (max-width: 767px) { .how { grid-template-columns: repeat(2, 1fr); row-gap: 16px; } }
+
+.recent { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 767px) { .recent { grid-template-columns: 1fr; } }
+.recent-item { display: flex; gap: 12px; padding: 12px; align-items: center; color: var(--text); text-decoration: none; }
+.recent-item:hover { text-decoration: none; }
+.recent-item .thumb { width: 120px; flex: none; }
+.recent-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; align-items: flex-start; font-size: 14px; }
+@media (max-width: 639px) { .recent-item .thumb { width: 96px; } }
+
+.jobs { overflow: hidden; }
+.jobs summary { padding: 14px 20px; cursor: pointer; font-weight: 600; font-size: 14px; color: var(--text-2); }
+.jobs[open] summary { border-bottom: 1px solid var(--border); }
+.list-item { align-items: center; }

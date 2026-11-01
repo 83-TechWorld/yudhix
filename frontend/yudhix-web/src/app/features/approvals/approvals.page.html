@@ -1,0 +1,143 @@
+<div class="page page-narrow">
+  <header class="page-head">
+    <div>
+      <span class="eyebrow">Respond</span>
+      <h1>Approvals</h1>
+      <p>No reply goes out without a second pair of eyes. The person who wrote a reply can't approve it.</p>
+    </div>
+    <button class="btn" type="button" (click)="session.toggleRole()">
+      <y-icon name="swap" [size]="16" /> Acting as {{ session.user().name }} · {{ session.user().title }}
+    </button>
+  </header>
+
+  <div class="segmented lanes">
+    @for (l of lanes; track l.key) {
+      <button type="button" [class.active]="lane() === l.key" (click)="lane.set(l.key)">{{ l.label }} <span class="count">{{ counts()[l.key] }}</span></button>
+    }
+  </div>
+
+  @if (lane() === 'review' && session.role() === 'agent' && counts().review) {
+    <div class="callout callout-info hint-box"><y-icon name="info" [size]="16" /><span>Only approvers can review. Switch role (top right) to try the approver view.</span></div>
+  }
+
+  @if (all() === null) {
+    <div class="stack">@for (i of [1, 2, 3]; track i) { <div class="skeleton" style="height: 180px"></div> }</div>
+  } @else {
+    <div class="stack">
+      @for (r of shown(); track r.id) {
+        <article class="card reply" [class.breached]="r.slaBreached">
+          <div class="reply-head">
+            <span class="chip" [class]="statusLabel[r.status].chip">{{ statusLabel[r.status].label }}</span>
+            @if (r.priority) { <span class="chip" [class]="priorityChip[r.priority]">{{ r.priority }}</span> }
+            @if (r.status !== 'POSTED') {
+              <span class="subtle" [class.overdue]="r.slaBreached"><y-icon name="clock" [size]="13" /> {{ r.slaDueAt | due }}</span>
+            }
+            <span class="spacer"></span>
+            <span class="subtle">{{ r.updatedAt | ago }}</span>
+          </div>
+
+          <div class="reply-body">
+            <div class="convo">
+              <div class="bubble them">
+                <span class="who subtle">Commenter</span>
+                <p>{{ r.commentText }}</p>
+              </div>
+              <div class="bubble us">
+                <span class="who subtle">Reply by {{ r.authorName }}</span>
+                @if (editing() === r.id) {
+                  <textarea class="textarea" rows="4" [(ngModel)]="editText" aria-label="Edit reply"></textarea>
+                } @else {
+                  <p>{{ r.text }}</p>
+                }
+              </div>
+            </div>
+
+            @if (r.rejectionReason && r.status === 'REJECTED') {
+              <div class="callout callout-warn"><y-icon name="edit" [size]="15" /><span><strong>{{ r.approverName }}:</strong> {{ r.rejectionReason }}</span></div>
+            }
+            @if (r.videoTitle) {
+              <a class="subtle video" [routerLink]="['/videos', r.videoId]"><y-icon name="video" [size]="13" /> {{ r.videoTitle }}</a>
+            }
+
+            @if (r.status === 'POSTED') {
+              <div class="posted">
+                <span class="subtle">
+                  Posted {{ r.postedAt | ago }}
+                  @if (r.deliveryMode === 'SIMULATED') { · <span class="chip chip-outline" title="Live posting needs the YouTube connection (yudhix-link). This reply was recorded but not sent.">Simulated</span> }
+                  @if (r.approverName) { · approved by {{ r.approverName }} }
+                </span>
+                @if (r.outcome) {
+                  <div class="outcome" [class]="'outcome-' + r.outcome">
+                    <strong>{{ r.outcome === 'IMPROVED' ? 'Turned around' : r.outcome === 'WORSENED' ? 'Got worse' : 'No change' }}</strong>
+                    @if (r.followUpText) { <span>: "{{ r.followUpText }}"</span> }
+                  </div>
+                }
+              </div>
+            }
+          </div>
+
+          <!-- Actions -->
+          <div class="reply-actions">
+            @switch (r.status) {
+              @case ('IN_REVIEW') {
+                @if (canReview(r)) {
+                  @if (rejecting() === r.id) {
+                    <div class="inline-form">
+                      <input class="input" [(ngModel)]="rejectReason" placeholder="What should change?" aria-label="Reason" (keyup.enter)="reject(r)" />
+                      <button class="btn" type="button" (click)="rejecting.set(null)">Cancel</button>
+                      <button class="btn btn-danger" type="button" (click)="reject(r)" [disabled]="busy() === r.id">Send back</button>
+                    </div>
+                  } @else {
+                    <button class="btn" type="button" (click)="startReject(r)">Request changes</button>
+                    <button class="btn btn-primary" type="button" (click)="approve(r)" [disabled]="busy() === r.id"><y-icon name="check" [size]="16" /> Approve</button>
+                  }
+                } @else if (session.role() === 'approver') {
+                  <span class="subtle">You wrote this reply, so another approver has to review it.</span>
+                } @else {
+                  <span class="subtle">Waiting for an approver.</span>
+                }
+              }
+              @case ('APPROVED') {
+                <button class="btn btn-primary" type="button" (click)="post(r)" [disabled]="busy() === r.id"><y-icon name="send" [size]="16" /> Post reply</button>
+              }
+              @case ('POSTED') {
+                @if (!r.outcome) {
+                  @if (recording() === r.id) {
+                    <div class="stack grow">
+                      <textarea class="textarea" rows="3" [(ngModel)]="followUp" placeholder="Paste what the customer said after your reply…" aria-label="Customer follow-up"></textarea>
+                      <div class="row-wrap">
+                        <button class="btn btn-primary" type="button" (click)="saveOutcome(r)">Score follow-up</button>
+                        <span class="subtle">or set it:</span>
+                        <button class="btn btn-sm" type="button" (click)="saveOutcome(r, 'IMPROVED')">Improved</button>
+                        <button class="btn btn-sm" type="button" (click)="saveOutcome(r, 'NEUTRAL')">No change</button>
+                        <button class="btn btn-sm" type="button" (click)="saveOutcome(r, 'WORSENED')">Worse</button>
+                      </div>
+                    </div>
+                  } @else {
+                    <button class="btn" type="button" (click)="startOutcome(r)"><y-icon name="trendUp" [size]="16" /> Record outcome</button>
+                  }
+                }
+              }
+              @default {
+                @if (editing() === r.id) {
+                  <button class="btn" type="button" (click)="editing.set(null)">Cancel</button>
+                  <button class="btn" type="button" (click)="saveEdit(r, false)" [disabled]="busy() === r.id">Save</button>
+                  <button class="btn btn-primary" type="button" (click)="saveEdit(r, true)" [disabled]="busy() === r.id">Save & submit</button>
+                } @else {
+                  <button class="btn" type="button" (click)="startEdit(r)"><y-icon name="edit" [size]="16" /> Edit</button>
+                  <button class="btn btn-primary" type="button" (click)="submit(r)" [disabled]="busy() === r.id">Submit for approval</button>
+                }
+              }
+            }
+          </div>
+        </article>
+      } @empty {
+        <div class="card">
+          <y-empty icon="shield" title="All clear" text="Nothing in this lane right now.">
+            <a class="btn" routerLink="/inbox">Go to inbox</a>
+          </y-empty>
+        </div>
+      }
+    </div>
+  }
+</div>

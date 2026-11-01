@@ -1,0 +1,43 @@
+.video-select { height: 40px; max-width: 280px; padding: 0 10px; }
+.kpis { margin-bottom: 16px; }
+.kpi-main { background: linear-gradient(135deg, var(--brand-soft), var(--surface)); }
+.alert { border-color: var(--danger); }
+.grid-2 { margin-bottom: 16px; }
+.align-start { align-self: flex-start; }
+
+.outcomes-bar { height: 14px; gap: 2px; }
+.outcomes-bar span { border-radius: 4px; }
+.legend { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 16px; font-size: 14px; }
+.legend div { display: flex; align-items: center; gap: 8px; }
+.legend strong { margin-left: auto; }
+
+.pipeline { display: flex; flex-direction: column; gap: 10px; }
+.pipe-row { display: grid; grid-template-columns: 110px 1fr 36px; gap: 10px; align-items: center; font-size: 14px; }
+.pipe-label { display: inline-flex; align-items: center; gap: 6px; color: var(--text-2); }
+.pipe-bar { height: 10px; border-radius: 6px; background: var(--surface-3); overflow: hidden; }
+.pipe-bar span { display: block; height: 100%; background: var(--brand); border-radius: 6px; min-width: 2px; }
+.pipe-row strong { text-align: right; }
+
+.verdicts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.verdicts div { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); }
+.verdicts strong { font-size: 20px; }
+.prio-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.prio { padding: 10px 12px; border-radius: 10px; display: flex; flex-direction: column; }
+.prio span { font-size: 12px; font-weight: 700; }
+.prio strong { font-size: 20px; }
+.p1 { background: var(--danger-soft); color: var(--danger-text); }
+.p2 { background: var(--warn-soft); color: var(--warn-text); }
+.p3 { background: var(--surface-2); color: var(--text-2); }
+
+.trend-card { margin-bottom: 16px; display: flex; flex-direction: column; gap: 12px; }
+.legend-inline { display: flex; gap: 12px; flex-wrap: wrap; }
+.legend-inline span { display: inline-flex; align-items: center; gap: 6px; }
+.trend { width: 100%; height: 180px; display: block; }
+.axis { display: flex; justify-content: space-between; }
+
+.board-row { align-items: center; color: var(--text); text-decoration: none; }
+.board-row:hover { text-decoration: none; }
+.board-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.board-stats { display: flex; gap: 16px; white-space: nowrap; }
+.board-stats strong { color: var(--text); }
+@media (max-width: 639px) { .board-stats { flex-direction: column; gap: 0; align-items: flex-end; } }

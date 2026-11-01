@@ -5,7 +5,8 @@
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3.4-brightgreen.svg)](#)
 [![Spring Cloud](https://img.shields.io/badge/Spring%20Cloud-2023.0.3-blue.svg)](#)
 [![Python](https://img.shields.io/badge/Python-3.11-yellow.svg)](#)
-[![Angular](https://img.shields.io/badge/Angular-18+-red.svg)](#)
+[![Angular](https://img.shields.io/badge/Angular-20%20PWA-red.svg)](#)
+[![Capacitor](https://img.shields.io/badge/Capacitor-8%20(iOS%20%7C%20Android)-119eff.svg)](#)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16%20%2B%20pgvector-blue.svg)](#)
 [![Keycloak](https://img.shields.io/badge/Keycloak-25+-blueviolet.svg)](#)
 [![License](https://img.shields.io/badge/license-Proprietary-lightgrey.svg)](#)
@@ -15,6 +16,20 @@
 ## 1. Executive Overview & Guiding Principles
 
 **Yudhix** is a multi-tenant, privacy-first, enterprise social comment intelligence and brand turnaround platform. It continuously harvests public comments about products from social platforms (YouTube, LinkedIn, Reddit, X), executes PII masking, extracts aspects and sentiment using local AI models (Ollama Qwen3 / XLM-RoBERTa), computes real-time impact scores, surfaces actionable insights, and orchestrates a compliant, human-in-the-loop reply turnaround workflow.
+
+### Truth first: the product flow
+
+Yudhix starts with the **video**, not the comments. Before a brand replies to anyone, it should know whether the anger comes from a real product problem or from something the creator got wrong.
+
+| Step | Screen | What happens |
+|---|---|---|
+| 1. **Analyze** | `/analyze` | Paste a YouTube link (or a transcript). Yudhix reads the transcript and pulls out timestamped claims. |
+| 2. **Truth report** | `/videos/:id` → *Claims* | Each claim is checked against the brand's official knowledge base: *Accurate*, *Misleading*, *False* or *Unverified*, with the cited source. |
+| 3. **Audience impact** | `/videos/:id` → *Audience impact* | Comments are linked to the claim that triggered them. Every comment gets a root cause: **misinformation**, **valid concern** or **general**. |
+| 4. **Respond** | `/inbox`, `/approvals`, *Creator note* | Agents draft replies (AI drafts cite the official fact), approvers sign off (separation of duties), and the team sends the creator a polite clarification note. |
+| 5. **Track** | `/track` | Turnaround rate, reply pipeline, SLA breaches, misinformation share and sentiment over time. |
+
+The web app is an **Angular 20 PWA** that works on desktop, laptop, tablet and phone, and ships to the **App Store / Play Store** through **Capacitor** (see [§8.3](#83-mobile-apps-ios--android)).
 
 ### Core Principles
 - **Privacy by Design**: Store insights, not identities. Social author IDs are immediately hashed using keyed HMAC-SHA256 (`author_hash`). Personal PII is masked before model inference or long-term persistence.
@@ -30,7 +45,7 @@
 ```mermaid
 flowchart TB
     subgraph ClientLayer ["Client & Interface Layer"]
-        UI["Angular 18 Web App<br/>(yudhix-web: Dashboard, Inbox, Approvals)"]
+        UI["Angular 20 PWA + Capacitor<br/>(yudhix-web: Analyze, Truth Report, Inbox, Approvals, Track)<br/>Web · iOS · Android"]
     end
 
     subgraph EdgeLayer ["Edge & Security"]
@@ -55,7 +70,7 @@ flowchart TB
     subgraph Pipeline ["Batch Orchestration & AI Engine"]
         AIRFLOW["Apache Airflow<br/>(Scheduled Ingestion & Refresh DAGs)"]
         STAGING[("comment_staging<br/>(Encrypted, 24h TTL)")]
-        SENSE["Analysis & AI Pipeline (yudhix-sense)<br/>Presidio PII Masker · XLM-RoBERTa · Ollama Qwen3"]
+        SENSE["Analysis & AI Pipeline (yudhix-sense)<br/>PII Masker · Sentiment · Ollama LLM<br/>Truth pipeline · Reply workflow · Insights API"]
     end
 
     subgraph DataTier ["Data & Storage Tier"]
@@ -280,6 +295,31 @@ A major architectural innovation of Yudhix is **Ground Truth Triangulation**. Un
 4. **Causality & Anger Attribution**: Proves to brand executives that public backlash was triggered by *creator misinformation* rather than a failure of the product itself.
 5. **Creator Clarification Kit**: Generates personalized, polite outreach notes citing official specifications so creators can update pinned comments and avoid viral PR crises.
 
+### How it is implemented (`services/yudhix-sense/app/truth`)
+
+"Analyze a video" runs as a background job (`video_analysis_job`). The UI polls it and shows each stage:
+
+| Stage | Module | What it does | Fallback when the optional piece is missing |
+|---|---|---|---|
+| `FETCHING_VIDEO` | `youtube.py` | Title, channel, duration, views (YouTube Data API) | YouTube oEmbed (no key needed) |
+| `TRANSCRIBING` | `youtube.py` | YouTube captions (`youtube-transcript-api`) → Whisper (`faster-whisper` + `yt-dlp`) | Pasted transcript (`[mm:ss] text` lines) |
+| `EXTRACTING_CLAIMS` | `claims.py` | Local LLM extracts up to 8 atomic, timestamped claims | Rule-based: assertive sentences (numbers, prices, absolutes, policy verbs, brand terms) |
+| `FACT_CHECKING` | `retrieval.py`, `verifier.py` | BM25 retrieval over `product_knowledge`, then a verdict per claim | Rule-based: matching figures, absolutes the source negates, predictions → unverified |
+| `INGESTING_COMMENTS` | `pipeline.py` | Pulls comments, masks PII, pseudonymizes authors (keyed HMAC), classifies sentiment | Uses comments already stored for the video |
+| `ATTRIBUTING` | `attribution.py`, `scoring.py` | Links each comment to the claim it reacts to, sets root cause, re-scores impact and priority | – |
+
+**Verdicts.** Small local models are unreliable at choosing a verdict label directly. The LLM therefore states how the source *relates* to the claim (`SUPPORTS`, `CONTRADICTS`, `PARTIALLY_CONTRADICTS`, `NOT_ADDRESSED`, plus `is_prediction`), and code maps that to a verdict. A guardrail downgrades "supports" to *Misleading* when the claim states an absolute that the source explicitly qualifies. Each claim records whether it was checked by `LLM`, `HEURISTIC` or was `SEEDED`, and the UI shows that next to its confidence.
+
+**Attribution** is deterministic and explainable:
+- A comment links to at most one claim: the claim it shares the most specific words with (IDF-weighted, with a small concept thesaurus, e.g. *disc ↔ physical ↔ blu-ray*).
+- Brand words and everyday words are down-weighted. At least one specific word from the claim itself must match.
+- A comment that mentions a timestamp near a claim ("at 1:14…") links directly.
+- The matched words are stored in `comment_claim_link.evidence` and shown in the UI as "Why linked".
+
+**Root cause** per comment: `MISINFORMATION` (reacts to a misleading, false or unverified claim), `VALID_CONCERN` (reacts to an accurate claim), or `UNLINKED`.
+
+**Impact score** (0–100) = `100 × severity^0.8 × engagement × recency`, plus 10% for misinformation-driven comments. P1 ≥ 80, P2 ≥ 50, else P3. Calibrated so that a fresh negative comment with ~100 likes is P1, the same comment a month later is P2, and an unliked complaint is P3.
+
 ---
 
 ## 5. Microservices Catalog & Responsibilities
@@ -291,7 +331,7 @@ A major architectural innovation of Yudhix is **Ground Truth Triangulation**. Un
 | 3 | `services/yudhix-catalog` | **yudhix-catalog** | Spring Boot 3.3, Java 21, pgvector | Product catalog, aliases, competitor tracking, embeddings (bge-m3) | `product`, `product_alias`, `owned_source` |
 | 4 | `services/yudhix-radar` | **yudhix-radar** | Spring Boot 3.3, Java 21 | Topic taxonomy, discovery keyword rules, sentiment & engagement filters | `discovery_rule`, `topic` |
 | 5 | `services/yudhix-link` | **yudhix-link** | Spring Boot 3.3, Java 21 | Platform SPI, OAuth token vault (AES-256-GCM), watermarks, fetch & post | `platform_credential`, `source_watermark`, `comment_staging` |
-| 6 | `services/yudhix-sense` | **yudhix-sense** | Python 3.11, FastAPI, Presidio | PII sanitization, fast XLM-RoBERTa classifier, Ollama LLM aspect extraction | `comment_analysis`, `comment_aspect` |
+| 6 | `services/yudhix-sense` | **yudhix-sense** | Python 3.11+, FastAPI, Ollama | PII masking, sentiment, LLM enrichment. **Today it also hosts the truth-first core** (video analysis jobs, claims, fact-checking, attribution, creator notes) and the **Respond & Track API** (inbox, reply approvals, outcomes, insights) that the web app uses. These move to `yudhix-resolve` / `yudhix-loop` as those services mature. | `comment_analysis`, `comment_aspect`, `product_knowledge`, `video_truth_analysis`, `video_claim`, `video_analysis_job`, `comment_claim_link`, `creator_outreach` |
 | 7 | `services/yudhix-pulse` | **yudhix-pulse** | Spring Boot 3.3, Java 21, pg_partman | Monthly partitioned comments, velocity & engagement decay, P1/P2/P3 scoring | `comment`, `daily_product_sentiment` |
 | 8 | `services/yudhix-resolve` | **yudhix-resolve** | Spring Boot 3.3, Java 21 | Reply state machine (DRAFT → IN_REVIEW → APPROVED → POSTED), SLA, brand voice | `reply`, `reply_template`, `approval_step` |
 | 9 | `services/yudhix-loop` | **yudhix-loop** | Spring Boot 3.3, Java 21 | +24h/+72h/+7d thread turnaround outcome measurement, agent label feedback | `reply_outcome`, `label_feedback` |
@@ -304,7 +344,7 @@ A major architectural innovation of Yudhix is **Ground Truth Triangulation**. Un
 ### Shared Modules & Frontend
 - **`libs/yudhix-common`**: Shared tenant context (`TenantContextHolder`), PostgreSQL RLS interceptors, keyed `AuthorHasher`, standard API responses (`ApiResponse<T>`, `ErrorResponse`).
 - **`libs/yudhix-connector-sdk`**: Pluggable `PlatformConnector` Java SPI, `FetchRequest`, `FetchResult`, `PostResult`, `EngagementSnapshot`, `Watermark`.
-- **`frontend/yudhix-web`**: Angular 18+ application with standalone components, Signals, Keycloak OIDC, and ECharts analytics.
+- **`frontend/yudhix-web`**: Angular 20 app (standalone components, signals, lazy-loaded pages) that is also a PWA (installable, offline shell) and a Capacitor 8 project for iOS / Android. Responsive layout: sidebar on desktop, icon rail on tablet, top bar + bottom tabs on phones, with light/dark themes and safe-area support. No UI library: a small design system lives in `src/styles.scss`, and charts are hand-built SVG.
 
 ---
 
@@ -372,7 +412,40 @@ yudhix/
 │   ├── yudhix-notify/
 │   └── yudhix-config/
 └── frontend/
-    └── yudhix-web/                       # Angular 18 Single Page App
+    └── yudhix-web/                       # Angular 20 PWA + Capacitor (web, iOS, Android)
+```
+
+#### `services/yudhix-sense` (Python API used by the web app)
+```
+app/
+├── main.py                 # FastAPI app: CORS, startup migrations, /health capabilities, legacy endpoints
+├── db.py                   # Comment persistence helpers
+├── core/                   # config (env vars), database (cursor, migrations, hash-chained audit), llm (Ollama), text
+├── migrations/V2__truth_first.sql   # Idempotent; applied on every startup
+├── pipeline/               # PII masker, keyword sentiment classifier, LLM enricher
+├── truth/                  # youtube, claims, retrieval, verifier, attribution, scoring, outreach, pipeline (job), repository
+├── workflow/               # state (approval state machine), service (inbox, replies, outcomes), insights (KPIs)
+└── api/                    # deps (tenant + actor headers), truth routes, workflow routes
+tests/                      # pytest: masker, classifier, truth core, state machine
+```
+
+#### `frontend/yudhix-web`
+```
+src/
+├── styles.scss             # Design system: tokens (light/dark), buttons, chips, cards, sheets, skeletons
+├── environments/           # apiUrl + tenant per build (prod used for store builds)
+└── app/
+    ├── core/               # api.service (typed client + header interceptor), models, session (role/theme), native (Capacitor)
+    ├── shared/             # icon set, verdict badge, score ring, sentiment bar, toasts, pipes
+    ├── layout/             # shell: sidebar / rail / bottom tabs
+    └── features/
+        ├── analyze/        # Step 1: paste a video, live job progress
+        ├── videos/         # Video list + Truth report (Claims · Audience impact · Creator note)
+        ├── inbox/          # Prioritized comments, root cause, AI-drafted replies
+        ├── approvals/      # Review lanes, approve / request changes, post, record outcome
+        ├── track/          # KPIs, outcomes, pipeline, sentiment trend, per-video accuracy
+        └── knowledge/      # Official facts used for fact-checking
+capacitor.config.ts         # appId io.yudhix.app, webDir dist/yudhix-web/browser
 ```
 
 ---
@@ -383,8 +456,8 @@ yudhix/
 - **Java 21** (Temurin 21 recommended)
 - **Maven 3.9+** (or use included `./mvnw`)
 - **Docker & Docker Compose**
-- **Python 3.11** (for `yudhix-sense`)
-- **Node.js 20+ & npm** (for `yudhix-web`)
+- **Python 3.11+** (for `yudhix-sense`)
+- **Node.js 20.19+ / 22+ & npm** (for `yudhix-web`, Angular 20)
 
 ### Build Shared Modules
 ```bash
@@ -399,6 +472,75 @@ docker compose up -d postgres keycloak ollama mailpit
 - **Keycloak Admin Console**: `http://localhost:8180` (User: `admin`)
 - **Mailpit Web UI**: `http://localhost:8025`
 - **Ollama AI Server**: `http://localhost:11434` (Model: `llama3.1:latest`)
+
+### 8.1 Run the app
+
+```bash
+./yudhix.sh start        # Ollama check, yudhix-sense on :8000, yudhix-web on :4200
+./yudhix.sh status
+./yudhix.sh stop
+```
+
+Or run the two parts yourself:
+
+```bash
+# API (applies migrations/V2__truth_first.sql on startup)
+cd services/yudhix-sense
+python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
+./.venv/bin/uvicorn app.main:app --port 8000 --reload
+
+# Web app
+cd frontend/yudhix-web
+npm install
+npm start                # http://localhost:4200
+```
+
+Open **http://localhost:4200**. The app opens on **Analyze**. Try the example video, or open **Videos → "PlayStation Explains Why it's Ending Physical Discs"** to see a full truth report built from 2,662 stored comments.
+
+**Demo roles.** Until the SaaS/auth layer ships, the avatar in the sidebar (or top bar on phones) switches between **Asha (agent)** and **Ravi (approver)**. The app sends `X-User-Id` / `X-User-Role` headers, and the API enforces separation of duties: nobody can approve a reply they wrote.
+
+### 8.2 Configuration (`yudhix-sense` environment variables)
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `YOUTUBE_API_KEY` | *(empty)* | Pull metadata and comments for newly analyzed videos. Without it, analysis uses oEmbed metadata and only the comments already stored. **Server-side only, never put it in the web app.** |
+| `OLLAMA_URL` / `OLLAMA_MODEL` | `http://127.0.0.1:11434` / `llama3.1:latest` | Local LLM for claim extraction, fact-checking and reply drafts. Without it, rule-based fallbacks are used, and the app shows which mode it's in. |
+| `WHISPER_MODEL` | `small` | Used only if `faster-whisper` is installed and `yt-dlp` is on `PATH` (videos without captions). |
+| `AUTHOR_HMAC_KEY` | `dev-only-change-me` | Secret for pseudonymizing comment authors. **Set a strong value in production.** |
+| `MAX_COMMENTS_PER_VIDEO` | `500` | Comments pulled per analysis. |
+| `CORS_ORIGINS` | `localhost:4200`, `capacitor://localhost`, … | Allowed web/app origins. |
+| `PG_HOST` / `PG_PORT` / `PG_DB` / `PG_USER` / `PG_PASSWORD` | `localhost` / `5432` / `yudhix` / `postgres` / `postgres` | Database. |
+
+`GET /health` reports which optional capabilities are active (`llm`, `youtubeApi`, `captions`, `whisper`, `livePosting`). The Analyze screen shows them as chips.
+
+### 8.3 Mobile apps (iOS & Android)
+
+The same Angular build ships to the stores through Capacitor 8 (`capacitor.config.ts`, app id `io.yudhix.app`). The native projects aren't committed yet. Create them once on a machine with Xcode / Android Studio:
+
+```bash
+cd frontend/yudhix-web
+# 1. Point the app at a reachable API (a phone can't reach "localhost" on your laptop)
+#    edit src/environments/environment.prod.ts → apiUrl: 'https://api.your-domain.com'
+npx cap add ios          # creates ios/ (commit it)
+npx cap add android      # creates android/ (commit it)
+npm run mobile:sync      # ng build + cap sync
+npm run mobile:ios       # opens Xcode → run on a simulator / archive for App Store
+npm run mobile:android   # opens Android Studio → run / build a signed bundle for Play Store
+```
+
+Already handled in the web code: safe-area insets (notch / home indicator), status bar style, splash screen, the Android back button (`src/app/core/native.ts`), touch-sized targets, bottom-tab navigation and bottom sheets on phones. Add `capacitor://localhost` (iOS) and `http://localhost` (Android) to `CORS_ORIGINS` on the production API. They're already in the defaults and in the Keycloak realm.
+
+Before submitting to the stores you still need app icons and splash images (`npx @capacitor/assets generate`), store listings, a privacy policy URL, and the production API + auth.
+
+### 8.4 Tests
+
+```bash
+./yudhix.sh unit                                   # both suites
+cd services/yudhix-sense && ./.venv/bin/python -m pytest -q tests     # 20 backend tests
+cd frontend/yudhix-web && npm test                                    # 7 frontend tests (headless Chrome)
+```
+
+Backend tests cover video-link parsing, transcript parsing, the rule-based verifier, claim extraction, attribution and root cause, impact scoring bands, and the approval state machine (including separation of duties).
 
 ---
 
@@ -436,11 +578,20 @@ erDiagram
     tenant ||--o{ usage_event : "metered actions"
     tenant ||--o{ invoice : "monthly billing"
     tenant ||--o{ notification_rule : "triggers alerts"
+
+    tenant ||--o{ product_knowledge : "official facts (RAG)"
+    tenant ||--o{ video_truth_analysis : "decoded videos"
+    video_truth_analysis ||--o{ video_claim : "timestamped claims"
+    product_knowledge ||--o{ video_claim : "cited by"
+    video_claim ||--o{ comment_claim_link : "triggered"
+    comment ||--o{ comment_claim_link : "reacts to"
+    tenant ||--o{ video_analysis_job : "analysis runs"
+    tenant ||--o{ creator_outreach : "clarification notes"
 ```
 
 ---
 
-### Complete 31-Table Dictionary & Links
+### Complete 37-Table Dictionary & Links
 
 #### Group 1: Tenant & Identity Domain (`yudhix-tenant`)
 | Table Name | Primary Key | Foreign Keys / Links | Usage & Business Responsibility |
@@ -517,6 +668,18 @@ erDiagram
 | `notification_rule` | `(tenant_id, id)` | `tenant_id` $\rightarrow$ `tenant.id` | Configurable alert triggers (e.g. "Trigger Slack alert if >5 P1 negative comments arrive within 15 minutes"). |
 | `notification_log` | `id (BIGSERIAL)` | `rule_id` $\rightarrow$ `notification_rule.id` | History of dispatched alerts across Slack webhooks, SMTP emails, and agent dashboard banners. |
 
+#### Group 12: Ground Truth & Video Triangulation (`yudhix-sense`, migration `app/migrations/V2__truth_first.sql`)
+| Table Name | Primary Key | Foreign Keys / Links | Usage & Business Responsibility |
+|---|---|---|---|
+| `product_knowledge` | `id (UUID)` | `product_id` $\rightarrow$ `product.id` | The brand's official facts (specs, policies, pricing, warranties) that claims are checked against. Managed on the **Knowledge** screen. |
+| `video_truth_analysis` | `id (UUID)`, unique `(tenant_id, video_id)` | `product_id` $\rightarrow$ `product.id` | One row per analyzed video: metadata, factual accuracy, rage-bait score, sensationalism grade, summary, transcript source and analysis method. |
+| `video_claim` | `id (UUID)` | `video_analysis_id` $\rightarrow$ `video_truth_analysis.id`<br/>`rag_knowledge_id` $\rightarrow$ `product_knowledge.id` | Atomic, timestamped creator claims with verdict, confidence, explanation, cited source, linked-comment count and `verification_method` (`LLM` / `HEURISTIC` / `SEEDED`). |
+| `video_analysis_job` | `id (UUID)` | `tenant_id` | Background "Analyze video" runs: status, stage, progress %, user-facing message and error. Polled by the UI. |
+| `comment_claim_link` | `(tenant_id, comment_id, claim_id)` | `claim_id` $\rightarrow$ `video_claim.id`<br/>`comment_id` $\rightarrow$ `comment.id` | Outrage attribution: which claim a comment reacts to, with score, method (`LEXICAL` / `TIMESTAMP`) and `evidence` (matched words). |
+| `creator_outreach` | `id (UUID)` | `video_id`, `claim_ids[]` | Drafted / sent clarification notes to creators, citing official sources. |
+
+The same migration also adds workflow columns used by the web app: `reply.claim_id`, `reply.delivery_mode` (`LIVE` / `SIMULATED`), `reply.submitted_at`, `reply.approved_at`, and `reply_outcome.outcome`, `follow_up_text`, `source`.
+
 ---
 
 ## 10. Database Configuration & Setup Guide
@@ -554,7 +717,7 @@ Use the included lifecycle manager script:
 ```bash
 ./yudhix.sh init-db
 ```
-This command automatically creates the database if missing, enables `uuid-ossp` and `pgcrypto`, and applies all 11 Flyway migration scripts in correct dependency order.
+This command automatically creates the database if missing, enables `uuid-ossp` and `pgcrypto`, and applies all 11 Flyway migration scripts in correct dependency order, followed by the idempotent `yudhix-sense` truth-first migration (which `yudhix-sense` also applies on every startup).
 
 #### Option B: Manual Execution Order
 Execute the migration scripts sequentially:
@@ -571,6 +734,7 @@ MIGRATIONS=(
   "services/yudhix-loop/src/main/resources/db/migration/V1__init_loop_schema.sql"
   "services/yudhix-notify/src/main/resources/db/migration/V1__init_notify_schema.sql"
   "services/yudhix-meter/src/main/resources/db/migration/V1__init_meter_schema.sql"
+  "services/yudhix-sense/app/migrations/V2__truth_first.sql"
 )
 
 for file in "${MIGRATIONS[@]}"; do
@@ -580,14 +744,14 @@ done
 ```
 
 ### Step 5: Verify Database Tables
-Confirm that all 31 tables are created:
+Confirm that all 37 tables are created:
 ```bash
 psql -h localhost -U postgres -d yudhix -c "\dt"
 ```
-You should see 31 rows returned, spanning all domains.
+You should see 37 rows returned, spanning all domains.
 
 ### Step 6: Query Live Ingested Comments & AI Sentiments
-Whenever you fetch live comments in the UI (`http://localhost:3000`) or via API, you can view the stored data directly in the terminal:
+Whenever you analyze a video in the UI (`http://localhost:4200`) or via the API, you can view the stored data directly in the terminal:
 ```bash
 # View comments and granular aspects in formatted record view
 ./yudhix.sh db
@@ -621,7 +785,7 @@ Yudhix uses **Keycloak 25+** as its centralized OpenID Connect (OIDC) / OAuth2 I
 sequenceDiagram
     autonumber
     actor User as Tenant Administrator / Agent
-    participant Web as Yudhix Web SPA (Port 3000)
+    participant Web as Yudhix Web App (Port 4200)
     participant KC as Keycloak 25+ (Port 8180)
     participant GW as API Gateway (Port 8080)
     participant Svc as Microservices Mesh (Port 8000+)
@@ -654,7 +818,7 @@ All enterprise tenant identities reside under the dedicated **`yudhix`** realm:
 | `viewer` | Realm | Read-only access to metrics and reports. |
 
 #### Registered Clients in `realm-yudhix.json`
-* **`yudhix-web`**: Public Single Page Application (SPA) client supporting Authorization Code Flow with PKCE and Direct Access Grants (Resource Owner Password Credentials). Allowed origins: `http://localhost:3000`, `http://127.0.0.1:3000`.
+* **`yudhix-web`**: Public Single Page Application (SPA) client supporting Authorization Code Flow with PKCE and Direct Access Grants (Resource Owner Password Credentials). Allowed origins: `http://localhost:4200` (Angular dev), `capacitor://localhost` (iOS app), `http://localhost` (Android app), plus the legacy `:3000` and gateway `:8080` origins.
 * **`yudhix-gateway`**: Confidential client used by Spring Cloud Gateway (`services/yudhix-gateway`) to authenticate microservice service-to-service calls.
 
 ---
@@ -747,23 +911,66 @@ curl -X POST "http://localhost:8180/realms/yudhix/protocol/openid-connect/token"
 
 ---
 
-### 11.4 SaaS Auth Portal & Persistent Session Management
+### 11.4 SaaS Auth Portal & Session Management (planned: SaaS layer)
 
-The web application (`http://localhost:3000`) provides a centralized **SaaS Auth Portal**:
+> **Status:** The previous vanilla-JS UI had a demo sign-in / register portal that built its session in the browser. It was removed with the move to Angular. Sign-in will come back as part of the **SaaS layer** using Keycloak's Authorization Code + PKCE flow (no password grant, no client-built tokens). Until then the web app runs as a single demo tenant and switches between demo roles (see [§8.1](#81-run-the-app)).
 
-#### 1. Sign In Tab
-* Allows tenant admins and agents to authenticate using their **Tenant Code**, **Work Email**, and **Password**.
-* Includes a **"Maintain persistent session"** option enabled by default.
-* Includes a **"Quick Fill: Sony PlayStation Demo"** button for instant one-click onboarding.
+Planned scope of the SaaS layer: landing and pricing pages, sign-up with workspace creation, onboarding (first product → first knowledge facts → first video), team invites and roles, plans / usage / invoices (`yudhix-meter`), and a workspace switcher for agencies.
 
-#### 2. Register New Tenant Tab (Sign Up)
-* Allows new enterprise customers to register their organization.
-* Fields: Company Name, auto-generated Tenant Code (kebab-case slug), Admin Full Name, Email, Password, and initial platform subscription toggles (YouTube up to 20 channels, LinkedIn, Reddit).
-* Automatically provisions a new Tenant UUID, initializes quotas, and starts the workspace.
+---
 
-#### 3. Session Persistence Engine
-* Sessions are persisted in browser `localStorage` under the key `yudhix_session` with a 24-hour expiration.
-* On page refresh (`F5`), `initSession()` checks the token validity and restores tenant context without forcing re-login.
-* The header and sidebar include a **Log Out** button that clears `localStorage` and smoothly returns to the Auth Portal.
+## 12. API Reference (yudhix-sense, used by the web app)
 
+All routes take `X-Tenant-Id` (defaults to the demo tenant). Write routes also take `X-User-Id` and `X-User-Role` (`agent` | `approver`). In production the gateway sets these from the validated JWT. Interactive docs: `http://localhost:8000/docs`.
 
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/health` | Status + active capabilities (LLM, YouTube API, captions, Whisper, live posting) |
+| `POST` | `/api/v1/truth/analyze` | Start an analysis job: `{ video_url, transcript? }` → `202` job |
+| `GET` | `/api/v1/truth/jobs`, `/api/v1/truth/jobs/{id}` | Job list / progress |
+| `GET` | `/api/v1/truth/videos`, `/api/v1/truth/videos/{videoId}` | Analyzed videos / truth report with claims |
+| `GET` | `/api/v1/truth/videos/{videoId}/impact` | Root-cause split, reactions per claim, headline |
+| `POST` | `/api/v1/truth/videos/{videoId}/reattribute` | Re-link comments to claims and re-score |
+| `GET` | `/api/v1/truth/claims/{claimId}/comments` | Comments linked to a claim, with "why linked" evidence |
+| `GET` / `POST` | `/api/v1/truth/videos/{videoId}/outreach` | List / generate creator clarification notes |
+| `PATCH` | `/api/v1/truth/outreach/{id}` | Edit a note or mark it `SENT` |
+| `GET` / `POST` / `DELETE` | `/api/v1/truth/knowledge[/{id}]` | Knowledge base |
+| `GET` | `/api/v1/inbox` | Prioritized comments. Filters: `video_id`, `cause`, `priority`, `sentiment`, `status=OPEN\|REPLIED`, `q`, `limit`, `offset` |
+| `GET` | `/api/v1/inbox/{commentId}` | Comment detail with linked claim, official fact and reply history |
+| `POST` | `/api/v1/inbox/{commentId}/suggest` | AI reply draft (cites the official fact for misinformation) |
+| `GET` / `POST` | `/api/v1/replies` | List (`status=IN_REVIEW,…`) / create a draft |
+| `PATCH` | `/api/v1/replies/{id}` | Edit text (only while `DRAFT` / `REJECTED`) |
+| `POST` | `/api/v1/replies/{id}/{submit\|approve\|reject\|post}` | State transitions (`reject` needs `{ reason }`) |
+| `POST` | `/api/v1/replies/{id}/outcomes` | Record outcome from the customer's follow-up text, or set `IMPROVED` / `NEUTRAL` / `WORSENED` |
+| `POST` | `/api/v1/outcomes/check` | Read live threads for replies posted `LIVE` |
+| `GET` | `/api/v1/insights/summary`, `/insights/trend`, `/insights/videos` | KPIs, daily sentiment, per-video accuracy |
+
+Every state change appends a hash-chained `audit_event` (`row_hash = SHA-256(prev_hash | tenant | action | entity | payload)`, serialized per tenant with an advisory lock).
+
+---
+
+## 13. Current Limitations & Next Steps
+
+| Area | Today | Next |
+|---|---|---|
+| **Auth & tenancy** | Single demo tenant. Role chosen in the UI and sent as headers. | Keycloak PKCE login; gateway injects tenant/user from the JWT; RLS on new tables. |
+| **Posting replies** | Approved replies are recorded as `SIMULATED` (nothing is sent to YouTube). | YouTube OAuth connector in `yudhix-link`, `delivery_mode = LIVE`, automatic +24h/+72h/+7d outcome checks. |
+| **Outcomes** | Recorded by hand from the customer's follow-up (scored automatically) or chosen directly. | Automatic from live threads (`/outcomes/check` is ready for `LIVE` replies). |
+| **Attribution** | Keyword/IDF matching with a concept thesaurus, explainable but noisy on sarcasm and memes. | Embedding similarity (pgvector + bge-m3) with optional LLM re-ranking of borderline links. |
+| **Fact-checking** | BM25 over `product_knowledge` + local 8B LLM (rule-based fallback). | Document upload and chunking, pgvector retrieval, stronger model option, human verdict override. |
+| **Sentiment** | Keyword classifier (whole-word, churn phrases). | XLM-RoBERTa tier-1 as in the architecture; agent corrections into `label_feedback`. |
+| **Ingestion** | Per-video on demand ("Analyze"). | Channel watchers and scheduled re-scans (Airflow DAGs), notifications for P1 spikes. |
+| **Mobile** | Capacitor configured; native projects not yet generated. | `npx cap add ios/android`, icons and splash, store listings, push notifications for P1 alerts. |
+
+> **Security note:** the old vanilla UI (`frontend/yudhix-web/js/app.js`, removed in this change) had a YouTube Data API key hardcoded in it. That key is still in git history, so **rotate it in Google Cloud Console**. YouTube access now happens only on the server (`YOUTUBE_API_KEY`).
+
+---
+
+## 14. Changelog
+
+### 2026-11-01: Truth-first product, new UI
+- **New web app:** Angular 20 PWA, responsive from phone to desktop, light/dark, ready for App Store / Play Store via Capacitor 8. Replaces the vanilla JS single page (still available in git history before this commit).
+- **Truth-first flow:** Analyze → Truth report (claims, verdicts, cited sources) → Audience impact (root cause per comment) → Respond (inbox, approvals, creator note) → Track (KPIs).
+- **Backend (`yudhix-sense`):** background video analysis jobs with captions / Whisper / pasted transcripts; LLM + rule-based claim extraction and fact-checking; explainable comment-to-claim attribution; recalibrated impact scoring; reply approval workflow with separation of duties; outcome recording; insights API; knowledge base CRUD; creator notes; hash-chained audit trail; CORS restricted to known origins; YouTube API key moved server-side.
+- **Database:** `V2__truth_first.sql` brings the hand-made truth tables under migration and adds `video_analysis_job`, `comment_claim_link` and `creator_outreach`, plus new workflow columns.
+- **Tooling:** `./yudhix.sh start` now runs the Angular app on :4200; `./yudhix.sh unit` runs both test suites; Keycloak realm allows the new web and Capacitor origins.

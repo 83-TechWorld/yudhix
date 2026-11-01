@@ -18,9 +18,12 @@ from app.db import (
     get_source_watermarks,
     get_products_summary,
     tag_comment_product,
-    get_product_knowledge,
     get_video_truth_analysis
 )
+from app.api import truth as truth_api, workflow as workflow_api
+from app.core import config, llm
+from app.core.database import run_migrations
+from app.truth import youtube
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("yudhix-sense")
@@ -33,11 +36,21 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=config.CORS_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "X-Tenant-Id", "X-User-Id", "X-User-Role"],
 )
+app.include_router(truth_api.router)
+app.include_router(workflow_api.router)
+
+
+@app.on_event("startup")
+def apply_migrations():
+    try:
+        run_migrations()
+    except Exception as e:  # keep serving read-only endpoints even if the DB is briefly unavailable
+        logger.error("Migrations failed: %s", e)
 
 masker = PiiMasker()
 classifier = FastSentimentClassifier()
@@ -46,7 +59,27 @@ enricher = OllamaLlmEnricher()
 
 @app.get("/health")
 def health_check():
-    return {"status": "UP", "service": "yudhix-sense"}
+    """Also reports which optional capabilities are active, so the UI can explain fallbacks."""
+    whisper = False
+    try:
+        import faster_whisper  # noqa: F401
+        import shutil
+        whisper = shutil.which("yt-dlp") is not None
+    except ImportError:
+        pass
+    try:
+        import youtube_transcript_api  # noqa: F401
+        captions = True
+    except ImportError:
+        captions = False
+    return {
+        "status": "UP", "service": "yudhix-sense",
+        "capabilities": {
+            "llm": llm.is_available(), "llmModel": config.OLLAMA_MODEL,
+            "youtubeApi": youtube.has_api_key(), "captions": captions, "whisper": whisper,
+            "livePosting": False,
+        },
+    }
 
 
 @app.get("/api/v1/products")
@@ -76,24 +109,6 @@ def tag_product(
         raise HTTPException(status_code=400, detail="product_id is required")
     success = tag_comment_product(comment_id=comment_id, product_id=product_id, tenant_id=tenant_id)
     return {"success": success, "commentId": comment_id, "productId": product_id}
-
-
-@app.get("/api/v1/truth/knowledge")
-def list_knowledge(tenant_id: str = "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d", product_id: Optional[str] = None):
-    """
-    Fetch authoritative brand ground truth specifications and policies for RAG verification.
-    """
-    records = get_product_knowledge(tenant_id=tenant_id, product_id=product_id)
-    return {"knowledge": records, "count": len(records)}
-
-
-@app.get("/api/v1/truth/videos")
-def list_video_truth(tenant_id: str = "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d", video_id: Optional[str] = None):
-    """
-    Fetch decoded videos, extracted atomic claims, and RAG fact-check cross-references.
-    """
-    videos = get_video_truth_analysis(tenant_id=tenant_id, video_id=video_id)
-    return {"videos": videos, "count": len(videos)}
 
 
 @app.get("/api/v1/comments")

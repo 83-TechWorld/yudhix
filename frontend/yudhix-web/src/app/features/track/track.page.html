@@ -1,0 +1,158 @@
+<div class="page">
+  <header class="page-head">
+    <div>
+      <span class="eyebrow">Track</span>
+      <h1>Outcomes</h1>
+      <p>Did your replies turn people around? Where is negativity coming from?</p>
+    </div>
+    <div class="row-wrap">
+      <select class="select video-select" [ngModel]="videoId()" (ngModelChange)="selectVideo($event)" aria-label="Scope">
+        <option value="">All videos</option>
+        @for (v of videos(); track v.id) { <option [value]="v.videoId">{{ v.title }}</option> }
+      </select>
+      <button class="btn" type="button" (click)="checkOutcomes()" [disabled]="checking()">
+        <y-icon name="refresh" [size]="16" [class.spin]="checking()" /> Check for replies
+      </button>
+    </div>
+  </header>
+
+  @if (error()) {
+    <div class="callout callout-danger">{{ error() }}</div>
+  } @else if (!summary()) {
+    <div class="grid-4">@for (i of [1, 2, 3, 4]; track i) { <div class="skeleton" style="height: 110px"></div> }</div>
+  } @else {
+    @let s = summary()!;
+
+    <!-- KPIs -->
+    <section class="grid-4 kpis">
+      <div class="card stat kpi-main">
+        <div class="stat-label"><y-icon name="trendUp" [size]="15" /> Turnaround rate</div>
+        <div class="stat-value">{{ s.turnaroundRate === null ? '–' : (s.turnaroundRate | pct) }}</div>
+        <div class="stat-note">
+          @if (outcomeTotal()) { {{ s.outcomes.improved }} of {{ outcomeTotal() }} replies improved the conversation }
+          @else { No outcomes yet. Record them on posted replies. }
+        </div>
+      </div>
+      <div class="card stat">
+        <div class="stat-label"><y-icon name="send" [size]="15" /> Replies posted</div>
+        <div class="stat-value">{{ s.replies.posted }}</div>
+        <div class="stat-note">{{ s.replies.in_review }} in review · {{ s.replies.draft + s.replies.rejected }} drafts</div>
+      </div>
+      <div class="card stat">
+        <div class="stat-label"><y-icon name="target" [size]="15" /> Anger from misinformation</div>
+        <div class="stat-value">{{ s.misinformationShareOfNegative | pct }}</div>
+        <div class="stat-note">{{ s.validConcernShareOfNegative | pct }} from valid product concerns</div>
+      </div>
+      <div class="card stat" [class.alert]="s.replies.sla_breached">
+        <div class="stat-label"><y-icon name="clock" [size]="15" /> Overdue replies</div>
+        <div class="stat-value">{{ s.replies.sla_breached }}</div>
+        <div class="stat-note">
+          @if (s.avgReviewHours !== null) { Avg. review time {{ s.avgReviewHours < 1 ? '< 1h' : s.avgReviewHours + 'h' }} } @else { Past their SLA }
+        </div>
+      </div>
+    </section>
+
+    <div class="grid-2">
+      <!-- Outcomes -->
+      <section class="card card-pad stack">
+        <h2>Reply outcomes</h2>
+        @if (outcomeTotal() || s.outcomes.pending) {
+          <div class="bar outcomes-bar">
+            <span class="bar-ok" [style.width.%]="(s.outcomes.improved / (outcomeTotal() + s.outcomes.pending || 1)) * 100"></span>
+            <span class="bar-neutral" [style.width.%]="(s.outcomes.neutral / (outcomeTotal() + s.outcomes.pending || 1)) * 100"></span>
+            <span class="bar-bad" [style.width.%]="(s.outcomes.worsened / (outcomeTotal() + s.outcomes.pending || 1)) * 100"></span>
+          </div>
+          <div class="legend">
+            <div><i class="dot" style="background: var(--ok)"></i>Improved <strong>{{ s.outcomes.improved }}</strong></div>
+            <div><i class="dot" style="background: var(--muted)"></i>No change <strong>{{ s.outcomes.neutral }}</strong></div>
+            <div><i class="dot" style="background: var(--danger)"></i>Worse <strong>{{ s.outcomes.worsened }}</strong></div>
+            <div><i class="dot" style="background: var(--surface-3)"></i>Waiting <strong>{{ s.outcomes.pending }}</strong></div>
+          </div>
+        } @else {
+          <p class="subtle">Post a few replies and record what happened next. Outcomes show up here.</p>
+          <a class="btn btn-sm align-start" routerLink="/inbox">Go to inbox</a>
+        }
+        <hr class="divider" />
+        <h3>Reply pipeline</h3>
+        <div class="pipeline">
+          @for (p of pipeline(); track p.label) {
+            <div class="pipe-row">
+              <span class="pipe-label"><y-icon [name]="p.icon" [size]="14" /> {{ p.label }}</span>
+              <div class="pipe-bar"><span [style.width.%]="p.width"></span></div>
+              <strong>{{ p.value }}</strong>
+            </div>
+          }
+        </div>
+      </section>
+
+      <!-- Claims & sentiment -->
+      <section class="card card-pad stack">
+        <h2>Claims checked</h2>
+        <div class="verdicts">
+          <div><span class="chip chip-ok">Accurate</span><strong>{{ s.claims.correct }}</strong></div>
+          <div><span class="chip chip-warn">Misleading</span><strong>{{ s.claims.misleading }}</strong></div>
+          <div><span class="chip chip-danger">False</span><strong>{{ s.claims.false }}</strong></div>
+          <div><span class="chip">Unverified</span><strong>{{ s.claims.unverified }}</strong></div>
+        </div>
+        <p class="subtle">{{ s.claims.total }} claims across {{ s.videos }} videos.</p>
+        <hr class="divider" />
+        <h3>Comments by priority</h3>
+        <div class="prio-row">
+          <div class="prio p1"><span>P1</span><strong>{{ s.comments.p1 | compact }}</strong></div>
+          <div class="prio p2"><span>P2</span><strong>{{ s.comments.p2 | compact }}</strong></div>
+          <div class="prio p3"><span>P3</span><strong>{{ s.comments.p3 | compact }}</strong></div>
+        </div>
+        <p class="subtle">{{ s.comments.total | compact }} comments · {{ s.comments.negative | compact }} negative · {{ s.comments.positive | compact }} positive</p>
+      </section>
+    </div>
+
+    <!-- Trend -->
+    <section class="card card-pad trend-card">
+      <div class="row">
+        <h2>Sentiment over time</h2>
+        <span class="spacer"></span>
+        <span class="legend-inline subtle">
+          <span><i class="dot" style="background: var(--danger)"></i>Negative</span>
+          <span><i class="dot" style="background: var(--muted); opacity: .5"></i>Neutral</span>
+          <span><i class="dot" style="background: var(--ok)"></i>Positive</span>
+        </span>
+      </div>
+      @if (trend().length) {
+        <svg class="trend" [attr.viewBox]="'0 0 ' + trend().length * 10 + ' 100'" preserveAspectRatio="none" role="img" aria-label="Comments per day by sentiment">
+          @for (p of trend(); track p.day; let i = $index) {
+            <g>
+              <title>{{ p.day }}: {{ p.negative }} negative, {{ p.neutral }} neutral, {{ p.positive }} positive</title>
+              <rect [attr.x]="i * 10 + 1" [attr.width]="8" [attr.y]="barY(p, 'negative')" [attr.height]="barH(p, 'negative')" fill="var(--danger)" />
+              <rect [attr.x]="i * 10 + 1" [attr.width]="8" [attr.y]="barY(p, 'neutral')" [attr.height]="barH(p, 'neutral')" fill="var(--muted)" opacity=".4" />
+              <rect [attr.x]="i * 10 + 1" [attr.width]="8" [attr.y]="barY(p, 'positive')" [attr.height]="barH(p, 'positive')" fill="var(--ok)" />
+            </g>
+          }
+        </svg>
+        <div class="axis subtle">@for (l of trendLabels(); track $index) { <span>{{ l }}</span> }</div>
+      } @else {
+        <p class="subtle">No dated comments yet.</p>
+      }
+    </section>
+
+    <!-- Videos -->
+    <section class="card">
+      <div class="card-head"><h2>By video</h2><span class="subtle hide-mobile">Most disputed first</span></div>
+      <div class="list">
+        @for (b of board(); track b.videoId) {
+          <a class="list-item clickable board-row" [routerLink]="['/videos', b.videoId]">
+            <y-ring [value]="b.factualAccuracy" [size]="42" label="Accuracy" />
+            <div class="board-main">
+              <strong class="truncate">{{ b.title }}</strong>
+              <span class="subtle truncate">{{ b.channel }}</span>
+            </div>
+            <div class="board-stats subtle">
+              <span><strong>{{ b.misleadingClaims }}</strong>/{{ b.totalClaims }} disputed</span>
+              <span class="hide-mobile"><strong>{{ b.comments | compact }}</strong> comments</span>
+              <span><strong>{{ b.repliesPosted }}</strong> replies</span>
+            </div>
+          </a>
+        }
+      </div>
+    </section>
+  }
+</div>

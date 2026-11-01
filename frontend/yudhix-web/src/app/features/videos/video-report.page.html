@@ -1,0 +1,290 @@
+<div class="page">
+  <a routerLink="/videos" class="back"><y-icon name="arrowLeft" [size]="16" /> Videos</a>
+
+  @if (error()) {
+    <div class="callout callout-danger">{{ error() }}</div>
+  } @else if (!video()) {
+    <div class="skeleton" style="height: 180px; margin-bottom: 16px"></div>
+    <div class="grid-4">@for (i of [1, 2, 3, 4]; track i) { <div class="skeleton" style="height: 96px"></div> }</div>
+  } @else {
+    @let v = video()!;
+
+    <!-- Header -->
+    <header class="report-head card card-pad">
+      <a class="head-thumb" [href]="v.url" target="_blank" rel="noopener" aria-label="Watch on YouTube">
+        <img class="thumb" [src]="v.thumbnailUrl" alt="" />
+        <span class="play"><y-icon name="play" [size]="18" /></span>
+      </a>
+      <div class="head-text">
+        <span class="eyebrow">Truth report</span>
+        <h1>{{ v.title }}</h1>
+        <div class="row-wrap subtle">
+          <span><strong class="channel">{{ v.channel }}</strong></span>
+          @if (v.publishedDate) { <span>· {{ v.publishedDate }}</span> }
+          @if (v.viewCount) { <span>· {{ v.viewCount | compact }} views</span> }
+          @if (v.analyzedAt) { <span>· analyzed {{ v.analyzedAt | ago }}</span> }
+        </div>
+        @if (v.summary) { <p class="summary">{{ v.summary }}</p> }
+        <div class="row-wrap">
+          <a class="btn btn-sm" [href]="v.url" target="_blank" rel="noopener"><y-icon name="external" [size]="15" /> YouTube</a>
+          <a class="btn btn-sm" routerLink="/inbox" [queryParams]="{ video: v.videoId }"><y-icon name="inbox" [size]="15" /> Respond to comments</a>
+        </div>
+      </div>
+    </header>
+
+    <!-- Scorecards -->
+    <section class="grid-4 scores">
+      <div class="card stat score">
+        <y-ring [value]="v.factualAccuracy" [size]="52" label="Factual accuracy" />
+        <div>
+          <div class="stat-label">Factual accuracy</div>
+          <div class="stat-note">{{ verdictCounts()['FACTUALLY_CORRECT'] }} of {{ v.totalClaims }} claims hold up</div>
+        </div>
+      </div>
+      <div class="card stat">
+        <div class="stat-label"><y-icon name="alert" [size]="15" /> Disputed claims</div>
+        <div class="stat-value">{{ v.misleadingClaims }}<span class="of">/{{ v.totalClaims }}</span></div>
+        <div class="stat-note">{{ verdictCounts()['FALSE'] }} false · {{ verdictCounts()['MISLEADING'] }} misleading · {{ verdictCounts()['UNVERIFIED_SPECULATION'] }} unverified</div>
+      </div>
+      <div class="card stat">
+        <div class="stat-label"><y-icon name="target" [size]="15" /> Anger from misinformation</div>
+        <div class="stat-value">{{ impact() ? (impact()!.misinformationShareOfNegative | pct) : '–' }}</div>
+        <div class="stat-note">of negative comments react to a disputed claim</div>
+      </div>
+      <div class="card stat">
+        <div class="stat-label"><y-icon name="message" [size]="15" /> Comments</div>
+        <div class="stat-value">{{ v.comments | compact }}</div>
+        <div class="stat-note">{{ v.negativeComments | compact }} negative · {{ v.linkedComments | compact }} traced to claims</div>
+      </div>
+    </section>
+
+    <!-- Tabs -->
+    <nav class="tabs" role="tablist">
+      <button type="button" role="tab" [class.active]="tab() === 'claims'" (click)="setTab('claims')">
+        <y-icon name="file" [size]="16" /> Claims <span class="chip">{{ v.totalClaims }}</span>
+      </button>
+      <button type="button" role="tab" [class.active]="tab() === 'impact'" (click)="setTab('impact')">
+        <y-icon name="target" [size]="16" /> Audience impact
+      </button>
+      <button type="button" role="tab" [class.active]="tab() === 'outreach'" (click)="setTab('outreach')">
+        <y-icon name="mail" [size]="16" /> Creator note
+      </button>
+    </nav>
+
+    <!-- ============ CLAIMS ============ -->
+    @if (tab() === 'claims') {
+      <div class="segmented filter">
+        <button type="button" [class.active]="verdictFilter() === 'all'" (click)="verdictFilter.set('all')">All <span class="count">{{ claims().length }}</span></button>
+        <button type="button" [class.active]="verdictFilter() === 'disputed'" (click)="verdictFilter.set('disputed')">Disputed <span class="count">{{ v.misleadingClaims }}</span></button>
+        <button type="button" [class.active]="verdictFilter() === 'FALSE'" (click)="verdictFilter.set('FALSE')">False <span class="count">{{ verdictCounts()['FALSE'] }}</span></button>
+        <button type="button" [class.active]="verdictFilter() === 'MISLEADING'" (click)="verdictFilter.set('MISLEADING')">Misleading <span class="count">{{ verdictCounts()['MISLEADING'] }}</span></button>
+        <button type="button" [class.active]="verdictFilter() === 'UNVERIFIED_SPECULATION'" (click)="verdictFilter.set('UNVERIFIED_SPECULATION')">Unverified <span class="count">{{ verdictCounts()['UNVERIFIED_SPECULATION'] }}</span></button>
+        <button type="button" [class.active]="verdictFilter() === 'FACTUALLY_CORRECT'" (click)="verdictFilter.set('FACTUALLY_CORRECT')">Accurate <span class="count">{{ verdictCounts()['FACTUALLY_CORRECT'] }}</span></button>
+      </div>
+
+      <ol class="timeline">
+        @for (c of filteredClaims(); track c.id) {
+          <li class="claim card">
+            <div class="claim-rail" [style.background]="verdictMeta[c.verdict].color"></div>
+            <div class="claim-main">
+              <div class="row-wrap claim-top">
+                <a class="ts" [href]="youtubeAt(v.videoId, c.timestampSeconds)" target="_blank" rel="noopener" title="Watch this moment">
+                  <y-icon name="play" [size]="12" /> {{ c.timestamp }}
+                </a>
+                <y-verdict [verdict]="c.verdict" />
+                <span class="subtle">{{ c.topic }}</span>
+                <span class="spacer"></span>
+                <span class="chip chip-outline" [attr.title]="'Confidence ' + (c.confidence | pct)">{{ methodLabel(c.verificationMethod) }} · {{ c.confidence | pct }}</span>
+              </div>
+              <blockquote class="quote" [class]="verdictMeta[c.verdict].quote">"{{ c.quote }}"</blockquote>
+              <p class="analysis">{{ c.analysis }}</p>
+
+              @if (c.knowledge) {
+                <div class="source">
+                  <div class="source-title"><y-icon name="book" [size]="14" /> {{ c.knowledge.title }}@if (c.knowledge.clauseRef) { <span class="mono"> · {{ c.knowledge.clauseRef }}</span> }</div>
+                  <p>{{ c.knowledge.statement }}</p>
+                </div>
+              } @else if (c.citation) {
+                <div class="source"><div class="source-title"><y-icon name="book" [size]="14" /> {{ c.citation }}</div></div>
+              } @else {
+                <div class="callout callout-warn"><y-icon name="info" [size]="15" /><span>No official document covers this yet. <a routerLink="/knowledge">Add one to the knowledge base</a> and re-analyze.</span></div>
+              }
+
+              <div class="row-wrap claim-foot">
+                <button class="btn btn-sm" type="button" (click)="openClaim(c)" [disabled]="!c.linkedComments">
+                  <y-icon name="message" [size]="15" /> {{ c.linkedComments | compact }} reactions
+                </button>
+                @if (c.isMisinformation && c.linkedComments) {
+                  <a class="btn btn-sm btn-ghost" routerLink="/inbox" [queryParams]="{ video: v.videoId, cause: 'MISINFORMATION' }">Reply with the facts <y-icon name="arrowRight" [size]="15" /></a>
+                }
+              </div>
+            </div>
+          </li>
+        } @empty {
+          <li class="card card-pad subtle">No claims with this verdict.</li>
+        }
+      </ol>
+    }
+
+    <!-- ============ IMPACT ============ -->
+    @if (tab() === 'impact') {
+      @if (!impact()) {
+        <div class="skeleton" style="height: 320px"></div>
+      } @else {
+        @let i = impact()!;
+        <div class="stack-lg">
+          <div class="callout callout-info headline">
+            <y-icon name="target" [size]="18" />
+            <div>
+              <strong>{{ i.headline }}</strong>
+              <div>Comments are linked to the claim they react to by matching what they talk about, or by a timestamp they mention. Open a claim to see the evidence.</div>
+            </div>
+          </div>
+
+          <section class="card card-pad">
+            <div class="row">
+              <h2>Why people are reacting</h2>
+              <span class="spacer"></span>
+              <button class="btn btn-sm btn-ghost" type="button" (click)="recompute()" [disabled]="recomputing()">
+                <y-icon name="refresh" [size]="15" [class.spin]="recomputing()" /> Re-link
+              </button>
+            </div>
+            <div class="bar causes-bar" role="img" aria-label="Root cause split">
+              @for (c of causes(); track c.cause) { <span [style.width.%]="c.share * 100" [style.background]="c.meta.color"></span> }
+            </div>
+            <div class="grid-3 causes">
+              @for (c of causes(); track c.cause) {
+                <div class="cause">
+                  <div class="row"><i class="dot" [style.background]="c.meta.color"></i><strong>{{ c.meta.label }}</strong></div>
+                  <div class="cause-num">{{ c.total | compact }} <span class="subtle">comments · {{ c.negative | compact }} negative</span></div>
+                  <p class="subtle">{{ c.meta.help }}</p>
+                  @if (c.cause !== 'UNLINKED' && c.total) {
+                    <a class="btn btn-sm" routerLink="/inbox" [queryParams]="{ video: v.videoId, cause: c.cause }">Open in inbox</a>
+                  }
+                </div>
+              }
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-head"><h2>Reactions by claim</h2><span class="subtle hide-mobile">Most reactions first</span></div>
+            <div class="list">
+              @for (c of i.claims; track c.id) {
+                <button class="list-item clickable claim-row" type="button" (click)="openClaim(c)" [disabled]="!c.linkedComments">
+                  <span class="ts static">{{ c.timestamp }}</span>
+                  <div class="claim-row-main">
+                    <div class="row-wrap"><y-verdict [verdict]="c.verdict" /><strong class="truncate">{{ c.topic }}</strong></div>
+                    <div class="subtle clamp-2">"{{ c.quote }}"</div>
+                    <div class="volume"><span [style.width.%]="(c.linkedComments / maxLinked()) * 100" [style.background]="verdictMeta[c.verdict].color"></span></div>
+                    <y-sentiment-bar [positive]="c.sentiment.positive ?? 0" [negative]="c.sentiment.negative ?? 0" [neutral]="c.sentiment.neutral ?? 0" />
+                  </div>
+                  <div class="claim-row-count">
+                    <strong>{{ c.linkedComments | compact }}</strong>
+                    <span class="subtle">{{ c.sentiment.negative ?? 0 }} neg</span>
+                  </div>
+                </button>
+              }
+            </div>
+          </section>
+        </div>
+      }
+    }
+
+    <!-- ============ CREATOR NOTE ============ -->
+    @if (tab() === 'outreach') {
+      <div class="outreach">
+        <section class="card card-pad stack">
+          <div>
+            <h2>Ask the creator to add context</h2>
+            <p class="muted">Generate a polite note that cites your official documents. Nothing is sent automatically. Copy it into email or YouTube Studio.</p>
+          </div>
+          <div class="pick">
+            @for (c of claims(); track c.id) {
+              <label class="pick-item" [class.checked]="selectedClaims().has(c.id)">
+                <input type="checkbox" [checked]="selectedClaims().has(c.id)" (change)="toggleClaim(c.id)" />
+                <span class="ts static">{{ c.timestamp }}</span>
+                <span class="pick-text">
+                  <span class="row-wrap"><y-verdict [verdict]="c.verdict" /><strong>{{ c.topic }}</strong></span>
+                  <span class="subtle clamp-2">"{{ c.quote }}"</span>
+                </span>
+              </label>
+            }
+          </div>
+          <div class="row-wrap">
+            <button class="btn btn-primary" type="button" (click)="generateNote()" [disabled]="generating() || !selectedClaims().size">
+              @if (generating()) { <y-icon name="loader" class="spin" /> Writing… } @else { <y-icon name="sparkles" /> Generate note ({{ selectedClaims().size }}) }
+            </button>
+          </div>
+        </section>
+
+        @if (notes() === null) {
+          <div class="skeleton" style="height: 200px"></div>
+        } @else {
+          @for (n of notes(); track n.id) {
+            <section class="card card-pad stack note">
+              <div class="row-wrap">
+                <span class="chip" [class.chip-ok]="n.status === 'SENT'">{{ n.status === 'SENT' ? 'Sent' : 'Draft' }}</span>
+                <span class="subtle">To {{ n.channel }} · {{ n.createdAt | ago }} · {{ n.claimIds.length }} claims</span>
+              </div>
+              <div class="field">
+                <label [attr.for]="'subj-' + n.id">Subject</label>
+                <input class="input" [id]="'subj-' + n.id" [(ngModel)]="n.subject" [disabled]="n.status === 'SENT'" />
+              </div>
+              <div class="field">
+                <label [attr.for]="'body-' + n.id">Message</label>
+                <textarea class="textarea" [id]="'body-' + n.id" rows="12" [(ngModel)]="n.body" [disabled]="n.status === 'SENT'"></textarea>
+              </div>
+              <div class="row-wrap">
+                <button class="btn" type="button" (click)="copy(n.subject + '\n\n' + n.body)"><y-icon name="copy" [size]="16" /> Copy</button>
+                @if (n.status !== 'SENT') {
+                  <button class="btn" type="button" (click)="saveNote(n)">Save</button>
+                  <button class="btn btn-primary" type="button" (click)="saveNote(n, 'SENT')"><y-icon name="send" [size]="16" /> Mark as sent</button>
+                }
+              </div>
+            </section>
+          } @empty {
+            <p class="subtle center">No notes yet for this video.</p>
+          }
+        }
+      </div>
+    }
+  }
+</div>
+
+<!-- Linked comments sheet -->
+@if (sheetClaim(); as c) {
+  <div class="sheet-backdrop" (click)="closeSheet()"></div>
+  <aside class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+    <div class="sheet-head">
+      <div style="flex: 1; min-width: 0">
+        <div class="row-wrap"><span class="ts static">{{ c.timestamp }}</span><y-verdict [verdict]="c.verdict" /></div>
+        <h2 id="sheet-title" class="truncate">{{ c.topic }}</h2>
+      </div>
+      <button class="btn btn-ghost btn-icon" type="button" (click)="closeSheet()" aria-label="Close"><y-icon name="x" /></button>
+    </div>
+    <div class="sheet-body stack">
+      <blockquote class="quote" [class]="verdictMeta[c.verdict].quote">"{{ c.quote }}"</blockquote>
+      <p class="subtle">Comments linked to this claim, most liked first. "Why linked" shows the words they share with the claim.</p>
+      @if (sheetComments() === null) {
+        @for (i of [1, 2, 3]; track i) { <div class="skeleton" style="height: 72px"></div> }
+      } @else {
+        @for (m of sheetComments(); track m.id) {
+          <div class="linked">
+            <p>{{ m.text }}</p>
+            <div class="row-wrap subtle">
+              <span class="chip" [class]="sentimentChip[m.sentiment]">{{ m.sentiment | lowercase }}</span>
+              <span class="chip" [class]="priorityChip[m.priority]">{{ m.priority }}</span>
+              <span><y-icon name="thumbsUp" [size]="13" /> {{ m.likes | compact }}</span>
+              <span class="why">Why linked: {{ m.evidence || m.linkMethod }}</span>
+            </div>
+          </div>
+        } @empty {
+          <p class="subtle">No linked comments.</p>
+        }
+      }
+    </div>
+    <div class="sheet-foot">
+      <a class="btn btn-primary btn-block" routerLink="/inbox" [queryParams]="{ video: videoId(), cause: c.isMisinformation ? 'MISINFORMATION' : 'VALID_CONCERN' }">Respond in inbox</a>
+    </div>
+  </aside>
+}

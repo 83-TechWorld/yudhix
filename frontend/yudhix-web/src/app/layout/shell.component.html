@@ -1,0 +1,95 @@
+<div class="shell">
+  <!-- Sidebar (desktop) / rail (tablet) -->
+  <aside class="sidebar hide-mobile" aria-label="Main">
+    <a class="brand" routerLink="/analyze">
+      <span class="logo" aria-hidden="true">Y</span>
+      <span class="brand-text">
+        <strong>Yudhix</strong>
+        <small>Truth-first social intelligence</small>
+      </span>
+    </a>
+
+    <nav class="nav">
+      @for (item of nav; track item.path) {
+        <a [routerLink]="item.path" routerLinkActive="active" class="nav-item" [attr.title]="item.label">
+          <y-icon [name]="item.icon" [size]="20" />
+          <span class="nav-label">{{ item.label }}</span>
+          @if (item.path === '/approvals' && inReview()) {
+            <span class="badge">{{ inReview() }}</span>
+          }
+        </a>
+      }
+    </nav>
+
+    <div class="sidebar-foot">
+      <button class="status" type="button" (click)="refresh()" [attr.title]="apiDown() ? 'API offline. Click to retry' : 'API online'">
+        <span class="dot" [style.background]="apiDown() ? 'var(--danger)' : health() ? 'var(--ok)' : 'var(--muted)'"></span>
+        <span class="nav-label">
+          @if (apiDown()) { API offline } @else if (health()?.capabilities?.llm) { AI model ready } @else if (health()) { Rule-based mode } @else { Connecting… }
+        </span>
+      </button>
+      <button class="nav-item" type="button" (click)="session.cycleTheme()" [attr.title]="'Theme: ' + session.theme()">
+        <y-icon [name]="themeIcon()" [size]="20" />
+        <span class="nav-label">Theme: {{ session.theme() }}</span>
+      </button>
+      <button class="me" type="button" (click)="switchRole()" title="Switch demo role">
+        <span class="avatar" [class.approver]="session.role() === 'approver'">{{ session.user().initials }}</span>
+        <span class="nav-label me-text">
+          <strong>{{ session.user().name }}</strong>
+          <small>{{ session.user().title }} · switch</small>
+        </span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Top bar (mobile) -->
+  <header class="topbar show-mobile">
+    <a class="logo" routerLink="/analyze" aria-label="Yudhix home">Y</a>
+    <h1 class="topbar-title">{{ title() }}</h1>
+    <span class="spacer"></span>
+    @if (apiDown()) {
+      <button class="btn btn-ghost btn-icon" type="button" (click)="refresh()" aria-label="API offline, retry">
+        <span class="dot" style="background: var(--danger)"></span>
+      </button>
+    }
+    <a class="btn btn-ghost btn-icon" routerLink="/knowledge" aria-label="Knowledge base"><y-icon name="book" /></a>
+    <button class="btn btn-ghost btn-icon" type="button" (click)="session.cycleTheme()" aria-label="Change theme">
+      <y-icon [name]="themeIcon()" />
+    </button>
+    <button class="avatar-btn" type="button" (click)="switchRole()" [attr.aria-label]="'Acting as ' + session.user().name + '. Switch role'">
+      <span class="avatar" [class.approver]="session.role() === 'approver'">{{ session.user().initials }}</span>
+    </button>
+  </header>
+
+  <main class="main">
+    @if (apiDown()) {
+      <div class="offline">
+        <y-icon name="alert" [size]="16" />
+        <span>Can't reach the Yudhix API. Start it with <span class="kbd">./yudhix.sh start</span>, then retry.</span>
+        <button class="btn btn-sm" type="button" (click)="refresh()">Retry</button>
+      </div>
+    }
+    <router-outlet />
+  </main>
+
+  <!-- Bottom tabs (mobile) -->
+  <nav class="tabbar show-mobile" aria-label="Main">
+    @for (item of nav; track item.path) {
+      @if (item.mobile) {
+        <a [routerLink]="item.path" routerLinkActive="active" class="tab">
+          <span class="tab-icon">
+            <y-icon [name]="item.icon" [size]="22" />
+            @if (item.path === '/approvals' && inReview()) { <span class="badge">{{ inReview() }}</span> }
+          </span>
+          <span>{{ item.label }}</span>
+        </a>
+      }
+    }
+  </nav>
+
+  <div class="toasts" aria-live="polite">
+    @for (t of toasts.toasts(); track t.id) {
+      <div class="toast" [class.toast-error]="t.kind === 'error'" (click)="toasts.dismiss(t.id)">{{ t.text }}</div>
+    }
+  </div>
+</div>

@@ -30,6 +30,11 @@ APP_ORIGINS = [o.strip() for o in os.getenv(
 SMTP_HOST = os.getenv("KC_SMTP_HOST", "mailpit")
 SMTP_PORT = os.getenv("KC_SMTP_PORT", "1025")
 SMTP_FROM = os.getenv("KC_SMTP_FROM", "no-reply@yudhix.local")
+SMTP_USER = os.getenv("KC_SMTP_USER", "")          # e.g. Zoho ZeptoMail: "emailapikey"
+SMTP_PASSWORD = os.getenv("KC_SMTP_PASSWORD", "")
+SMTP_STARTTLS = os.getenv("KC_SMTP_STARTTLS", "false").lower() == "true"
+SMTP_SSL = os.getenv("KC_SMTP_SSL", "false").lower() == "true"
+WAIT_SECONDS = int(os.getenv("KC_WAIT_SECONDS", "0"))  # jobs: wait for Keycloak to come up
 VERIFY_EMAIL = os.getenv("KC_VERIFY_EMAIL", "true").lower() == "true"
 
 
@@ -52,7 +57,22 @@ def call(method, path, token=None, body=None, form=None):
         sys.exit(f"{method} {path} failed: {e.code} {e.read().decode()[:300]}")
 
 
+def wait_for_keycloak():
+    import time
+    deadline = time.time() + WAIT_SECONDS
+    while True:
+        try:
+            with urllib.request.urlopen(f"{KC_URL}/realms/master", timeout=5):
+                return
+        except Exception as e:
+            if time.time() > deadline:
+                sys.exit(f"Keycloak not reachable at {KC_URL}: {e}")
+            print("waiting for Keycloak…", flush=True)
+            time.sleep(5)
+
+
 def main():
+    wait_for_keycloak()
     token = call("POST", "/realms/master/protocol/openid-connect/token", form={
         "client_id": "admin-cli", "username": ADMIN_USER, "password": ADMIN_PASSWORD, "grant_type": "password",
     })["access_token"]
@@ -74,7 +94,8 @@ def main():
         "accessTokenLifespan": 300,
         "ssoSessionIdleTimeout": 60 * 60 * 8,
         "smtpServer": {"host": SMTP_HOST, "port": SMTP_PORT, "from": SMTP_FROM, "fromDisplayName": "Yudhix",
-                       "auth": "false", "ssl": "false", "starttls": "false"},
+                       "auth": "true" if SMTP_USER else "false", "user": SMTP_USER, "password": SMTP_PASSWORD,
+                       "ssl": "true" if SMTP_SSL else "false", "starttls": "true" if SMTP_STARTTLS else "false"},
     })
     call("PUT", f"/admin/realms/{REALM}", token, realm)
     print(f"realm '{REALM}': sign-up, email verification={VERIFY_EMAIL}, brute-force protection, SMTP {SMTP_HOST}:{SMTP_PORT}, theme yudhix")

@@ -77,6 +77,23 @@ classifier = FastSentimentClassifier()
 enricher = OllamaLlmEnricher()
 
 
+@app.get("/healthz", include_in_schema=False)
+def liveness():
+    """Kubernetes liveness probe: the process is up. No dependencies, always fast."""
+    return {"status": "ok"}
+
+
+@app.get("/readyz", include_in_schema=False)
+def readiness():
+    """Kubernetes readiness probe: the database answers. Pods failing this get no traffic."""
+    from app.core.database import fetch_one
+    try:
+        fetch_one("SELECT 1 AS ok")
+        return {"status": "ready"}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"database unavailable: {type(e).__name__}")
+
+
 @app.get("/health")
 def health_check():
     """Also reports which optional capabilities are active, so the UI can explain fallbacks."""

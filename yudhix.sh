@@ -232,6 +232,15 @@ case "$1" in
     test)
         run_test
         ;;
+    docker-up)
+        ./deploy/scripts/docker-up.sh
+        ;;
+    docker-down)
+        ./deploy/scripts/docker-down.sh "${2:-}"
+        ;;
+    k8s-up|k8s-down|k8s-status|k8s-wipe)
+        ./deploy/scripts/k8s-local.sh "${1#k8s-}"
+        ;;
     keycloak)
         print_banner
         echo -e "${ORANGE}[+] Applying SaaS sign-in settings to Keycloak (realm yudhix)...${NC}"
@@ -260,7 +269,7 @@ case "$1" in
         ;;
     *)
         print_banner
-        echo -e "${WHITE}Usage:${NC} ./yudhix.sh {start|stop|restart|status|test|unit|e2e|keycloak|db|init-db|ui}"
+        echo -e "${WHITE}Usage:${NC} ./yudhix.sh {start|stop|restart|status|test|unit|e2e|keycloak|docker-up|docker-down|k8s-up|k8s-down|k8s-status|db|init-db|ui}"
         echo ""
         echo -e "  ${ORANGE}start${NC}    - Launch Ollama, yudhix-sense AI engine, and yudhix-web frontend"
         echo -e "  ${ORANGE}stop${NC}     - Stop all background running services"
@@ -268,6 +277,8 @@ case "$1" in
         echo -e "  ${ORANGE}test${NC}     - Run live end-to-end PII masking & AI analysis test"
         echo -e "  ${ORANGE}unit${NC}     - Run backend (pytest) and frontend (Karma) unit tests"
         echo -e "  ${ORANGE}e2e${NC}      - End-to-end SaaS test through the real Keycloak (creates + removes test users)"
+        echo -e "  ${ORANGE}docker-up${NC}   - Whole stack in Docker behind the gateway (http://localhost:8080); docker-down [--wipe]"
+        echo -e "  ${ORANGE}k8s-up${NC}      - Whole stack on the current Kubernetes context (http://localhost:8081); k8s-status / k8s-down / k8s-wipe"
         echo -e "  ${ORANGE}keycloak${NC} - Apply sign-up, PKCE, SMTP and theme settings to the running Keycloak"
         echo -e "  ${ORANGE}db${NC}       - Query and display comments and AI sentiment from PostgreSQL"
         echo -e "  ${ORANGE}init-db${NC}  - Create DB yudhix, enable extensions, and run all 37 table migrations"

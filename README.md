@@ -1038,6 +1038,15 @@ Every state change appends a hash-chained `audit_event` (`row_hash = SHA-256(pre
 
 ## 14. Changelog
 
+### 2026-11-02: Containers, Kubernetes and Zoho Catalyst
+- **Four images** (`gateway`, `web`, `api`, `keycloak`), non-root, listening on `PORT` or Zoho's `X_ZOHO_CATALYST_LISTEN_PORT`.
+- **Gateway:** one public origin (`/`, `/api`, `/auth`) with rate limiting and security headers. No CORS needed.
+- **Docker:** the full stack runs with one command on http://localhost:8080.
+- **Kubernetes:** Kustomize base plus `local` and `production` overlays, with HPAs, PDBs, probes, NetworkPolicies, clustered Keycloak, TLS ingress and a realm-setup Job.
+- **Zoho Catalyst AppSail:** amd64 build + deploy script, and a guide with managed Postgres and ZeptoMail.
+- **API:** bootstraps the full schema on an empty database (safe with many replicas), plus `/healthz` and `/readyz` probes.
+- **Web:** runtime `config.json`. Fixed a service-worker bug that made the app reload itself in a loop inside the sign-in iframe on production builds.
+
 ### 2026-11-02: Regional pricing, robot AI status, new favicon
 - **INR pricing for India, USD elsewhere:** `plan_price` table, billing currency per workspace, currency-aware invoices and proration, ₹ / $ toggle and auto-detection on the pricing page, Indian digit grouping.
 - **AI status robot** in the app bar: awake when the local AI model is available, asleep (with floating "z"s) in rule-based mode, x-eyes when the API is offline.
@@ -1117,4 +1126,25 @@ Trials and quotas: when the trial ends, reports stay readable but new analyses a
 - The demo workspace (`is_demo`) can't be deleted, and anyone can leave or rejoin it. Turn off `DEMO_WORKSPACE_JOIN` in production.
 - Deleting a workspace is a soft delete: access ends immediately, the subscription is canceled, and data stays for audit and retention rules.
 - Every workspace, team and billing change is written to the hash-chained `audit_event` ledger.
+
+---
+
+## 16. Deployment: Docker, Kubernetes, Zoho Catalyst
+
+Full guide: **[deploy/README.md](deploy/README.md)** (Zoho: [deploy/zoho/README.md](deploy/zoho/README.md)).
+
+| Where | Command | URL |
+|---|---|---|
+| Dev (hot reload) | `./yudhix.sh start` | http://localhost:4200 |
+| Docker, whole stack | `./yudhix.sh docker-up` | http://localhost:8080 |
+| Kubernetes on your laptop | `./yudhix.sh k8s-up` | http://localhost:8081 |
+| Kubernetes in production | `kubectl apply -k deploy/k8s/overlays/production` | your domain |
+| Zoho Catalyst AppSail | `deploy/zoho/deploy-catalyst.sh` | your domain → gateway app |
+
+```
+Browser ─► gateway ─┬─ /      → web       (stateless, 2–6 replicas)
+                    ├─ /api   → api       (stateless, 2–10 replicas, autoscaled)
+                    └─ /auth  → keycloak  (1–2 replicas, clustered on Kubernetes)
+            api, keycloak → PostgreSQL · api → Ollama (optional) · SMTP
+```
 

@@ -45,12 +45,54 @@ def fetch_one(sql: str, params: tuple = ()) -> Optional[Dict[str, Any]]:
         return dict(row) if row else None
 
 
+# Base schema owned by the Java services (their Flyway V1 files). The container image copies them
+# into app/migrations/base/ so a brand-new database (Docker, Kubernetes, managed Postgres on Zoho)
+# can be bootstrapped by this service alone. Order matters: later files reference earlier tables.
+BASE_ORDER = ["tenant", "ledger", "dharma", "catalog", "radar", "link", "pulse", "resolve", "loop", "notify", "meter"]
+MIGRATION_LOCK = 724_001  # pg_advisory_lock key: only one replica migrates at a time
+
+
 def run_migrations() -> None:
-    """Apply every SQL file in app/migrations in name order. Files must be idempotent."""
-    for path in sorted(MIGRATIONS_DIR.glob("V*.sql")):
-        with cursor(commit=True) as cur:
-            cur.execute(path.read_text())
-        logger.info("Applied migration %s", path.name)
+    """Bootstrap the base schema on an empty database, then apply app/migrations/V*.sql (idempotent).
+    Safe with many replicas starting at once: everything runs under one advisory lock."""
+    from app.db import get_db_connection as connect
+    conn = connect()
+    try:
+        conn.autocommit = True
+        with conn.cursor() as cur:
+            cur.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK,))
+            try:
+                _bootstrap_base_schema(cur)
+                for path in sorted(MIGRATIONS_DIR.glob("V*.sql")):
+                    cur.execute("BEGIN")
+                    try:
+                        cur.execute(path.read_text())
+                        cur.execute("COMMIT")
+                    except Exception:
+                        cur.execute("ROLLBACK")
+                        raise
+                    logger.info("Applied migration %s", path.name)
+            finally:
+                cur.execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK,))
+    finally:
+        conn.close()
+
+
+def _bootstrap_base_schema(cur) -> None:
+    cur.execute("SELECT to_regclass('public.tenant') IS NOT NULL AS ready")
+    if cur.fetchone()[0]:
+        return
+    base_dir = MIGRATIONS_DIR / "base"
+    files = [base_dir / f"V1__init_{name}_schema.sql" for name in BASE_ORDER]
+    missing = [f.name for f in files if not f.exists()]
+    if missing:
+        raise RuntimeError(f"Empty database and base schema files are missing: {missing}. "
+                           f"Build the image from the repository root (see deploy/README.md).")
+    logger.info("Empty database: creating the base schema (%d files)", len(files))
+    cur.execute('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"; CREATE EXTENSION IF NOT EXISTS "pgcrypto";')
+    for f in files:
+        cur.execute(f.read_text())
+        logger.info("Base schema: %s", f.name)
 
 
 def append_audit(cur, tenant_id: str, actor_id: str, actor_type: str, action: str,

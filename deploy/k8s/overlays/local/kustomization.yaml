@@ -1,0 +1,56 @@
+# Local cluster (Docker Desktop / kind / minikube): everything in-cluster, 1 replica each,
+# dev-only secrets. Reach it with: ./deploy/scripts/k8s-local.sh up   ->  http://localhost:8081
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: yudhix
+resources:
+  - ../../base
+  - postgres.yaml
+  - mailpit.yaml
+configMapGenerator:
+  - name: yudhix-config
+    behavior: merge
+    literals:
+      - PUBLIC_URL=http://localhost:8081
+      - DEMO_WORKSPACE_JOIN=true
+      - KEYCLOAK_ADMIN_PUBLIC=true
+secretGenerator:
+  - name: yudhix-secrets
+    literals:                      # development values only, never use in production
+      - POSTGRES_PASSWORD=yudhix_local_pw
+      - KEYCLOAK_ADMIN_PASSWORD=admin_local_pw
+      - AUTHOR_HMAC_KEY=local-only-change-me
+patches:
+  # One replica of everything on a laptop
+  - target: { kind: Deployment, name: "gateway|web|api" }
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  - target: { kind: HorizontalPodAutoscaler }
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+  - target: { kind: PodDisruptionBudget }
+    patch: |-
+      - op: replace
+        path: /spec/minAvailable
+        value: 0
+  # Locally built images: never pull from a registry
+  - target: { kind: Deployment }
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+  - target: { kind: Job }
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+  # Smaller requests so it fits next to Docker Desktop's other workloads
+  - target: { kind: Deployment, name: keycloak }
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests
+        value: { cpu: 100m, memory: 512Mi }

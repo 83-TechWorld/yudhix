@@ -1,6 +1,6 @@
 // Production / mobile builds. A phone can't reach "localhost" on your laptop: point these at
 // your public API and Keycloak before shipping to the stores.
-export const environment = {
+export const environment: { production: boolean; apiUrl: string; keycloak: { url: string; realm: string; clientId: string }; salesEmail: string } = {
   production: true,
   apiUrl: 'http://localhost:8000',
   keycloak: { url: 'http://localhost:8180', realm: 'yudhix', clientId: 'yudhix-web' },

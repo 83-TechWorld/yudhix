@@ -1,0 +1,73 @@
+# =============================================================================
+# Yudhix API gateway: one public origin for the whole product.
+#   /            -> web       (Angular app)
+#   /api, /health -> api      (yudhix-sense, horizontally scaled)
+#   /auth        -> keycloak  (sign-in, sign-up, tokens)
+# Upstreams come from env vars, so the same image works in Docker Compose, Kubernetes
+# (Service DNS names) and Zoho Catalyst (other AppSail URLs over HTTPS).
+# =============================================================================
+
+# Respect TLS terminated in front of us (cloud LB / ingress / Catalyst); else use our own scheme.
+map $http_x_forwarded_proto $fwd_proto { default $http_x_forwarded_proto; "" $scheme; }
+map $http_x_forwarded_host  $fwd_host  { default $http_x_forwarded_host;  "" $http_host; }
+map $http_x_forwarded_port  $fwd_port  { default $http_x_forwarded_port;  "" $server_port; }
+
+# Abuse protection, per client IP
+limit_req_zone $binary_remote_addr zone=api:10m   rate=${API_RATE_LIMIT};
+limit_req_zone $binary_remote_addr zone=login:10m rate=${LOGIN_RATE_LIMIT};
+limit_req_status 429;
+
+server {
+  listen ${PORT};
+  server_name _;
+  server_tokens off;
+  client_max_body_size ${MAX_BODY_SIZE};
+
+  gzip on;
+  gzip_proxied any;
+  gzip_types application/json application/javascript text/css image/svg+xml;
+
+  add_header X-Content-Type-Options "nosniff" always;
+  add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+  add_header X-Frame-Options "SAMEORIGIN" always;
+
+  proxy_http_version 1.1;
+  proxy_set_header Connection "";
+  # Set here, not per location: a location with its own proxy_set_header drops all of these.
+  proxy_set_header Host $proxy_host;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_set_header X-Forwarded-Proto $fwd_proto;
+  proxy_set_header X-Forwarded-Host $fwd_host;
+  proxy_set_header X-Forwarded-Port $fwd_port;
+  proxy_set_header X-Request-Id $request_id;
+  proxy_ssl_server_name on;          # needed when an upstream is HTTPS (e.g. Catalyst AppSail URLs)
+  proxy_connect_timeout 5s;
+  proxy_read_timeout 120s;           # AI drafts can take a while
+  proxy_buffer_size 32k;             # Keycloak sends large headers/cookies
+  proxy_buffers 8 32k;
+
+  location = /gateway/healthz { access_log off; default_type text/plain; return 200 "ok"; }
+
+  location /api/ {
+    limit_req zone=api burst=${API_RATE_BURST} nodelay;
+    proxy_pass ${API_UPSTREAM};
+  }
+  location = /health { proxy_pass ${API_UPSTREAM}; }
+
+  location ~ ^/auth/realms/[^/]+/(login-actions|protocol/openid-connect/(token|auth|registrations)) {
+    limit_req zone=login burst=20 nodelay;
+    proxy_pass ${KEYCLOAK_UPSTREAM};
+  }
+  location /auth/ {
+    proxy_pass ${KEYCLOAK_UPSTREAM};
+  }
+  # Keycloak's admin console is not exposed publicly unless explicitly enabled.
+  location ~ ^/auth/admin/ {
+    ${KEYCLOAK_ADMIN_ACCESS}
+    proxy_pass ${KEYCLOAK_UPSTREAM};
+  }
+
+  location / {
+    proxy_pass ${WEB_UPSTREAM};
+  }
+}

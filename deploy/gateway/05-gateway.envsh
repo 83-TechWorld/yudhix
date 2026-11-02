@@ -1,0 +1,18 @@
+#!/bin/sh
+# Defaults for the gateway template (sourced by the nginx entrypoint).
+export PORT="${X_ZOHO_CATALYST_LISTEN_PORT:-${PORT:-8080}}"
+export WEB_UPSTREAM="${WEB_UPSTREAM:-http://web:8080}"
+export API_UPSTREAM="${API_UPSTREAM:-http://api:8000}"
+export KEYCLOAK_UPSTREAM="${KEYCLOAK_UPSTREAM:-http://keycloak:8080}"
+export API_RATE_LIMIT="${API_RATE_LIMIT:-30r/s}"
+export API_RATE_BURST="${API_RATE_BURST:-60}"
+export LOGIN_RATE_LIMIT="${LOGIN_RATE_LIMIT:-10r/s}"
+export MAX_BODY_SIZE="${MAX_BODY_SIZE:-2m}"
+# "allow all;" exposes /auth/admin (fine locally). Production default: denied at the gateway.
+if [ "${KEYCLOAK_ADMIN_PUBLIC:-false}" = "true" ]; then
+  export KEYCLOAK_ADMIN_ACCESS="allow all;"
+else
+  export KEYCLOAK_ADMIN_ACCESS="return 404;"
+fi
+# Only substitute our own variables (keep nginx's $uri, $host, ...).
+export NGINX_ENVSUBST_FILTER="^(PORT|WEB_UPSTREAM|API_UPSTREAM|KEYCLOAK_UPSTREAM|API_RATE_LIMIT|API_RATE_BURST|LOGIN_RATE_LIMIT|MAX_BODY_SIZE|KEYCLOAK_ADMIN_ACCESS)$"

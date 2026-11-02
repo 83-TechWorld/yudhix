@@ -1,0 +1,15 @@
+#!/bin/sh
+# Sourced by the nginx entrypoint before templates render.
+# Zoho Catalyst assigns the port; elsewhere $PORT (default 8080) is used.
+export PORT="${X_ZOHO_CATALYST_LISTEN_PORT:-${PORT:-8080}}"
+
+# Runtime config for the browser. Empty values = same origin (behind the gateway).
+cat > /usr/share/nginx/html/config.json <<JSON
+{
+  "apiUrl": "${API_URL:-}",
+  "keycloakUrl": "${KEYCLOAK_URL:-}",
+  "keycloakRealm": "${KEYCLOAK_REALM:-yudhix}",
+  "keycloakClientId": "${KEYCLOAK_CLIENT_ID:-yudhix-web}",
+  "salesEmail": "${SALES_EMAIL:-sales@example.com}"
+}
+JSON

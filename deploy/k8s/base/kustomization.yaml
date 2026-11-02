@@ -1,0 +1,34 @@
+# Yudhix on Kubernetes: base (environment-neutral). Use an overlay:
+#   kubectl apply -k deploy/k8s/overlays/local        # Docker Desktop / kind / minikube
+#   kubectl apply -k deploy/k8s/overlays/production   # any managed cluster
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: yudhix
+labels:
+  - pairs: { app.kubernetes.io/part-of: yudhix }
+    includeSelectors: false
+resources:
+  - namespace.yaml
+  - gateway.yaml
+  - web.yaml
+  - api.yaml
+  - keycloak.yaml
+  - keycloak-setup-job.yaml
+  - network-policies.yaml
+configMapGenerator:
+  - name: yudhix-config
+    literals:
+      - PUBLIC_URL=http://localhost:8081            # the URL users type (overlays change it)
+      - PG_HOST=postgres
+      - PG_PORT=5432
+      - PG_DB=yudhix
+      - PG_USER=yudhix
+      - KC_DB_URL=jdbc:postgresql://postgres:5432/keycloak
+      - SMTP_HOST=mailpit
+      - SMTP_PORT=1025
+      - SMTP_STARTTLS=false
+      - OLLAMA_URL=http://host.docker.internal:11434
+      - OLLAMA_MODEL=llama3.1:latest
+      - DEMO_WORKSPACE_JOIN=false
+      - KEYCLOAK_ADMIN_PUBLIC=false
+      - SALES_EMAIL=sales@example.com

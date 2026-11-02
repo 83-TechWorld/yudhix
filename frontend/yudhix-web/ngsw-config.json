@@ -26,5 +26,16 @@
         ]
       }
     }
-  ]
+  ],
+  "navigationUrls": [
+    "/**",
+    "!/**/*.*",
+    "!/**/*__*",
+    "!/**/*__*/**",
+    "!/auth",
+    "!/auth/**",
+    "!/api/**",
+    "!/health"
+  ],
+  "navigationRequestStrategy": "freshness"
 }

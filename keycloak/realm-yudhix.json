@@ -55,20 +55,24 @@
         "http://localhost:4200/*",
         "http://127.0.0.1:4200/*",
         "capacitor://localhost/*",
-        "http://localhost/*"
+        "http://localhost/*",
+        "http://localhost:8080/*",
+        "http://localhost:8081/*"
       ],
       "webOrigins": [
         "http://localhost:4200",
         "http://127.0.0.1:4200",
         "capacitor://localhost",
-        "http://localhost"
+        "http://localhost",
+        "http://localhost:8080",
+        "http://localhost:8081"
       ],
       "implicitFlowEnabled": false,
       "rootUrl": "http://localhost:4200",
       "baseUrl": "/",
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://localhost:4200/*##http://127.0.0.1:4200/*##capacitor://localhost/*##http://localhost/*"
+        "post.logout.redirect.uris": "http://localhost:4200/*##http://127.0.0.1:4200/*##capacitor://localhost/*##http://localhost/*##http://localhost:8080/*##http://localhost:8081/*"
       }
     }
   ],

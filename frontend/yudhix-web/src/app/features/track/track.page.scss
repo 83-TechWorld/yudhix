@@ -2,6 +2,8 @@
 .kpis { margin-bottom: 16px; }
 .kpi-main { background: linear-gradient(135deg, var(--brand-soft), var(--surface)); }
 .alert { border-color: var(--danger); }
+.card-lift { transition: transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out); }
+@media (hover: hover) { .card-lift:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); } }
 .grid-2 { margin-bottom: 16px; }
 .align-start { align-self: flex-start; }
 
@@ -15,7 +17,7 @@
 .pipe-row { display: grid; grid-template-columns: 110px 1fr 36px; gap: 10px; align-items: center; font-size: 14px; }
 .pipe-label { display: inline-flex; align-items: center; gap: 6px; color: var(--text-2); }
 .pipe-bar { height: 10px; border-radius: 6px; background: var(--surface-3); overflow: hidden; }
-.pipe-bar span { display: block; height: 100%; background: var(--brand); border-radius: 6px; min-width: 2px; }
+.pipe-bar span { transform-origin: left; animation: grow-x .7s var(--ease-out) backwards; transition: width .6s var(--ease-out); display: block; height: 100%; background: var(--brand); border-radius: 6px; min-width: 2px; }
 .pipe-row strong { text-align: right; }
 
 .verdicts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
@@ -33,6 +35,10 @@
 .legend-inline { display: flex; gap: 12px; flex-wrap: wrap; }
 .legend-inline span { display: inline-flex; align-items: center; gap: 6px; }
 .trend { width: 100%; height: 180px; display: block; }
+/* Trend bars rise from the baseline, left to right */
+.day { transform-box: fill-box; transform-origin: bottom; animation: grow-y .6s var(--ease-out) backwards; animation-delay: min(calc(var(--i, 0) * 8ms), 600ms); }
+@keyframes grow-y { from { transform: scaleY(0); } }
+@media (hover: hover) { .day:hover { opacity: .75; } }
 .axis { display: flex; justify-content: space-between; }
 
 .board-row { align-items: center; color: var(--text); text-decoration: none; }

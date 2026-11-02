@@ -42,8 +42,8 @@ type Filter = 'all' | 'disputed' | 'accurate';
         <div class="card"><y-empty icon="video" title="No matching videos" text="Try another filter, or analyze a new video." /></div>
       } @else {
         <div class="grid-3">
-          @for (v of shown(); track v.id) {
-            <a class="card card-interactive video" [routerLink]="['/videos', v.videoId]">
+          @for (v of shown(); track v.id; let i = $index) {
+            <a class="card card-interactive video enter" [style.--i]="i" [routerLink]="['/videos', v.videoId]">
               <div class="thumb-wrap">
                 <img class="thumb" [src]="v.thumbnailUrl" alt="" loading="lazy" />
                 @if (v.misleadingClaims) {
@@ -80,6 +80,9 @@ type Filter = 'all' | 'disputed' | 'accurate';
     .video { display: flex; flex-direction: column; overflow: hidden; color: var(--text); text-decoration: none; }
     .video:hover { text-decoration: none; }
     .thumb-wrap { position: relative; padding: 10px 10px 0; }
+    .thumb { transition: transform .4s var(--ease-out); }
+    .thumb-wrap { overflow: hidden; border-radius: 12px; }
+    @media (hover: hover) { .video:hover .thumb { transform: scale(1.03); } }
     .overlay { position: absolute; left: 20px; top: 20px; box-shadow: var(--shadow); }
     .video-body { padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 10px; }
     .top { align-items: flex-start; }

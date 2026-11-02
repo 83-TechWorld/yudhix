@@ -24,8 +24,8 @@
     <div class="stack">@for (i of [1, 2, 3]; track i) { <div class="skeleton" style="height: 180px"></div> }</div>
   } @else {
     <div class="stack">
-      @for (r of shown(); track r.id) {
-        <article class="card reply" [class.breached]="r.slaBreached">
+      @for (r of shown(); track r.id; let i = $index) {
+        <article class="card reply card-lift enter" [style.--i]="i" [class.breached]="r.slaBreached">
           <div class="reply-head">
             <span class="chip" [class]="statusLabel[r.status].chip">{{ statusLabel[r.status].label }}</span>
             @if (r.priority) { <span class="chip" [class]="priorityChip[r.priority]">{{ r.priority }}</span> }
@@ -67,7 +67,7 @@
                   @if (r.approverName) { · approved by {{ r.approverName }} }
                 </span>
                 @if (r.outcome) {
-                  <div class="outcome" [class]="'outcome-' + r.outcome">
+                  <div class="outcome enter-fade" [class]="'outcome-' + r.outcome">
                     <strong>{{ r.outcome === 'IMPROVED' ? 'Turned around' : r.outcome === 'WORSENED' ? 'Got worse' : 'No change' }}</strong>
                     @if (r.followUpText) { <span>: "{{ r.followUpText }}"</span> }
                   </div>
@@ -82,7 +82,7 @@
               @case ('IN_REVIEW') {
                 @if (canReview(r)) {
                   @if (rejecting() === r.id) {
-                    <div class="inline-form">
+                    <div class="inline-form enter-fade">
                       <input class="input" [(ngModel)]="rejectReason" placeholder="What should change?" aria-label="Reason" (keyup.enter)="reject(r)" />
                       <button class="btn" type="button" (click)="rejecting.set(null)">Cancel</button>
                       <button class="btn btn-danger" type="button" (click)="reject(r)" [disabled]="busy() === r.id">Send back</button>
@@ -103,7 +103,7 @@
               @case ('POSTED') {
                 @if (!r.outcome) {
                   @if (recording() === r.id) {
-                    <div class="stack grow">
+                    <div class="stack grow enter-fade">
                       <textarea class="textarea" rows="3" [(ngModel)]="followUp" placeholder="Paste what the customer said after your reply…" aria-label="Customer follow-up"></textarea>
                       <div class="row-wrap">
                         <button class="btn btn-primary" type="button" (click)="saveOutcome(r)">Score follow-up</button>

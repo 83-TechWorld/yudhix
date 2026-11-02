@@ -33,12 +33,12 @@ import { AgoPipe, EmptyStateComponent, ToastService } from '../../shared/ui';
           </y-empty>
         </div>
       } @else {
-        @for (g of groups(); track g.category) {
-          <section class="group">
+        @for (g of groups(); track g.category; let gi = $index) {
+          <section class="group enter" [style.--i]="gi">
             <h2 class="eyebrow">{{ g.category }} · {{ g.items.length }}</h2>
             <div class="stack">
-              @for (k of g.items; track k.id) {
-                <article class="card card-pad doc">
+              @for (k of g.items; track k.id; let ki = $index) {
+                <article class="card card-pad doc card-lift enter" [style.--i]="gi + ki + 1">
                   <div class="row-wrap">
                     <h3>{{ k.title }}</h3>
                     @if (k.clauseRef) { <span class="chip chip-outline mono">{{ k.clauseRef }}</span> }
@@ -108,6 +108,8 @@ import { AgoPipe, EmptyStateComponent, ToastService } from '../../shared/ui';
     .group h2 { margin-bottom: 10px; }
     .doc { display: flex; flex-direction: column; gap: 8px; }
     .statement { color: var(--text-2); }
+    .card-lift { transition: transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out); }
+    @media (hover: hover) { .card-lift:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); } }
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })

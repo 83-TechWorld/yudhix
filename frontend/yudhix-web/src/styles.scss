@@ -51,6 +51,15 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --gutter: 16px;
 
+  /* Motion */
+  --dur-1: 120ms;   /* press / color changes */
+  --dur-2: 200ms;   /* hover lift, state changes */
+  --dur-3: 420ms;   /* entrances */
+  --ease-out: cubic-bezier(.2, .8, .2, 1);
+  --ease-spring: cubic-bezier(.34, 1.4, .64, 1);
+  --stagger: 45ms;
+  --shadow-hover: 0 2px 4px rgba(15, 23, 32, 0.05), 0 10px 28px rgba(15, 23, 32, 0.10);
+
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
@@ -79,6 +88,7 @@
   --shadow-sm: none;
   --shadow: 0 0 0 1px var(--border);
   --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.5);
+  --shadow-hover: 0 0 0 1px var(--border-strong), 0 10px 28px rgba(0, 0, 0, 0.45);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -145,9 +155,14 @@ button, input, textarea, select { font: inherit; color: inherit; }
 @media (max-width: 639px) { .card-pad { padding: 16px; } }
 .card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
 .card-body { padding: 16px 20px; }
-.card-interactive { cursor: pointer; transition: border-color .15s, box-shadow .15s, transform .15s; }
-.card-interactive:hover { border-color: var(--border-strong); box-shadow: var(--shadow); }
-.card-interactive:active { transform: scale(.995); }
+.card-interactive {
+  cursor: pointer;
+  transition: border-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out);
+}
+@media (hover: hover) {
+  .card-interactive:hover { border-color: var(--border-strong); box-shadow: var(--shadow-hover); transform: translateY(-2px); }
+}
+.card-interactive:active { transform: translateY(0) scale(.99); transition-duration: var(--dur-1); }
 
 /* ---------------------------------------------------------------- stat */
 .stat { padding: 16px 18px; }
@@ -162,10 +177,17 @@ button, input, textarea, select { font: inherit; color: inherit; }
   height: 40px; padding: 0 16px; border-radius: 10px;
   border: 1px solid var(--border-strong); background: var(--surface); color: var(--text);
   font-weight: 600; font-size: 14px; cursor: pointer; white-space: nowrap;
-  transition: background .15s, border-color .15s, color .15s, opacity .15s;
+  transition: background var(--dur-1) ease, border-color var(--dur-1) ease, color var(--dur-1) ease,
+    opacity var(--dur-1) ease, box-shadow var(--dur-2) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .btn:hover { background: var(--surface-2); text-decoration: none; }
+/* Tactile press: a quick, small squash that springs back on release */
+.btn:active:not(:disabled) { transform: scale(.96); }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
+@media (hover: hover) {
+  .btn-primary:hover:not(:disabled) { box-shadow: 0 4px 14px color-mix(in srgb, var(--brand) 35%, transparent); transform: translateY(-1px); }
+  .btn-primary:active:not(:disabled) { transform: scale(.96); box-shadow: none; }
+}
 .btn-primary { background: var(--brand); border-color: var(--brand); color: #fff; }
 :root[data-theme="dark"] .btn-primary { color: #0b0f14; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn-primary { color: #0b0f14; } }
@@ -202,6 +224,9 @@ button, input, textarea, select { font: inherit; color: inherit; }
   border: 0; background: transparent; height: 32px; padding: 0 12px; border-radius: 8px; font-size: 13px;
   font-weight: 600; color: var(--text-2); cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;
 }
+.segmented button { transition: background var(--dur-2) var(--ease-out), color var(--dur-2) ease, box-shadow var(--dur-2) ease, transform var(--dur-1) var(--ease-out); }
+.segmented button:hover:not(.active) { color: var(--text); }
+.segmented button:active { transform: scale(.95); }
 .segmented button.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
 .segmented .count { font-size: 11.5px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 
@@ -223,14 +248,20 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .list { display: flex; flex-direction: column; }
 .list-item { display: flex; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--border); align-items: flex-start; }
 .list-item:last-child { border-bottom: 0; }
-.list-item.clickable { cursor: pointer; }
+.list-item.clickable { cursor: pointer; transition: background var(--dur-2) ease; }
 .list-item.clickable:hover { background: var(--surface-2); }
 .list-item.selected { background: var(--brand-soft); }
 @media (max-width: 639px) { .list-item { padding: 14px 16px; } }
 
 /* ---------------------------------------------------------------- bars */
 .bar { height: 8px; border-radius: 999px; background: var(--surface-3); overflow: hidden; display: flex; }
-.bar > span { height: 100%; display: block; }
+/* Bars grow from zero when they first appear, then glide when their value changes */
+.bar > span {
+  height: 100%; display: block; transform-origin: left;
+  transition: width .6s var(--ease-out);
+  animation: grow-x .7s var(--ease-out) backwards;
+}
+@keyframes grow-x { from { transform: scaleX(0); } }
 .bar-ok { background: var(--ok); } .bar-bad { background: var(--danger); } .bar-neutral { background: var(--muted); opacity: .45; }
 .bar-warn { background: var(--warn); } .bar-brand { background: var(--brand); }
 
@@ -240,7 +271,9 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .tabs button {
   border: 0; background: none; padding: 12px 14px; font-weight: 600; font-size: 14px; color: var(--text-2);
   border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; white-space: nowrap; display: flex; gap: 6px; align-items: center;
+  transition: color var(--dur-2) ease, border-color var(--dur-2) var(--ease-out);
 }
+.tabs button:hover:not(.active) { color: var(--text); border-bottom-color: var(--border-strong); }
 .tabs button.active { color: var(--text); border-bottom-color: var(--brand); }
 
 /* ---------------------------------------------------------------- skeleton & empty */
@@ -297,4 +330,38 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .spin { animation: spin 0.9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .hide-mobile { } .show-mobile { display: none !important; }
+
+/* ---------------------------------------------------------------- motion
+   .enter          fade + rise when the element first renders
+   [style.--i]     its position in a list; each step adds --stagger delay (capped at ~0.4s,
+                   so long lists and "load more" pages never feel slow)
+   Only opacity and transform animate, so it stays on the GPU and doesn't shift layout. */
+.enter {
+  animation: rise var(--dur-3) var(--ease-out) backwards;
+  animation-delay: min(calc(var(--i, 0) * var(--stagger)), 400ms);
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px); }
+}
+.enter-fade { animation: fade var(--dur-3) ease backwards; animation-delay: min(calc(var(--i, 0) * var(--stagger)), 400ms); }
+
+/* Page changes use the browser's View Transitions (router withViewTransitions): a quick cross-fade */
+::view-transition-old(root),
+::view-transition-new(root) { animation-duration: 180ms; animation-timing-function: ease; }
+
+/* Accessibility: people who ask for less motion get instant state changes.
+   Loading spinners keep turning (slowly) because they tell you something is happening. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+  .spin { animation-duration: 2.4s !important; animation-iteration-count: infinite !important; }
+  .card-interactive:hover, .btn-primary:hover:not(:disabled) { transform: none; }
+  .btn:active:not(:disabled), .segmented button:active, .card-interactive:active { transform: none; }
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}
 @media (max-width: 767px) { .hide-mobile { display: none !important; } .show-mobile { display: revert !important; } }

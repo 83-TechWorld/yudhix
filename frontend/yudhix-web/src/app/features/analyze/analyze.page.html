@@ -1,5 +1,5 @@
 <div class="page page-narrow">
-  <section class="hero">
+  <section class="hero enter">
     <span class="eyebrow">Step 1 · Ground truth</span>
     <h1>Check a video before its comments shape your brand</h1>
     <p class="muted">
@@ -8,7 +8,7 @@
     </p>
 
     @if (!job() || job()!.status === 'FAILED') {
-      <form class="card card-pad analyze-form" (ngSubmit)="submit()">
+      <form class="card card-pad analyze-form enter" style="--i: 2" (ngSubmit)="submit()">
         <label class="sr-only" for="url">YouTube video link</label>
         <div class="url-row">
           <div class="search grow">
@@ -57,7 +57,7 @@
         </div>
       </form>
     } @else {
-      <div class="card card-pad progress-card" aria-live="polite">
+      <div class="card card-pad progress-card enter-fade" aria-live="polite">
         <div class="row">
           <div class="grow">
             <div class="eyebrow">{{ job()!.status === 'COMPLETED' ? 'Done' : 'Analyzing' }}</div>
@@ -89,10 +89,10 @@
   </section>
 
   <section class="how">
-    <div class="how-item"><span class="how-n">1</span><div><strong>Decode</strong><p class="subtle">Transcript → timestamped claims</p></div></div>
-    <div class="how-item"><span class="how-n">2</span><div><strong>Fact-check</strong><p class="subtle">Against your official knowledge</p></div></div>
-    <div class="how-item"><span class="how-n">3</span><div><strong>Trace reactions</strong><p class="subtle">Which claim caused which comments</p></div></div>
-    <div class="how-item"><span class="how-n">4</span><div><strong>Respond & track</strong><p class="subtle">Approved replies, measured outcomes</p></div></div>
+    <div class="how-item enter" style="--i: 3"><span class="how-n">1</span><div><strong>Decode</strong><p class="subtle">Transcript → timestamped claims</p></div></div>
+    <div class="how-item enter" style="--i: 4"><span class="how-n">2</span><div><strong>Fact-check</strong><p class="subtle">Against your official knowledge</p></div></div>
+    <div class="how-item enter" style="--i: 5"><span class="how-n">3</span><div><strong>Trace reactions</strong><p class="subtle">Which claim caused which comments</p></div></div>
+    <div class="how-item enter" style="--i: 6"><span class="how-n">4</span><div><strong>Respond & track</strong><p class="subtle">Approved replies, measured outcomes</p></div></div>
   </section>
 
   <section class="stack">
@@ -114,8 +114,8 @@
       </div>
     } @else {
       <div class="recent">
-        @for (v of recentVideos(); track v.id) {
-          <a class="card card-interactive recent-item" [routerLink]="['/videos', v.videoId]">
+        @for (v of recentVideos(); track v.id; let i = $index) {
+          <a class="card card-interactive recent-item enter" [style.--i]="i + 4" [routerLink]="['/videos', v.videoId]">
             <img class="thumb" [src]="v.thumbnailUrl" alt="" loading="lazy" />
             <div class="recent-body">
               <strong class="clamp-2">{{ v.title }}</strong>

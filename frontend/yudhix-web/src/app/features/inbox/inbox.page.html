@@ -51,8 +51,8 @@
         <div class="card-body stack">@for (i of [1, 2, 3, 4, 5]; track i) { <div class="skeleton" style="height: 76px"></div> }</div>
       } @else {
         <div class="list">
-          @for (it of items(); track it.id) {
-            <button type="button" class="list-item clickable row-btn" [class.selected]="it.id === selectedId()" (click)="select(it)">
+          @for (it of items(); track it.id; let i = $index) {
+            <button type="button" class="list-item clickable row-btn enter" [style.--i]="i % 40" [class.selected]="it.id === selectedId()" (click)="select(it)">
               <span class="prio" [class]="'prio-' + it.priority">{{ it.priority }}</span>
               <div class="item-main">
                 <p class="clamp-2">{{ it.text }}</p>
@@ -82,7 +82,9 @@
     <!-- Detail (desktop) -->
     <section class="card detail-card desktop-only" aria-label="Comment detail">
       @if (detail()) {
-        <ng-container *ngTemplateOutlet="detailTpl" />
+        @for (d of [detail()!]; track d.id) {
+          <div class="enter-fade"><ng-container *ngTemplateOutlet="detailTpl" /></div>
+        }
       } @else {
         <y-empty icon="message" title="Pick a comment" text="Select a comment to see why it matters and draft a reply." />
       }

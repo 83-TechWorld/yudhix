@@ -1,6 +1,10 @@
 .lanes { margin-bottom: 16px; }
 .hint-box { margin-bottom: 16px; }
 .reply { overflow: hidden; }
+.card-lift { transition: transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out), border-color var(--dur-2) ease; }
+@media (hover: hover) { .card-lift:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); } }
+.bubble { animation: rise var(--dur-3) var(--ease-out) backwards; }
+.us { animation-delay: 90ms; }
 .reply.breached { border-color: var(--danger); }
 .reply-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 14px 18px 0; }
 .overdue { color: var(--danger-text); font-weight: 600; }

@@ -25,7 +25,7 @@
 
     <!-- KPIs -->
     <section class="grid-4 kpis">
-      <div class="card stat kpi-main">
+      <div class="card stat kpi-main card-lift enter" style="--i: 0">
         <div class="stat-label"><y-icon name="trendUp" [size]="15" /> Turnaround rate</div>
         <div class="stat-value">{{ s.turnaroundRate === null ? '–' : (s.turnaroundRate | pct) }}</div>
         <div class="stat-note">
@@ -33,17 +33,17 @@
           @else { No outcomes yet. Record them on posted replies. }
         </div>
       </div>
-      <div class="card stat">
+      <div class="card stat card-lift enter" style="--i: 1">
         <div class="stat-label"><y-icon name="send" [size]="15" /> Replies posted</div>
         <div class="stat-value">{{ s.replies.posted }}</div>
         <div class="stat-note">{{ s.replies.in_review }} in review · {{ s.replies.draft + s.replies.rejected }} drafts</div>
       </div>
-      <div class="card stat">
+      <div class="card stat card-lift enter" style="--i: 2">
         <div class="stat-label"><y-icon name="target" [size]="15" /> Anger from misinformation</div>
         <div class="stat-value">{{ s.misinformationShareOfNegative | pct }}</div>
         <div class="stat-note">{{ s.validConcernShareOfNegative | pct }} from valid product concerns</div>
       </div>
-      <div class="card stat" [class.alert]="s.replies.sla_breached">
+      <div class="card stat card-lift enter" style="--i: 3" [class.alert]="s.replies.sla_breached">
         <div class="stat-label"><y-icon name="clock" [size]="15" /> Overdue replies</div>
         <div class="stat-value">{{ s.replies.sla_breached }}</div>
         <div class="stat-note">
@@ -54,7 +54,7 @@
 
     <div class="grid-2">
       <!-- Outcomes -->
-      <section class="card card-pad stack">
+      <section class="card card-pad stack enter" style="--i: 4">
         <h2>Reply outcomes</h2>
         @if (outcomeTotal() || s.outcomes.pending) {
           <div class="bar outcomes-bar">
@@ -86,7 +86,7 @@
       </section>
 
       <!-- Claims & sentiment -->
-      <section class="card card-pad stack">
+      <section class="card card-pad stack enter" style="--i: 5">
         <h2>Claims checked</h2>
         <div class="verdicts">
           <div><span class="chip chip-ok">Accurate</span><strong>{{ s.claims.correct }}</strong></div>
@@ -107,7 +107,7 @@
     </div>
 
     <!-- Trend -->
-    <section class="card card-pad trend-card">
+    <section class="card card-pad trend-card enter" style="--i: 6">
       <div class="row">
         <h2>Sentiment over time</h2>
         <span class="spacer"></span>
@@ -120,7 +120,7 @@
       @if (trend().length) {
         <svg class="trend" [attr.viewBox]="'0 0 ' + trend().length * 10 + ' 100'" preserveAspectRatio="none" role="img" aria-label="Comments per day by sentiment">
           @for (p of trend(); track p.day; let i = $index) {
-            <g>
+            <g class="day" [style.--i]="i">
               <title>{{ p.day }}: {{ p.negative }} negative, {{ p.neutral }} neutral, {{ p.positive }} positive</title>
               <rect [attr.x]="i * 10 + 1" [attr.width]="8" [attr.y]="barY(p, 'negative')" [attr.height]="barH(p, 'negative')" fill="var(--danger)" />
               <rect [attr.x]="i * 10 + 1" [attr.width]="8" [attr.y]="barY(p, 'neutral')" [attr.height]="barH(p, 'neutral')" fill="var(--muted)" opacity=".4" />
@@ -135,7 +135,7 @@
     </section>
 
     <!-- Videos -->
-    <section class="card">
+    <section class="card enter" style="--i: 7">
       <div class="card-head"><h2>By video</h2><span class="subtle hide-mobile">Most disputed first</span></div>
       <div class="list">
         @for (b of board(); track b.videoId) {

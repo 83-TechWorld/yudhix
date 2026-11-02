@@ -10,7 +10,7 @@
     @let v = video()!;
 
     <!-- Header -->
-    <header class="report-head card card-pad">
+    <header class="report-head card card-pad enter">
       <a class="head-thumb" [href]="v.url" target="_blank" rel="noopener" aria-label="Watch on YouTube">
         <img class="thumb" [src]="v.thumbnailUrl" alt="" />
         <span class="play"><y-icon name="play" [size]="18" /></span>
@@ -34,24 +34,24 @@
 
     <!-- Scorecards -->
     <section class="grid-4 scores">
-      <div class="card stat score">
+      <div class="card stat score enter" style="--i: 1">
         <y-ring [value]="v.factualAccuracy" [size]="52" label="Factual accuracy" />
         <div>
           <div class="stat-label">Factual accuracy</div>
           <div class="stat-note">{{ verdictCounts()['FACTUALLY_CORRECT'] }} of {{ v.totalClaims }} claims hold up</div>
         </div>
       </div>
-      <div class="card stat">
+      <div class="card stat enter" style="--i: 2">
         <div class="stat-label"><y-icon name="alert" [size]="15" /> Disputed claims</div>
         <div class="stat-value">{{ v.misleadingClaims }}<span class="of">/{{ v.totalClaims }}</span></div>
         <div class="stat-note">{{ verdictCounts()['FALSE'] }} false · {{ verdictCounts()['MISLEADING'] }} misleading · {{ verdictCounts()['UNVERIFIED_SPECULATION'] }} unverified</div>
       </div>
-      <div class="card stat">
+      <div class="card stat enter" style="--i: 3">
         <div class="stat-label"><y-icon name="target" [size]="15" /> Anger from misinformation</div>
         <div class="stat-value">{{ impact() ? (impact()!.misinformationShareOfNegative | pct) : '–' }}</div>
         <div class="stat-note">of negative comments react to a disputed claim</div>
       </div>
-      <div class="card stat">
+      <div class="card stat enter" style="--i: 4">
         <div class="stat-label"><y-icon name="message" [size]="15" /> Comments</div>
         <div class="stat-value">{{ v.comments | compact }}</div>
         <div class="stat-note">{{ v.negativeComments | compact }} negative · {{ v.linkedComments | compact }} traced to claims</div>
@@ -83,8 +83,8 @@
       </div>
 
       <ol class="timeline">
-        @for (c of filteredClaims(); track c.id) {
-          <li class="claim card">
+        @for (c of filteredClaims(); track c.id; let i = $index) {
+          <li class="claim card card-lift enter" [style.--i]="i">
             <div class="claim-rail" [style.background]="verdictMeta[c.verdict].color"></div>
             <div class="claim-main">
               <div class="row-wrap claim-top">
@@ -133,7 +133,7 @@
       } @else {
         @let i = impact()!;
         <div class="stack-lg">
-          <div class="callout callout-info headline">
+          <div class="callout callout-info headline enter">
             <y-icon name="target" [size]="18" />
             <div>
               <strong>{{ i.headline }}</strong>
@@ -141,7 +141,7 @@
             </div>
           </div>
 
-          <section class="card card-pad">
+          <section class="card card-pad enter" style="--i: 1">
             <div class="row">
               <h2>Why people are reacting</h2>
               <span class="spacer"></span>
@@ -153,8 +153,8 @@
               @for (c of causes(); track c.cause) { <span [style.width.%]="c.share * 100" [style.background]="c.meta.color"></span> }
             </div>
             <div class="grid-3 causes">
-              @for (c of causes(); track c.cause) {
-                <div class="cause">
+              @for (c of causes(); track c.cause; let ci = $index) {
+                <div class="cause enter" [style.--i]="ci + 2">
                   <div class="row"><i class="dot" [style.background]="c.meta.color"></i><strong>{{ c.meta.label }}</strong></div>
                   <div class="cause-num">{{ c.total | compact }} <span class="subtle">comments · {{ c.negative | compact }} negative</span></div>
                   <p class="subtle">{{ c.meta.help }}</p>
@@ -166,11 +166,11 @@
             </div>
           </section>
 
-          <section class="card">
+          <section class="card enter" style="--i: 3">
             <div class="card-head"><h2>Reactions by claim</h2><span class="subtle hide-mobile">Most reactions first</span></div>
             <div class="list">
-              @for (c of i.claims; track c.id) {
-                <button class="list-item clickable claim-row" type="button" (click)="openClaim(c)" [disabled]="!c.linkedComments">
+              @for (c of i.claims; track c.id; let ri = $index) {
+                <button class="list-item clickable claim-row enter" [style.--i]="ri + 4" type="button" (click)="openClaim(c)" [disabled]="!c.linkedComments">
                   <span class="ts static">{{ c.timestamp }}</span>
                   <div class="claim-row-main">
                     <div class="row-wrap"><y-verdict [verdict]="c.verdict" /><strong class="truncate">{{ c.topic }}</strong></div>
@@ -193,7 +193,7 @@
     <!-- ============ CREATOR NOTE ============ -->
     @if (tab() === 'outreach') {
       <div class="outreach">
-        <section class="card card-pad stack">
+        <section class="card card-pad stack enter">
           <div>
             <h2>Ask the creator to add context</h2>
             <p class="muted">Generate a polite note that cites your official documents. Nothing is sent automatically. Copy it into email or YouTube Studio.</p>
@@ -221,7 +221,7 @@
           <div class="skeleton" style="height: 200px"></div>
         } @else {
           @for (n of notes(); track n.id) {
-            <section class="card card-pad stack note">
+            <section class="card card-pad stack note enter">
               <div class="row-wrap">
                 <span class="chip" [class.chip-ok]="n.status === 'SENT'">{{ n.status === 'SENT' ? 'Sent' : 'Draft' }}</span>
                 <span class="subtle">To {{ n.channel }} · {{ n.createdAt | ago }} · {{ n.claimIds.length }} claims</span>
@@ -268,8 +268,8 @@
       @if (sheetComments() === null) {
         @for (i of [1, 2, 3]; track i) { <div class="skeleton" style="height: 72px"></div> }
       } @else {
-        @for (m of sheetComments(); track m.id) {
-          <div class="linked">
+        @for (m of sheetComments(); track m.id; let mi = $index) {
+          <div class="linked enter" [style.--i]="mi">
             <p>{{ m.text }}</p>
             <div class="row-wrap subtle">
               <span class="chip" [class]="sentimentChip[m.sentiment]">{{ m.sentiment | lowercase }}</span>

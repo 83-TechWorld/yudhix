@@ -59,11 +59,15 @@ export class VerdictBadgeComponent {
   template: `
     <svg [attr.width]="size()" [attr.height]="size()" viewBox="0 0 36 36" role="img" [attr.aria-label]="label() + ' ' + pct() + '%'">
       <circle cx="18" cy="18" r="15.5" fill="none" stroke="var(--surface-3)" stroke-width="3.2" />
-      <circle cx="18" cy="18" r="15.5" fill="none" [attr.stroke]="color()" stroke-width="3.2" stroke-linecap="round"
+      <circle class="arc" cx="18" cy="18" r="15.5" fill="none" [attr.stroke]="color()" stroke-width="3.2" stroke-linecap="round"
         [attr.stroke-dasharray]="dash()" transform="rotate(-90 18 18)" />
       <text x="18" y="19.5" text-anchor="middle" dominant-baseline="middle" font-size="9" font-weight="700" fill="var(--text)">{{ pct() }}%</text>
     </svg>`,
-  styles: `:host { display: inline-flex; }`,
+  styles: `
+    :host { display: inline-flex; }
+    .arc { transition: stroke-dasharray .6s var(--ease-out), stroke .3s ease; animation: ring-in .9s var(--ease-out) backwards; }
+    @keyframes ring-in { from { stroke-dasharray: 0 97.4; } }
+  `,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class RingComponent {

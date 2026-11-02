@@ -4,7 +4,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from app.api.deps import actor, tenant_id
+from app.api.deps import actor, membership, tenant_id
+from app.platform import billing
+from app.platform.auth import Membership
 from app.workflow import insights, service
 from app.workflow.state import Actor, WorkflowError
 
@@ -16,6 +18,8 @@ def _run(fn, *args, **kwargs):
         return fn(*args, **kwargs)
     except WorkflowError as e:
         raise HTTPException(e.status_code, str(e))
+    except billing.QuotaError as e:
+        raise HTTPException(402, str(e))
 
 
 @router.get("/inbox")
@@ -35,8 +39,9 @@ def inbox_item(comment_id: str, tenant: str = Depends(tenant_id)):
 
 
 @router.post("/inbox/{comment_id}/suggest")
-def suggest(comment_id: str, tenant: str = Depends(tenant_id)):
-    return _run(service.suggest_reply, tenant, comment_id)
+def suggest(comment_id: str, member: Membership = Depends(membership), _: Actor = Depends(actor)):
+    billing.record(member.tenant_id, "AI_CALL", 1)
+    return _run(service.suggest_reply, member.tenant_id, comment_id, member.tenant_name)
 
 
 class ReplyCreate(BaseModel):
@@ -93,7 +98,7 @@ def reply_action(reply_id: str, action: str, body: Optional[Decision] = None, te
 
 
 @router.post("/outcomes/check")
-def outcomes_check(tenant: str = Depends(tenant_id)):
+def outcomes_check(tenant: str = Depends(tenant_id), _: Actor = Depends(actor)):
     return service.check_live_outcomes(tenant)
 
 

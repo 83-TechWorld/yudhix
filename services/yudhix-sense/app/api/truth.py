@@ -4,12 +4,13 @@ from typing import List, Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from app.api.deps import actor, tenant_id
+from app.api.deps import actor, membership, tenant_id
+from app.platform import billing
+from app.platform.auth import Membership
 from app.truth import pipeline, repository, youtube
 from app.workflow.state import Actor
 
 router = APIRouter(prefix="/api/v1/truth", tags=["truth"])
-BRAND_NAME = "PlayStation"
 
 
 class AnalyzeRequest(BaseModel):
@@ -23,9 +24,14 @@ class AnalyzeRequest(BaseModel):
 def analyze(body: AnalyzeRequest, background: BackgroundTasks, tenant: str = Depends(tenant_id),
             user: Actor = Depends(actor)):
     try:
+        youtube.parse_video_id(body.video_url)
+        billing.check_quota(tenant, "VIDEO_ANALYZED")
         job = pipeline.create_job(tenant, body.video_url, body.product_id, user.id)
     except youtube.YouTubeError as e:
         raise HTTPException(400, str(e))
+    except billing.QuotaError as e:
+        raise HTTPException(402, str(e))
+    billing.record(tenant, "VIDEO_ANALYZED", 1, key=f"job:{job['id']}")
     background.add_task(pipeline.run_job, job["id"], tenant, body.transcript)
     return job
 
@@ -66,7 +72,7 @@ def impact(video_id: str, tenant: str = Depends(tenant_id)):
 
 
 @router.post("/videos/{video_id}/reattribute")
-def reattribute(video_id: str, tenant: str = Depends(tenant_id)):
+def reattribute(video_id: str, tenant: str = Depends(tenant_id), _: Actor = Depends(actor)):
     try:
         return pipeline.attribute_video(tenant, video_id)
     except pipeline.PipelineError as e:
@@ -88,10 +94,12 @@ def outreach_list(video_id: str, tenant: str = Depends(tenant_id)):
 
 
 @router.post("/videos/{video_id}/outreach", status_code=201)
-def outreach_create(video_id: str, body: OutreachRequest, tenant: str = Depends(tenant_id),
+def outreach_create(video_id: str, body: OutreachRequest, member: Membership = Depends(membership),
                     user: Actor = Depends(actor)):
+    tenant = member.tenant_id
+    billing.record(tenant, "AI_CALL", 1)
     try:
-        note = repository.create_outreach(tenant, user.id, video_id, body.claim_ids, BRAND_NAME)
+        note = repository.create_outreach(tenant, user.id, video_id, body.claim_ids, member.tenant_name)
     except ValueError as e:
         raise HTTPException(400, str(e))
     if not note:

@@ -3,12 +3,33 @@ import os
 
 DEFAULT_TENANT_ID = "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
 
-# Demo identities used until the SaaS/auth layer ships. The web app sends one of these
-# in the X-User-Id / X-User-Role headers so separation of duties can be enforced.
-DEMO_USERS = {
-    "agent": {"id": "11111111-1111-4111-8111-111111111111", "name": "Asha (Agent)", "role": "agent"},
-    "approver": {"id": "22222222-2222-4222-8222-222222222222", "name": "Ravi (Brand Approver)", "role": "approver"},
-}
+# ---- Identity (Keycloak) -------------------------------------------------------------
+# Issuer is what the BROWSER sees (tokens carry it). JWKS URL is what THIS server can reach
+# (they differ when Keycloak runs on an internal hostname).
+KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://localhost:8180").rstrip("/")
+KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "yudhix")
+KEYCLOAK_ISSUER = os.getenv("KEYCLOAK_ISSUER", f"{KEYCLOAK_URL}/realms/{KEYCLOAK_REALM}")
+KEYCLOAK_JWKS_URL = os.getenv("KEYCLOAK_JWKS_URL", f"{KEYCLOAK_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/certs")
+# Tokens must be issued to one of these clients (the "azp" claim).
+KEYCLOAK_CLIENT_IDS = [c.strip() for c in os.getenv("KEYCLOAK_CLIENT_IDS", "yudhix-web").split(",") if c.strip()]
+
+# ---- SaaS -------------------------------------------------------------------------------
+APP_URL = os.getenv("APP_URL", "http://localhost:4200").rstrip("/")   # used in invitation links
+TRIAL_DAYS = int(os.getenv("TRIAL_DAYS", "14"))
+TRIAL_PLAN = os.getenv("TRIAL_PLAN", "PROFESSIONAL")
+INVITE_TTL_DAYS = int(os.getenv("INVITE_TTL_DAYS", "7"))
+MAX_WORKSPACES_PER_USER = int(os.getenv("MAX_WORKSPACES_PER_USER", "20"))
+# Lets any signed-in user join the seeded PlayStation demo workspace. Turn off in production.
+DEMO_WORKSPACE_JOIN = os.getenv("DEMO_WORKSPACE_JOIN", "true").lower() == "true"
+# Old pre-SaaS endpoints (/api/v1/comments, /analyze, /scheduler/…) are only reachable with this key.
+INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY", "")
+
+SMTP_HOST = os.getenv("SMTP_HOST", "localhost")     # Mailpit in docker-compose (UI: http://localhost:8025)
+SMTP_PORT = int(os.getenv("SMTP_PORT", "1025"))
+SMTP_FROM = os.getenv("SMTP_FROM", "Yudhix <no-reply@yudhix.local>")
+SMTP_USER = os.getenv("SMTP_USER", "")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+SMTP_STARTTLS = os.getenv("SMTP_STARTTLS", "false").lower() == "true"
 
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "")
 # Secret used to pseudonymize comment authors (keyed per tenant). Set a strong value in production.

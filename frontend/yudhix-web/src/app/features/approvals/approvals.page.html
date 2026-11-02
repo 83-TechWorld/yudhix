@@ -5,9 +5,7 @@
       <h1>Approvals</h1>
       <p>No reply goes out without a second pair of eyes. The person who wrote a reply can't approve it.</p>
     </div>
-    <button class="btn" type="button" (click)="session.toggleRole()">
-      <y-icon name="swap" [size]="16" /> Acting as {{ session.user().name }} · {{ session.user().title }}
-    </button>
+    <span class="chip chip-brand role-chip"><y-icon name="shield" [size]="13" /> You're {{ roleLabel() }} in this workspace</span>
   </header>
 
   <div class="segmented lanes">
@@ -16,8 +14,8 @@
     }
   </div>
 
-  @if (lane() === 'review' && session.role() === 'agent' && counts().review) {
-    <div class="callout callout-info hint-box"><y-icon name="info" [size]="16" /><span>Only approvers can review. Switch role (top right) to try the approver view.</span></div>
+  @if (lane() === 'review' && !session.can('reply.approve') && counts().review) {
+    <div class="callout callout-info hint-box"><y-icon name="info" [size]="16" /><span>Only approvers and admins can review replies. An admin can change your role under Settings → Team.</span></div>
   }
 
   @if (all() === null) {
@@ -91,17 +89,19 @@
                     <button class="btn" type="button" (click)="startReject(r)">Request changes</button>
                     <button class="btn btn-primary" type="button" (click)="approve(r)" [disabled]="busy() === r.id"><y-icon name="check" [size]="16" /> Approve</button>
                   }
-                } @else if (session.role() === 'approver') {
+                } @else if (session.can('reply.approve')) {
                   <span class="subtle">You wrote this reply, so another approver has to review it.</span>
                 } @else {
                   <span class="subtle">Waiting for an approver.</span>
                 }
               }
               @case ('APPROVED') {
+                @if (session.can('content.write')) {
                 <button class="btn btn-primary" type="button" (click)="post(r)" [disabled]="busy() === r.id"><y-icon name="send" [size]="16" /> Post reply</button>
+                }
               }
               @case ('POSTED') {
-                @if (!r.outcome) {
+                @if (!r.outcome && session.can('content.write')) {
                   @if (recording() === r.id) {
                     <div class="stack grow enter-fade">
                       <textarea class="textarea" rows="3" [(ngModel)]="followUp" placeholder="Paste what the customer said after your reply…" aria-label="Customer follow-up"></textarea>
@@ -119,7 +119,9 @@
                 }
               }
               @default {
-                @if (editing() === r.id) {
+                @if (!session.can('content.write')) {
+                  <span class="subtle">Read-only for your role.</span>
+                } @else if (editing() === r.id) {
                   <button class="btn" type="button" (click)="editing.set(null)">Cancel</button>
                   <button class="btn" type="button" (click)="saveEdit(r, false)" [disabled]="busy() === r.id">Save</button>
                   <button class="btn btn-primary" type="button" (click)="saveEdit(r, true)" [disabled]="busy() === r.id">Save & submit</button>

@@ -1,13 +1,29 @@
-import { Injectable, effect, signal } from '@angular/core';
-import { Role } from './models';
-
-/** Demo identities until the SaaS/auth layer ships. Must match DEMO_USERS in yudhix-sense config.py. */
-export const DEMO_USERS: Record<Role, { id: string; name: string; initials: string; title: string }> = {
-  agent: { id: '11111111-1111-4111-8111-111111111111', name: 'Asha', initials: 'AS', title: 'Social agent' },
-  approver: { id: '22222222-2222-4222-8222-222222222222', name: 'Ravi', initials: 'RV', title: 'Brand approver' },
-};
+import { HttpClient } from '@angular/common/http';
+import { Injectable, computed, effect, inject, signal } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
+import { environment } from '../../environments/environment';
+import { Me, WorkspaceRole, WorkspaceSummary } from './models';
 
 export type Theme = 'system' | 'light' | 'dark';
+export type Permission = 'workspace.manage' | 'team.manage' | 'billing.manage' | 'content.write' | 'reply.approve';
+
+/** Mirrors PERMISSIONS in services/yudhix-sense/app/platform/auth.py. The API is the real gate. */
+export const PERMISSIONS: Record<Permission, WorkspaceRole[]> = {
+  'workspace.manage': ['admin'],
+  'team.manage': ['admin'],
+  'billing.manage': ['admin'],
+  'content.write': ['admin', 'approver', 'agent'],
+  'reply.approve': ['admin', 'approver'],
+};
+
+export const ROLE_INFO: Record<WorkspaceRole, { label: string; description: string }> = {
+  admin: { label: 'Admin', description: 'Everything, including workspace settings, team and billing.' },
+  approver: { label: 'Approver', description: 'Reviews and approves replies, plus everything an agent can do.' },
+  agent: { label: 'Agent', description: 'Analyzes videos, manages knowledge, drafts and posts replies.' },
+  analyst: { label: 'Analyst', description: 'Read-only access to reports, inbox and insights.' },
+};
+
+const WS_KEY = 'yudhix.workspace';
 
 function read(key: string): string | null {
   try {
@@ -17,21 +33,34 @@ function read(key: string): string | null {
   }
 }
 
-function write(key: string, value: string): void {
+function write(key: string, value: string | null): void {
   try {
-    localStorage.setItem(key, value);
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
   } catch {
-    /* private mode / storage blocked: preference just won't persist */
+    /* storage blocked: the choice just won't persist */
   }
 }
 
+/** The signed-in user, their workspaces and the one they're working in. */
 @Injectable({ providedIn: 'root' })
 export class SessionService {
-  readonly role = signal<Role>(read('yudhix.role') === 'approver' ? 'approver' : 'agent');
+  private http = inject(HttpClient);
+
+  readonly me = signal<Me | null>(null);
+  readonly workspaceId = signal<string | null>(read(WS_KEY));
   readonly theme = signal<Theme>((read('yudhix.theme') as Theme) || 'system');
 
+  readonly user = computed(() => this.me()?.user ?? null);
+  readonly workspaces = computed(() => this.me()?.workspaces ?? []);
+  readonly workspace = computed<WorkspaceSummary | null>(
+    () => this.workspaces().find((w) => w.id === this.workspaceId()) ?? null,
+  );
+  readonly role = computed<WorkspaceRole>(() => this.workspace()?.role ?? 'analyst');
+  readonly initials = computed(() => initials(this.user()?.name || this.user()?.email || '?'));
+
   constructor() {
-    effect(() => write('yudhix.role', this.role()));
+    effect(() => write(WS_KEY, this.workspaceId()));
     effect(() => {
       const theme = this.theme();
       write('yudhix.theme', theme);
@@ -41,15 +70,40 @@ export class SessionService {
     });
   }
 
-  user() {
-    return DEMO_USERS[this.role()];
+  can(permission: Permission): boolean {
+    return PERMISSIONS[permission].includes(this.role());
   }
 
-  toggleRole(): void {
-    this.role.update((r) => (r === 'agent' ? 'approver' : 'agent'));
+  /** Loads /me and makes sure a valid workspace is selected (or none, if the user has none). */
+  async refresh(): Promise<Me> {
+    const me = await firstValueFrom(this.http.get<Me>(`${environment.apiUrl}/api/v1/me`));
+    this.me.set(me);
+    if (!me.workspaces.some((w) => w.id === this.workspaceId())) {
+      this.workspaceId.set(me.workspaces.find((w) => !w.isDemo)?.id ?? me.workspaces[0]?.id ?? null);
+    }
+    return me;
+  }
+
+  select(workspaceId: string): void {
+    this.workspaceId.set(workspaceId);
+  }
+
+  clear(): void {
+    this.me.set(null);
+    this.workspaceId.set(null);
   }
 
   cycleTheme(): void {
     this.theme.update((t) => (t === 'system' ? 'light' : t === 'light' ? 'dark' : 'system'));
   }
+}
+
+export function initials(name: string): string {
+  const parts = name.replace(/@.*/, '').split(/[\s._-]+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? '?') + (parts[1]?.[0] ?? '')).toUpperCase();
+}
+
+export function trialDaysLeft(ws: WorkspaceSummary | null): number | null {
+  if (!ws?.trialEndsAt || ws.subscriptionStatus !== 'TRIALING') return null;
+  return Math.max(0, Math.ceil((new Date(ws.trialEndsAt).getTime() - Date.now()) / 86_400_000));
 }

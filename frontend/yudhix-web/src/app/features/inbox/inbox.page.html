@@ -151,6 +151,8 @@
         <a class="btn" routerLink="/approvals">Open in approvals <y-icon name="arrowRight" [size]="15" /></a>
       } @else if (d.replyStatus === 'POSTED') {
         <div class="callout callout-ok"><y-icon name="checkCircle" [size]="16" /><span>Replied. Track the outcome under <a routerLink="/approvals">Approvals → Posted</a>.</span></div>
+      } @else if (!session.can('content.write')) {
+        <div class="callout callout-info"><y-icon name="info" [size]="16" /><span>Your role is read-only here. An admin can give you agent access under Settings → Team.</span></div>
       } @else {
         <div class="field">
           <label for="draft" class="sr-only">Reply text</label>
@@ -165,7 +167,7 @@
           <button class="btn" type="button" (click)="save(false)" [disabled]="saving()">Save draft</button>
           <button class="btn btn-primary" type="button" (click)="save(true)" [disabled]="saving()"><y-icon name="send" [size]="16" /> Submit for approval</button>
         </div>
-        <p class="subtle">Every reply needs a brand approver before it's posted. You're acting as {{ session.user().name }} ({{ session.user().title }}).</p>
+        <p class="subtle">Every reply needs an approver's sign-off before it's posted.</p>
       }
     </div>
   </div>

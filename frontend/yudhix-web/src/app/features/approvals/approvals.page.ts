@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiService, errorMessage } from '../../core/api.service';
 import { Outcome, Reply } from '../../core/models';
-import { SessionService } from '../../core/session.service';
+import { ROLE_INFO, SessionService } from '../../core/session.service';
 import { IconComponent } from '../../shared/icon.component';
 import { AgoPipe, DuePipe, EmptyStateComponent, PRIORITY_CHIP, STATUS_LABEL, ToastService } from '../../shared/ui';
 
@@ -43,6 +43,11 @@ export class ApprovalsPage {
   protected readonly recording = signal<string | null>(null);
   protected followUp = '';
 
+  protected readonly roleLabel = computed(() => {
+    const label = ROLE_INFO[this.session.role()].label;
+    return (/^[AEIOU]/.test(label) ? 'an ' : 'a ') + label.toLowerCase();
+  });
+
   protected readonly counts = computed(() => {
     const out: Record<Lane, number> = { review: 0, changes: 0, approved: 0, posted: 0 };
     for (const r of this.all() ?? []) {
@@ -75,7 +80,7 @@ export class ApprovalsPage {
   }
 
   protected canReview(r: Reply): boolean {
-    return this.session.role() === 'approver' && r.authorId !== this.session.user().id;
+    return this.session.can('reply.approve') && r.authorId !== this.session.user()?.id;
   }
 
   private act(r: Reply, call: ReturnType<ApiService['replyAction']>, message: string): void {

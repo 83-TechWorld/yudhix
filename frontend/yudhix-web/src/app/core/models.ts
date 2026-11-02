@@ -6,7 +6,7 @@ export type Priority = 'P1' | 'P2' | 'P3';
 export type RootCause = 'MISINFORMATION' | 'VALID_CONCERN' | 'UNLINKED';
 export type ReplyStatus = 'DRAFT' | 'IN_REVIEW' | 'REJECTED' | 'APPROVED' | 'POSTED';
 export type Outcome = 'IMPROVED' | 'NEUTRAL' | 'WORSENED';
-export type Role = 'agent' | 'approver';
+
 
 export interface Health {
   status: string;
@@ -242,3 +242,118 @@ export interface LeaderboardRow {
   comments: number;
   repliesPosted: number;
 }
+
+// ---------------------------------------------------------------------------- SaaS
+
+export type WorkspaceRole = 'admin' | 'approver' | 'agent' | 'analyst';
+export type SubscriptionStatus = 'TRIALING' | 'TRIAL_EXPIRED' | 'ACTIVE' | 'CANCELED';
+
+export interface WorkspaceSummary {
+  id: string;
+  name: string;
+  slug: string;
+  isDemo: boolean;
+  country: string;
+  role: WorkspaceRole;
+  plan: string | null;
+  subscriptionStatus: SubscriptionStatus | null;
+  trialEndsAt: string | null;
+}
+
+export interface Me {
+  user: { id: string; email: string; name: string; emailVerified: boolean };
+  workspaces: WorkspaceSummary[];
+  pendingInvitations: { id: string; workspace: string; role: WorkspaceRole; expiresAt: string }[];
+  demoAvailable: boolean;
+}
+
+export interface WorkspaceDetail {
+  id: string;
+  name: string;
+  slug: string;
+  country: string;
+  countryName: string | null;
+  industry: string | null;
+  teamSize: string | null;
+  dataRegion: string;
+  isDemo: boolean;
+  createdAt: string;
+  role?: WorkspaceRole;
+}
+
+export interface Country { code: string; name: string; currency: string; }
+
+export interface Plan {
+  id: string;
+  name: string;
+  tagline: string | null;
+  currency: string;
+  monthlyPrice: number;
+  yearlyPrice: number | null;
+  features: string[];
+  highlighted: boolean;
+  quotas: { videos: number; comments: number; aiCalls: number; replies: number; seats: number };
+}
+
+export interface Meter {
+  metric: string;
+  label: string;
+  used: number;
+  quota: number | null;
+  percent: number | null;
+  hardLimit: boolean;
+}
+
+export interface InvoiceLine { description: string; quantity: number; unit_price?: number; unitPrice?: number; amount: number; }
+
+export interface BillingSummary {
+  plan: { id: string; name: string; currency: string; price: number; interval: 'MONTH' | 'YEAR' };
+  status: SubscriptionStatus;
+  trialEndsAt: string | null;
+  periodStart: string;
+  periodEnd: string;
+  meters: Meter[];
+  upcoming: { date: string; subtotal: number; tax: number; taxLabel: string; total: number; lines: InvoiceLine[] } | null;
+  paymentsConnected: boolean;
+}
+
+export interface Invoice {
+  id: string;
+  number: string;
+  status: string;
+  currency: string;
+  subtotal: number;
+  tax: number;
+  taxLabel: string;
+  total: number;
+  issuedAt: string;
+  dueAt: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
+  paidAt: string | null;
+  lines?: InvoiceLine[];
+  billTo?: { name: string; country: string };
+}
+
+export interface Member { userId: string; email: string; name: string; role: WorkspaceRole; joinedAt: string; lastSeenAt: string | null; }
+
+export interface Invitation {
+  id: string;
+  email: string;
+  role: WorkspaceRole;
+  status: string;
+  expiresAt: string;
+  createdAt: string;
+  expired: boolean;
+  invitedBy?: string | null;
+  link?: string;
+  emailSent?: boolean;
+}
+
+export interface InvitePreview { workspace: string; role: WorkspaceRole; roleLabel: string; invitedBy: string; email: string; expiresAt: string; }
+
+export interface AppNotification { id: number; kind: string; title: string; body: string | null; link: string | null; read: boolean; createdAt: string; }
+
+export interface Onboarding { steps: { key: string; label: string; done: boolean; link: string }[]; completed: number; total: number; }
+
+export interface Product { id: string; name: string; code: string; category: string | null; }

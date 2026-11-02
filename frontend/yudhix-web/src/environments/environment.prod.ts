@@ -1,7 +1,8 @@
-// Production / mobile builds. Point apiUrl at the public gateway before shipping to the stores:
-// a phone can't reach "localhost" on your laptop.
+// Production / mobile builds. A phone can't reach "localhost" on your laptop: point these at
+// your public API and Keycloak before shipping to the stores.
 export const environment = {
   production: true,
   apiUrl: 'http://localhost:8000',
-  tenantId: '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d',
+  keycloak: { url: 'http://localhost:8180', realm: 'yudhix', clientId: 'yudhix-web' },
+  salesEmail: 'sales@example.com', // TODO: set your sales inbox
 };

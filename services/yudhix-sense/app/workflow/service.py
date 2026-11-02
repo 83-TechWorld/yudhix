@@ -7,11 +7,12 @@ from app.core import config
 from app.core.database import append_audit, cursor, fetch_all, fetch_one
 from app.pipeline.classifier import FastSentimentClassifier
 from app.truth import outreach, youtube
+from app.platform import billing
+from app.platform.notifications import notify
 from app.truth.verifier import MISINFO_VERDICTS
 from app.workflow.state import Actor, WorkflowError, check_editable, next_status, outcome_from
 
 _classifier = FastSentimentClassifier()
-BRAND_NAME = "PlayStation"
 
 
 def _iso(v):
@@ -104,21 +105,22 @@ def comment_detail(tenant_id: str, comment_id: str) -> Optional[Dict]:
 # ----------------------------------------------------------------------------- replies
 
 REPLY_SELECT = """
-    SELECT r.*, c.masked_text AS comment_text, c.custom_attributes->>'video_title' AS video_title,
+    SELECT r.*, au.full_name AS author_name, ap.full_name AS approver_name, c.masked_text AS comment_text, c.custom_attributes->>'video_title' AS video_title,
            c.custom_attributes->>'video_id' AS video_id, ca.priority, ca.sentiment AS comment_sentiment,
            ro.outcome, ro.follow_up_text, ro.evaluated_at,
            (SELECT json_agg(json_build_object('step', s.step_name, 'decision', s.decision, 'reviewerId', s.reviewer_id,
                                               'comments', s.comments, 'at', s.action_at) ORDER BY s.action_at)
-              FROM approval_step s WHERE s.reply_id = r.id) AS steps
+              FROM approval_step s WHERE s.reply_id = r.id) AS steps,
+           (SELECT json_object_agg(m.keycloak_user_id, coalesce(m.full_name, m.email)) FROM tenant_user m
+              WHERE m.tenant_id = r.tenant_id) AS people
     FROM reply r
     JOIN comment c ON c.tenant_id = r.tenant_id AND c.id = r.comment_id
+    LEFT JOIN tenant_user au ON au.tenant_id = r.tenant_id AND au.keycloak_user_id = r.author_id::text
+    LEFT JOIN tenant_user ap ON ap.tenant_id = r.tenant_id AND ap.keycloak_user_id = r.approver_id::text
     LEFT JOIN comment_analysis ca ON ca.tenant_id = c.tenant_id AND ca.comment_id = c.id
     LEFT JOIN LATERAL (SELECT outcome, follow_up_text, evaluated_at FROM reply_outcome
                        WHERE reply_id = r.id ORDER BY evaluated_at DESC LIMIT 1) ro ON true
 """
-
-USER_NAMES = {u["id"]: u["name"] for u in config.DEMO_USERS.values()}
-
 
 def _reply(r: Dict) -> Dict:
     now = datetime.now(timezone.utc)
@@ -127,9 +129,9 @@ def _reply(r: Dict) -> Dict:
         "id": str(r["id"]), "commentId": str(r["comment_id"]), "commentText": r["comment_text"],
         "videoId": r["video_id"], "videoTitle": r["video_title"], "priority": r["priority"],
         "commentSentiment": r["comment_sentiment"], "text": r["reply_text"], "status": r["status"],
-        "authorId": str(r["author_id"]), "authorName": USER_NAMES.get(str(r["author_id"]), "Team member"),
+        "authorId": str(r["author_id"]), "authorName": r.get("author_name") or "Former member",
         "approverId": str(r["approver_id"]) if r.get("approver_id") else None,
-        "approverName": USER_NAMES.get(str(r["approver_id"])) if r.get("approver_id") else None,
+        "approverName": (r.get("approver_name") or "Former member") if r.get("approver_id") else None,
         "slaDueAt": _iso(due), "slaBreached": r["status"] not in ("POSTED",) and due is not None and due < now,
         "rejectionReason": r.get("rejection_reason"), "deliveryMode": r.get("delivery_mode"),
         "platformReplyId": r.get("platform_reply_id"), "createdAt": _iso(r["created_at"]),
@@ -137,7 +139,8 @@ def _reply(r: Dict) -> Dict:
         "approvedAt": _iso(r.get("approved_at")), "postedAt": _iso(r.get("posted_at")),
         "claimId": str(r["claim_id"]) if r.get("claim_id") else None,
         "outcome": r.get("outcome"), "followUpText": r.get("follow_up_text"),
-        "steps": [{**s, "reviewerName": USER_NAMES.get(str(s.get("reviewerId")), "Reviewer")} for s in (r.get("steps") or [])],
+        "steps": [{**s, "reviewerName": (r.get("people") or {}).get(str(s.get("reviewerId")), "Reviewer")}
+                  for s in (r.get("steps") or [])],
     }
 
 
@@ -155,7 +158,7 @@ def get_reply(tenant_id: str, reply_id: str) -> Optional[Dict]:
     return _reply(r) if r else None
 
 
-def suggest_reply(tenant_id: str, comment_id: str) -> Dict:
+def suggest_reply(tenant_id: str, comment_id: str, brand_name: str) -> Dict:
     item = comment_detail(tenant_id, comment_id)
     if not item:
         raise WorkflowError("Comment not found.", 404)
@@ -166,7 +169,7 @@ def suggest_reply(tenant_id: str, comment_id: str) -> Dict:
         item["text"], item["sentiment"],
         {"verdict": claim["verdict"], "official_statement": claim.get("officialStatement"),
          "fact_check_analysis": claim.get("analysis"), "document_title": claim.get("source")} if claim else None,
-        BRAND_NAME, None)
+        brand_name, None)
     cites_fact = bool(claim and claim["verdict"] in MISINFO_VERDICTS)
     if not cites_fact and stored and stored.get("suggested_reply") and item["sentiment"] == "NEGATIVE":
         text = stored["suggested_reply"]
@@ -214,6 +217,8 @@ def edit_reply(tenant_id: str, actor: Actor, reply_id: str, text: str) -> Dict:
 def transition(tenant_id: str, actor: Actor, reply_id: str, action: str, reason: Optional[str] = None) -> Dict:
     current = _load(tenant_id, reply_id)
     target = next_status(action, current["status"], actor, str(current["author_id"]), reason)
+    if action == "post":
+        billing.check_quota(tenant_id, "REPLY_POSTED")
     with cursor(commit=True) as cur:
         if action == "submit":
             cur.execute("""UPDATE reply SET status = %s, submitted_at = now(), rejection_reason = NULL,
@@ -240,7 +245,24 @@ def transition(tenant_id: str, actor: Actor, reply_id: str, action: str, reason:
                    WHERE r.id = %s""", (str(uuid.uuid4()), reply_id))
         append_audit(cur, tenant_id, actor.id, "USER", f"REPLY_{target}", "REPLY", reply_id,
                      {"from": current["status"], "to": target, "reason": reason})
+    author = str(current["author_id"])
+    if action == "post":
+        billing.record(tenant_id, "REPLY_POSTED", 1, key=f"reply:{reply_id}")
+    elif action == "submit":
+        notify(tenant_id, "review", "A reply needs your review", _excerpt(current["reply_text"]), "/approvals",
+               roles=["approver", "admin"], exclude=actor.id)
+    elif action == "approve":
+        notify(tenant_id, "review", "Your reply was approved", "It's ready to post.", "/approvals",
+               user_ids=[author], exclude=actor.id)
+    elif action == "reject":
+        notify(tenant_id, "review", "Changes requested on your reply", reason or "", "/approvals",
+               user_ids=[author], exclude=actor.id)
     return get_reply(tenant_id, reply_id)
+
+
+def _excerpt(text: str, n: int = 140) -> str:
+    text = " ".join((text or "").split())
+    return text if len(text) <= n else text[: n - 1] + "…"
 
 
 def _load(tenant_id: str, reply_id: str) -> Dict:

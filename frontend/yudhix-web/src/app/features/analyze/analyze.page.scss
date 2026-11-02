@@ -48,3 +48,11 @@
 .jobs summary { padding: 14px 20px; cursor: pointer; font-weight: 600; font-size: 14px; color: var(--text-2); }
 .jobs[open] summary { border-bottom: 1px solid var(--border); }
 .list-item { align-items: center; }
+
+.checklist { display: flex; flex-direction: column; gap: 12px; margin: 4px 0 8px; }
+.checklist h2 { margin-top: 2px; }
+.steps-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px 16px; }
+.steps-list li { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.steps-list li.done { color: var(--text-3); text-decoration: line-through; }
+.tick { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--border-strong); display: grid; place-items: center; flex: none; }
+.done .tick { background: var(--ok); border-color: var(--ok); color: #fff; }

@@ -1,7 +1,7 @@
 {
   "id": "yudhix",
   "realm": "yudhix",
-  "displayName": "Yudhix Intelligence Platform",
+  "displayName": "Yudhix",
   "enabled": true,
   "sslRequired": "external",
   "registrationAllowed": true,
@@ -50,26 +50,26 @@
       "enabled": true,
       "publicClient": true,
       "standardFlowEnabled": true,
-      "directAccessGrantsEnabled": true,
+      "directAccessGrantsEnabled": false,
       "redirectUris": [
-        "http://localhost:3000/*",
-        "http://127.0.0.1:3000/*",
         "http://localhost:4200/*",
         "http://127.0.0.1:4200/*",
         "capacitor://localhost/*",
-        "http://localhost/*",
-        "http://localhost:8080/*"
+        "http://localhost/*"
       ],
       "webOrigins": [
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
         "http://localhost:4200",
         "http://127.0.0.1:4200",
         "capacitor://localhost",
-        "http://localhost",
-        "http://localhost:8080",
-        "+"
-      ]
+        "http://localhost"
+      ],
+      "implicitFlowEnabled": false,
+      "rootUrl": "http://localhost:4200",
+      "baseUrl": "/",
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:4200/*##http://127.0.0.1:4200/*##capacitor://localhost/*##http://localhost/*"
+      }
     }
   ],
   "users": [
@@ -102,5 +102,23 @@
         ]
       }
     }
-  ]
+  ],
+  "registrationEmailAsUsername": true,
+  "verifyEmail": true,
+  "rememberMe": true,
+  "bruteForceProtected": true,
+  "failureFactor": 10,
+  "passwordPolicy": "length(10) and notUsername and notEmail",
+  "loginTheme": "yudhix",
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 28800,
+  "smtpServer": {
+    "host": "mailpit",
+    "port": "1025",
+    "from": "no-reply@yudhix.local",
+    "fromDisplayName": "Yudhix",
+    "auth": "false",
+    "ssl": "false",
+    "starttls": "false"
+  }
 }

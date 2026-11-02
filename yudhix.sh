@@ -205,7 +205,8 @@ init_db() {
         services/yudhix-loop/src/main/resources/db/migration/V1__init_loop_schema.sql \
         services/yudhix-notify/src/main/resources/db/migration/V1__init_notify_schema.sql \
         services/yudhix-meter/src/main/resources/db/migration/V1__init_meter_schema.sql \
-        services/yudhix-sense/app/migrations/V2__truth_first.sql; do
+        services/yudhix-sense/app/migrations/V2__truth_first.sql \
+        services/yudhix-sense/app/migrations/V3__saas.sql; do
         if [ -f "$f" ]; then
             psql -h localhost -U postgres -d yudhix -f "$f" >/dev/null 2>&1
         fi
@@ -231,6 +232,16 @@ case "$1" in
     test)
         run_test
         ;;
+    keycloak)
+        print_banner
+        echo -e "${ORANGE}[+] Applying SaaS sign-in settings to Keycloak (realm yudhix)...${NC}"
+        python3 keycloak/configure_realm.py
+        ;;
+    e2e)
+        print_banner
+        echo -e "${ORANGE}[+] End-to-end SaaS test (needs Keycloak, Mailpit and yudhix-sense running)${NC}"
+        (cd services/yudhix-sense && ./.venv/bin/python tests/e2e_saas.py)
+        ;;
     unit)
         print_banner
         echo -e "${ORANGE}[+] Backend unit tests (yudhix-sense)${NC}"
@@ -249,13 +260,15 @@ case "$1" in
         ;;
     *)
         print_banner
-        echo -e "${WHITE}Usage:${NC} ./yudhix.sh {start|stop|restart|status|test|unit|db|init-db|ui}"
+        echo -e "${WHITE}Usage:${NC} ./yudhix.sh {start|stop|restart|status|test|unit|e2e|keycloak|db|init-db|ui}"
         echo ""
         echo -e "  ${ORANGE}start${NC}    - Launch Ollama, yudhix-sense AI engine, and yudhix-web frontend"
         echo -e "  ${ORANGE}stop${NC}     - Stop all background running services"
         echo -e "  ${ORANGE}status${NC}   - Display health and ports of all services"
         echo -e "  ${ORANGE}test${NC}     - Run live end-to-end PII masking & AI analysis test"
         echo -e "  ${ORANGE}unit${NC}     - Run backend (pytest) and frontend (Karma) unit tests"
+        echo -e "  ${ORANGE}e2e${NC}      - End-to-end SaaS test through the real Keycloak (creates + removes test users)"
+        echo -e "  ${ORANGE}keycloak${NC} - Apply sign-up, PKCE, SMTP and theme settings to the running Keycloak"
         echo -e "  ${ORANGE}db${NC}       - Query and display comments and AI sentiment from PostgreSQL"
         echo -e "  ${ORANGE}init-db${NC}  - Create DB yudhix, enable extensions, and run all 37 table migrations"
         echo -e "  ${ORANGE}ui${NC}       - Open the Yudhix web app in your default browser"

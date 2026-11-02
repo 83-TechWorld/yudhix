@@ -145,7 +145,7 @@
             <div class="row">
               <h2>Why people are reacting</h2>
               <span class="spacer"></span>
-              <button class="btn btn-sm btn-ghost" type="button" (click)="recompute()" [disabled]="recomputing()">
+              <button class="btn btn-sm btn-ghost" type="button" (click)="recompute()" [disabled]="recomputing() || !session.can('content.write')">
                 <y-icon name="refresh" [size]="15" [class.spin]="recomputing()" /> Re-link
               </button>
             </div>
@@ -211,7 +211,7 @@
             }
           </div>
           <div class="row-wrap">
-            <button class="btn btn-primary" type="button" (click)="generateNote()" [disabled]="generating() || !selectedClaims().size">
+            <button class="btn btn-primary" type="button" (click)="generateNote()" [disabled]="generating() || !selectedClaims().size || !session.can('content.write')">
               @if (generating()) { <y-icon name="loader" class="spin" /> Writing… } @else { <y-icon name="sparkles" /> Generate note ({{ selectedClaims().size }}) }
             </button>
           </div>

@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiService, errorMessage } from '../../core/api.service';
 import { Claim, ClaimComment, Impact, OutreachNote, RootCause, Verdict, Video } from '../../core/models';
+import { SessionService } from '../../core/session.service';
 import { IconComponent } from '../../shared/icon.component';
 import {
   AgoPipe, CAUSE_META, CompactPipe, PctPipe, PRIORITY_CHIP, RingComponent, SENTIMENT_CHIP, SentimentBarComponent,
@@ -26,6 +27,7 @@ type VerdictFilter = 'all' | 'disputed' | Verdict;
 export class VideoReportPage {
   private api = inject(ApiService);
   private toast = inject(ToastService);
+  protected session = inject(SessionService);
 
   readonly videoId = input.required<string>();
   /** ?tab=claims|impact|outreach deep-links straight to a tab. */

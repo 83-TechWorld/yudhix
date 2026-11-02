@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { FormsModule } from '@angular/forms';
 import { ApiService, errorMessage } from '../../core/api.service';
 import { Knowledge } from '../../core/models';
+import { SessionService } from '../../core/session.service';
 import { IconComponent } from '../../shared/icon.component';
 import { AgoPipe, EmptyStateComponent, ToastService } from '../../shared/ui';
 
@@ -16,7 +17,9 @@ import { AgoPipe, EmptyStateComponent, ToastService } from '../../shared/ui';
           <h1>Knowledge base</h1>
           <p>The official facts Yudhix checks creator claims against. Better sources mean better verdicts.</p>
         </div>
-        <button class="btn btn-primary" type="button" (click)="openForm()"><y-icon name="plus" /> Add a fact</button>
+        @if (session.can('content.write')) {
+          <button class="btn btn-primary" type="button" (click)="openForm()"><y-icon name="plus" /> Add a fact</button>
+        }
       </header>
 
       <div class="search toolbar">
@@ -29,7 +32,9 @@ import { AgoPipe, EmptyStateComponent, ToastService } from '../../shared/ui';
       } @else if (!groups().length) {
         <div class="card">
           <y-empty icon="book" title="No facts yet" text="Add your product specs, policies and FAQs so claims can be checked.">
-            <button class="btn btn-primary" type="button" (click)="openForm()">Add the first fact</button>
+            @if (session.can('content.write')) {
+              <button class="btn btn-primary" type="button" (click)="openForm()">Add the first fact</button>
+            }
           </y-empty>
         </div>
       } @else {
@@ -44,7 +49,9 @@ import { AgoPipe, EmptyStateComponent, ToastService } from '../../shared/ui';
                     @if (k.clauseRef) { <span class="chip chip-outline mono">{{ k.clauseRef }}</span> }
                     <span class="spacer"></span>
                     @if (k.usedByClaims) { <span class="chip chip-brand">Cited by {{ k.usedByClaims }} claims</span> }
+                    @if (session.can('content.write')) {
                     <button class="btn btn-ghost btn-icon btn-sm" type="button" (click)="remove(k)" [attr.aria-label]="'Delete ' + k.title"><y-icon name="trash" [size]="16" /></button>
+                    }
                   </div>
                   <p class="statement">{{ k.statement }}</p>
                   <div class="subtle">
@@ -116,6 +123,7 @@ import { AgoPipe, EmptyStateComponent, ToastService } from '../../shared/ui';
 export class KnowledgePage {
   private api = inject(ApiService);
   private toast = inject(ToastService);
+  protected session = inject(SessionService);
 
   protected readonly items = signal<Knowledge[] | null>(null);
   protected readonly q = signal('');

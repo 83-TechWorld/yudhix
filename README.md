@@ -29,6 +29,8 @@ Yudhix starts with the **video**, not the comments. Before a brand replies to an
 | 4. **Respond** | `/inbox`, `/approvals`, *Creator note* | Agents draft replies (AI drafts cite the official fact), approvers sign off (separation of duties), and the team sends the creator a polite clarification note. |
 | 5. **Track** | `/track` | Turnaround rate, reply pipeline, SLA breaches, misinformation share and sentiment over time. |
 
+**SaaS for enterprises.** Companies sign up through Keycloak (email verification, password policy, brute-force protection; SSO-ready), create a workspace per brand, invite their team with per-workspace roles (**admin, approver, agent, analyst**), and get a 14-day trial, plans, usage quotas and invoices. Agencies switch between client workspaces from one login. See [§15](#15-saas-layer-sign-up-workspaces-team-billing).
+
 The web app is an **Angular 20 PWA** that works on desktop, laptop, tablet and phone, and ships to the **App Store / Play Store** through **Capacitor** (see [§8.3](#83-mobile-apps-ios--android)).
 
 ### Core Principles
@@ -386,7 +388,9 @@ yudhix/
 │       ├── 01-init-databases.sql         # Database provisioning (yudhix, keycloak, airflow)
 │       └── 02-enable-extensions.sql      # Extensions: uuid-ossp, pgcrypto, vector
 ├── keycloak/
-│   └── realm-yudhix.json                 # Pre-configured Realm, Clients, and Roles
+│   ├── realm-yudhix.json                 # Realm for fresh installs (sign-up, PKCE client, SMTP, theme)
+│   ├── configure_realm.py                # Applies the same settings to a running Keycloak (idempotent)
+│   └── themes/yudhix/login/              # Branded sign-in / sign-up pages
 ├── secrets/                              # Docker secrets (git-ignored)
 │   ├── pg_password.txt
 │   ├── kc_admin_password.txt
@@ -421,11 +425,12 @@ app/
 ├── main.py                 # FastAPI app: CORS, startup migrations, /health capabilities, legacy endpoints
 ├── db.py                   # Comment persistence helpers
 ├── core/                   # config (env vars), database (cursor, migrations, hash-chained audit), llm (Ollama), text
-├── migrations/V2__truth_first.sql   # Idempotent; applied on every startup
+├── migrations/             # V2__truth_first.sql, V3__saas.sql: idempotent, applied on every startup
+├── platform/               # SaaS: auth (Keycloak JWT + roles), workspaces (team, invites, onboarding), billing, notifications, mailer
 ├── pipeline/               # PII masker, keyword sentiment classifier, LLM enricher
 ├── truth/                  # youtube, claims, retrieval, verifier, attribution, scoring, outreach, pipeline (job), repository
 ├── workflow/               # state (approval state machine), service (inbox, replies, outcomes), insights (KPIs)
-└── api/                    # deps (tenant + actor headers), truth routes, workflow routes
+└── api/                    # deps (token, workspace, permissions), platform (SaaS) routes, truth routes, workflow routes
 tests/                      # pytest: masker, classifier, truth core, state machine
 ```
 
@@ -435,7 +440,7 @@ src/
 ├── styles.scss             # Design system: tokens (light/dark), buttons, chips, cards, sheets, skeletons
 ├── environments/           # apiUrl + tenant per build (prod used for store builds)
 └── app/
-    ├── core/               # api.service (typed client + header interceptor), models, session (role/theme), native (Capacitor)
+    ├── core/               # api.service (client + token/workspace interceptor), auth (keycloak-js), session (user, workspaces, roles), guards, native
     ├── shared/             # icon set, verdict badge, score ring, sentiment bar, toasts, pipes
     ├── layout/             # shell: sidebar / rail / bottom tabs
     └── features/
@@ -444,7 +449,10 @@ src/
         ├── inbox/          # Prioritized comments, root cause, AI-drafted replies
         ├── approvals/      # Review lanes, approve / request changes, post, record outcome
         ├── track/          # KPIs, outcomes, pipeline, sentiment trend, per-video accuracy
-        └── knowledge/      # Official facts used for fact-checking
+        ├── knowledge/      # Official facts used for fact-checking
+        ├── public/         # Landing, pricing, invitation pages
+        ├── onboarding/     # Workspace → product → first video
+        └── settings/       # Workspace, team, plan & billing, printable invoice
 capacitor.config.ts         # appId io.yudhix.app, webDir dist/yudhix-web/browser
 ```
 
@@ -497,7 +505,13 @@ npm start                # http://localhost:4200
 
 Open **http://localhost:4200**. The app opens on **Analyze**. Try the example video, or open **Videos → "PlayStation Explains Why it's Ending Physical Discs"** to see a full truth report built from 2,662 stored comments.
 
-**Demo roles.** Until the SaaS/auth layer ships, the avatar in the sidebar (or top bar on phones) switches between **Asha (agent)** and **Ravi (approver)**. The app sends `X-User-Id` / `X-User-Role` headers, and the API enforces separation of duties: nobody can approve a reply they wrote.
+**Sign in.** Keycloak must be running (`docker compose up -d keycloak mailpit`). Apply the SaaS settings once (sign-up, PKCE, SMTP, Yudhix login theme):
+
+```bash
+./yudhix.sh keycloak        # = python3 keycloak/configure_realm.py (idempotent)
+```
+
+Then open http://localhost:4200 → **Start free trial**. Keycloak sends the verification email to **Mailpit**, so open http://localhost:8025 and click the link. Onboarding creates your workspace; from the workspace menu you can also **Explore the demo workspace** (the seeded PlayStation data).
 
 ### 8.2 Configuration (`yudhix-sense` environment variables)
 
@@ -507,6 +521,17 @@ Open **http://localhost:4200**. The app opens on **Analyze**. Try the example vi
 | `OLLAMA_URL` / `OLLAMA_MODEL` | `http://127.0.0.1:11434` / `llama3.1:latest` | Local LLM for claim extraction, fact-checking and reply drafts. Without it, rule-based fallbacks are used, and the app shows which mode it's in. |
 | `WHISPER_MODEL` | `small` | Used only if `faster-whisper` is installed and `yt-dlp` is on `PATH` (videos without captions). |
 | `AUTHOR_HMAC_KEY` | `dev-only-change-me` | Secret for pseudonymizing comment authors. **Set a strong value in production.** |
+| `KEYCLOAK_URL` / `KEYCLOAK_REALM` | `http://localhost:8180` / `yudhix` | Where tokens come from. |
+| `KEYCLOAK_ISSUER` / `KEYCLOAK_JWKS_URL` | derived from the two above | Set separately when the browser and the API reach Keycloak by different hostnames. |
+| `KEYCLOAK_CLIENT_IDS` | `yudhix-web` | Tokens must be issued to one of these clients (`azp`). |
+| `APP_URL` | `http://localhost:4200` | Base of invitation links in emails. |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_FROM` (+ `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_STARTTLS`) | `localhost` / `1025` / `Yudhix <no-reply@yudhix.local>` | Invitation emails (Mailpit locally). |
+| `TRIAL_DAYS` / `TRIAL_PLAN` | `14` / `PROFESSIONAL` | Free trial for new workspaces. |
+| `INVITE_TTL_DAYS` / `MAX_WORKSPACES_PER_USER` | `7` / `20` | Invitation lifetime; workspace creation limit per person. |
+| `DEMO_WORKSPACE_JOIN` | `true` | Lets anyone signed in join the seeded demo workspace. **Turn off in production.** |
+| `INTERNAL_API_KEY` | *(empty = disabled)* | Unlocks the old pre-SaaS endpoints (`/api/v1/comments`, `/analyze`, `/scheduler/…`) for internal jobs via `X-Internal-Key`. |
+
+Web app settings live in `frontend/yudhix-web/src/environments/`: `apiUrl`, `keycloak { url, realm, clientId }` and `salesEmail` (used by "Talk to sales"; **replace the placeholder**).
 | `MAX_COMMENTS_PER_VIDEO` | `500` | Comments pulled per analysis. |
 | `CORS_ORIGINS` | `localhost:4200`, `capacitor://localhost`, … | Allowed web/app origins. |
 | `PG_HOST` / `PG_PORT` / `PG_DB` / `PG_USER` / `PG_PASSWORD` | `localhost` / `5432` / `yudhix` / `postgres` / `postgres` | Database. |
@@ -536,11 +561,14 @@ Before submitting to the stores you still need app icons and splash images (`npx
 
 ```bash
 ./yudhix.sh unit                                   # both suites
-cd services/yudhix-sense && ./.venv/bin/python -m pytest -q tests     # 20 backend tests
-cd frontend/yudhix-web && npm test                                    # 7 frontend tests (headless Chrome)
+cd services/yudhix-sense && ./.venv/bin/python -m pytest -q tests     # 31 backend unit tests
+cd frontend/yudhix-web && npm test                                    # 9 frontend unit tests (headless Chrome)
+./yudhix.sh e2e                                                        # 40 end-to-end checks through the real Keycloak
 ```
 
-Backend tests cover video-link parsing, transcript parsing, the rule-based verifier, claim extraction, attribution and root cause, impact scoring bands, and the approval state machine (including separation of duties).
+The end-to-end test (`services/yudhix-sense/tests/e2e_saas.py`) creates two throwaway Keycloak users, signs in with the real PKCE flow, and checks workspaces, invitations (incl. the Mailpit email), role permissions, tenant isolation, plan changes with GST invoices and proration, notifications, the demo workspace and deletion. It removes its users at the end.
+
+Backend tests cover video-link parsing, transcript parsing, the rule-based verifier, claim extraction, attribution and root cause, impact scoring bands, the approval state machine (including separation of duties), billing math (calendar intervals, GST, proration, overage, trial expiry), slugs, invitation tokens, token-claim checks and the role permission matrix.
 
 ---
 
@@ -591,7 +619,7 @@ erDiagram
 
 ---
 
-### Complete 37-Table Dictionary & Links
+### Complete 40-Table Dictionary & Links
 
 #### Group 1: Tenant & Identity Domain (`yudhix-tenant`)
 | Table Name | Primary Key | Foreign Keys / Links | Usage & Business Responsibility |
@@ -682,6 +710,17 @@ The same migration also adds workflow columns used by the web app: `reply.claim_
 
 ---
 
+#### Group 13: SaaS: Workspaces, Team, Billing & Notifications (`yudhix-sense`, migration `app/migrations/V3__saas.sql`)
+| Table Name | Primary Key | Foreign Keys / Links | Usage & Business Responsibility |
+|---|---|---|---|
+| `workspace_invitation` | `id (UUID)` | `tenant_id` $\rightarrow$ `tenant.id` | Pending / accepted / revoked invites with role and expiry. Only a SHA-256 hash of the emailed token is stored. One pending invite per email per workspace. |
+| `invoice_line` | `id (BIGSERIAL)` | `invoice_id` $\rightarrow$ `invoice.id` | Line items: plan fee, proration credit, comment overage. |
+| `app_notification` | `id (BIGSERIAL)` | `tenant_id` $\rightarrow$ `tenant.id` | In-app notifications, one row per recipient (welcome, review requests, approvals, joins, quota warnings, analysis done). |
+
+V3 also adds: `tenant.industry`, `team_size`, `created_by`, `deleted_at`, `is_demo`; `tenant_user.invited_by`, `last_seen_at`; `plan.video_quota`, `seat_limit`, `yearly_price`, `tagline`, `features`, `sort_order`, `highlighted` (and sets Starter / Professional / Enterprise); `subscription.billing_interval`, `trial_ends_at`, `cancel_at_period_end`; `invoice.number`, `period_start`, `period_end`, `due_at`, `tax_label`. It turns the seeded PlayStation data into the **PlayStation (Demo)** workspace.
+
+---
+
 ## 10. Database Configuration & Setup Guide
 
 Follow these step-by-step instructions to configure, initialize, and verify the PostgreSQL database.
@@ -735,6 +774,7 @@ MIGRATIONS=(
   "services/yudhix-notify/src/main/resources/db/migration/V1__init_notify_schema.sql"
   "services/yudhix-meter/src/main/resources/db/migration/V1__init_meter_schema.sql"
   "services/yudhix-sense/app/migrations/V2__truth_first.sql"
+  "services/yudhix-sense/app/migrations/V3__saas.sql"
 )
 
 for file in "${MIGRATIONS[@]}"; do
@@ -744,11 +784,11 @@ done
 ```
 
 ### Step 5: Verify Database Tables
-Confirm that all 37 tables are created:
+Confirm that all 40 tables are created:
 ```bash
 psql -h localhost -U postgres -d yudhix -c "\dt"
 ```
-You should see 37 rows returned, spanning all domains.
+You should see 40 rows returned, spanning all domains.
 
 ### Step 6: Query Live Ingested Comments & AI Sentiments
 Whenever you analyze a video in the UI (`http://localhost:4200`) or via the API, you can view the stored data directly in the terminal:
@@ -899,29 +939,55 @@ curl -I http://localhost:8180
 5. Open the **Role mapping** tab:
    * Click **Assign role** $\rightarrow$ Select `tenant_admin`.
 
-#### Step 5: Test Token Generation via Terminal
-You can authenticate and inspect the live JWT directly:
+#### Step 5: Apply the SaaS sign-in settings and test the flow
 ```bash
-curl -X POST "http://localhost:8180/realms/yudhix/protocol/openid-connect/token" \
-  -d "client_id=yudhix-web" \
-  -d "username=admin@sony.com" \
-  -d "password=sony_admin_2026" \
-  -d "grant_type=password"
+./yudhix.sh keycloak      # sign-up, verified email, PKCE-only web client, SMTP → Mailpit, Yudhix theme
+./yudhix.sh e2e           # signs in through the real PKCE flow and exercises the SaaS API
 ```
+The password grant (`grant_type=password`) is **disabled** for `yudhix-web`, so the old `curl … grant_type=password` test no longer works by design. `tests/e2e_saas.py` shows how to get a token through the browser flow from a script.
 
 ---
 
-### 11.4 SaaS Auth Portal & Session Management (planned: SaaS layer)
+### 11.4 Sign-up, Sign-in & Sessions (implemented)
 
-> **Status:** The previous vanilla-JS UI had a demo sign-in / register portal that built its session in the browser. It was removed with the move to Angular. Sign-in will come back as part of the **SaaS layer** using Keycloak's Authorization Code + PKCE flow (no password grant, no client-built tokens). Until then the web app runs as a single demo tenant and switches between demo roles (see [§8.1](#81-run-the-app)).
-
-Planned scope of the SaaS layer: landing and pricing pages, sign-up with workspace creation, onboarding (first product → first knowledge facts → first video), team invites and roles, plans / usage / invoices (`yudhix-meter`), and a workspace switcher for agencies.
+- **Flow:** Authorization Code + **PKCE (S256)** with [`keycloak-js`](https://www.npmjs.com/package/keycloak-js). The password grant and implicit flow are **disabled** on `yudhix-web`; the app never sees passwords.
+- **Pages:** sign-up, sign-in, email verification and password reset all run on Keycloak with the **`yudhix` login theme** (`keycloak/themes/yudhix`, mounted by docker-compose).
+- **Realm policy** (applied by `keycloak/configure_realm.py`): email as username, verified email required, password policy `length(10) and notUsername and notEmail`, brute-force protection, 5-minute access tokens, 8-hour idle SSO session, SMTP via Mailpit.
+- **Tokens** stay in memory and are refreshed before expiry. Session restore uses silent SSO (`public/silent-check-sso.html`). **Account & security** links to the Keycloak account console (password, MFA, sessions).
+- **API side:** `yudhix-sense` verifies every token against Keycloak's JWKS (RS256, issuer, expiry, `azp`). The workspace comes from `X-Tenant-Id`, and the caller must be an active member. **Roles are per workspace** and live in `tenant_user`, not in the token, so one person can be an admin for one brand and an agent for another.
+- **Enterprise SSO:** add a SAML/OIDC identity provider to the realm (Keycloak admin → Identity providers). Users who sign in through it are handled the same way.
+- **Production:** `KC_HOSTNAME`, HTTPS, a real SMTP server, and `APP_ORIGINS=https://app.your-domain.com python3 keycloak/configure_realm.py`.
 
 ---
 
 ## 12. API Reference (yudhix-sense, used by the web app)
 
-All routes take `X-Tenant-Id` (defaults to the demo tenant). Write routes also take `X-User-Id` and `X-User-Role` (`agent` | `approver`). In production the gateway sets these from the validated JWT. Interactive docs: `http://localhost:8000/docs`.
+Every route except `/health` and `/api/v1/public/*` needs `Authorization: Bearer <Keycloak access token>`. Workspace routes also need `X-Tenant-Id` and check membership and role (`admin` · `approver` · `agent` · `analyst`; analysts are read-only). Quota or trial problems return **402** with a readable message. Interactive docs: `http://localhost:8000/docs`.
+
+**SaaS**
+
+| Method | Path | Who | Purpose |
+|---|---|---|---|
+| `GET` | `/api/v1/public/plans`, `/public/countries` | anyone | Pricing and supported countries |
+| `GET` | `/api/v1/public/invitations/{token}` | anyone | Invite preview (workspace, inviter, role, masked email) |
+| `GET` | `/api/v1/me` | signed in | Profile, workspaces with role/plan/trial, pending invites |
+| `POST` | `/api/v1/workspaces` | signed in, verified email | Create a workspace (caller becomes admin, trial starts) |
+| `POST` | `/api/v1/workspaces/demo/join` | signed in | Join the demo workspace (if `DEMO_WORKSPACE_JOIN`) |
+| `POST` | `/api/v1/invitations/{token}/accept` | invitee (email must match) | Join a workspace |
+| `GET` / `PATCH` | `/api/v1/workspace` | member / admin | Workspace details / update |
+| `POST` | `/api/v1/workspace/delete`, `/workspace/leave` | admin / member | Soft-delete (type the name) / leave (not the last admin) |
+| `GET` | `/api/v1/workspace/onboarding` | member | Getting-started checklist |
+| `GET` / `POST` | `/api/v1/workspace/products` | member / agent+ | Products |
+| `GET` | `/api/v1/team` | member | Members (+ pending invites for admins) |
+| `POST` | `/api/v1/team/invitations` | admin | Invite up to 20 emails with a role (seat limit applies) |
+| `POST` / `DELETE` | `/api/v1/team/invitations/{id}[/resend]` | admin | Resend (new link) / revoke |
+| `PATCH` / `DELETE` | `/api/v1/team/members/{userId}` | admin | Change role / remove (keeps at least one admin) |
+| `GET` | `/api/v1/billing` | member | Plan, status, usage meters, next invoice |
+| `POST` | `/api/v1/billing/plan` | admin | Switch plan `{ plan_id, interval: MONTH\|YEAR }`; issues an invoice |
+| `GET` | `/api/v1/billing/invoices[/{id}]` | admin | Invoices with lines and tax |
+| `GET` / `POST` | `/api/v1/notifications`, `/notifications/read` | member | In-app notifications / mark read |
+
+**Truth, respond & track**
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -953,7 +1019,10 @@ Every state change appends a hash-chained `audit_event` (`row_hash = SHA-256(pre
 
 | Area | Today | Next |
 |---|---|---|
-| **Auth & tenancy** | Single demo tenant. Role chosen in the UI and sent as headers. | Keycloak PKCE login; gateway injects tenant/user from the JWT; RLS on new tables. |
+| **Auth & tenancy** | Keycloak PKCE sign-in; per-workspace roles enforced in the API. | Route through `yudhix-gateway`; enable PostgreSQL RLS on the new tables as defense in depth; move workspace/billing APIs into `yudhix-tenant` / `yudhix-meter`. |
+| **Payments** | Plans, quotas, proration and invoices are real, issued net 30 with status `OPEN`; no card is charged. | Stripe / Razorpay checkout + webhooks that mark invoices `PAID`; dunning for unpaid invoices. |
+| **Tax** | GST 18% for India-based workspaces; other countries show "Tax (not collected)". Prices in USD. | Tax engine (US sales tax, EU VAT), INR pricing, GSTIN on invoices. |
+| **SEO** | Landing and pricing pages are client-rendered. | Prerender / SSR for `/` and `/pricing`. |
 | **Posting replies** | Approved replies are recorded as `SIMULATED` (nothing is sent to YouTube). | YouTube OAuth connector in `yudhix-link`, `delivery_mode = LIVE`, automatic +24h/+72h/+7d outcome checks. |
 | **Outcomes** | Recorded by hand from the customer's follow-up (scored automatically) or chosen directly. | Automatic from live threads (`/outcomes/check` is ready for `LIVE` replies). |
 | **Attribution** | Keyword/IDF matching with a concept thesaurus, explainable but noisy on sarcasm and memes. | Embedding similarity (pgvector + bge-m3) with optional LLM re-ranking of borderline links. |
@@ -968,9 +1037,68 @@ Every state change appends a hash-chained `audit_event` (`row_hash = SHA-256(pre
 
 ## 14. Changelog
 
+### 2026-11-02: SaaS layer
+- **Public site:** landing page and live pricing page (monthly / yearly, comparison table, FAQ).
+- **Sign-up & sign-in with Keycloak:** PKCE, verified email, password policy, brute-force protection, branded login theme, `configure_realm.py`. The password grant is disabled.
+- **Onboarding:** workspace → first product (+ an official fact) → first video → truth report; or explore the demo workspace.
+- **Workspaces & team:** create several workspaces, switcher for agencies, invites by email (Mailpit locally) with admin / approver / agent / analyst roles, role changes, removals, leave and delete.
+- **Billing:** 14-day trial, Starter / Professional / Enterprise, usage meters vs quotas (hard limits on analyses and posted replies), plan changes with proration, GST invoices with printable view.
+- **Notifications:** in-app bell for reviews, approvals, joins, quota warnings and finished analyses.
+- **Security:** every API call needs a verified Keycloak token and workspace membership; demo identity headers removed; legacy endpoints locked behind `INTERNAL_API_KEY`.
+- **Tests:** 31 backend + 9 frontend unit tests; 40-check end-to-end API test through the real Keycloak.
+
 ### 2026-11-01: Truth-first product, new UI
 - **New web app:** Angular 20 PWA, responsive from phone to desktop, light/dark, ready for App Store / Play Store via Capacitor 8. Replaces the vanilla JS single page (still available in git history before this commit).
 - **Truth-first flow:** Analyze → Truth report (claims, verdicts, cited sources) → Audience impact (root cause per comment) → Respond (inbox, approvals, creator note) → Track (KPIs).
 - **Backend (`yudhix-sense`):** background video analysis jobs with captions / Whisper / pasted transcripts; LLM + rule-based claim extraction and fact-checking; explainable comment-to-claim attribution; recalibrated impact scoring; reply approval workflow with separation of duties; outcome recording; insights API; knowledge base CRUD; creator notes; hash-chained audit trail; CORS restricted to known origins; YouTube API key moved server-side.
 - **Database:** `V2__truth_first.sql` brings the hand-made truth tables under migration and adds `video_analysis_job`, `comment_claim_link` and `creator_outreach`, plus new workflow columns.
 - **Tooling:** `./yudhix.sh start` now runs the Angular app on :4200; `./yudhix.sh unit` runs both test suites; Keycloak realm allows the new web and Capacitor origins.
+
+---
+
+## 15. SaaS Layer: Sign-up, Workspaces, Team, Billing
+
+```
+Landing / Pricing ──► Start free trial ──► Keycloak sign-up ──► verify email (Mailpit)
+                                                     │
+                                                     ▼
+                       Onboarding: workspace → product (+ fact) → first video ──► Truth report
+                                                     │
+            Settings: Workspace · Team (invite, roles) · Plan & billing (usage, plans, invoices)
+```
+
+| Screen | Route | Notes |
+|---|---|---|
+| Landing | `/` | Public. "Open app" when already signed in. |
+| Pricing | `/pricing` | Public. Plans come from `/api/v1/public/plans`. |
+| Invitation | `/invite/:token` | Shows workspace, inviter and role; sign in or sign up, then accept. |
+| Onboarding | `/onboarding` (`?new=1` for another workspace) | New users without a workspace land here. |
+| Settings | `/settings/workspace`, `/settings/team`, `/settings/billing` | Non-admins see read-only versions. |
+| Invoice | `/settings/billing/invoices/:id` | Printable; "Print / save PDF". |
+
+**Roles (per workspace)**
+
+| | Admin | Approver | Agent | Analyst |
+|---|:-:|:-:|:-:|:-:|
+| Read reports, inbox, insights | ✓ | ✓ | ✓ | ✓ |
+| Analyze videos, knowledge, draft / submit / post replies, creator notes | ✓ | ✓ | ✓ | |
+| Approve / reject replies (never their own) | ✓ | ✓ | | |
+| Workspace settings, team, billing | ✓ | | | |
+
+**Plans** (USD / month; yearly = 10× monthly)
+
+| | Starter $99 | Professional $499 | Enterprise $1,999 |
+|---|---|---|---|
+| Video analyses | 20 | 100 | Unlimited |
+| Comments | 10,000 | 100,000 | Unlimited |
+| AI drafts & checks (fair use) | 2,000 | 25,000 | Unlimited |
+| Replies posted | 500 | 5,000 | Unlimited |
+| Team members (incl. pending invites) | 5 | 20 | Unlimited |
+
+Trials and quotas: when the trial ends, reports stay readable but new analyses and posting return **402** until an admin picks a plan. Admins get notifications at 80% and 100% of each quota. Extra comments are billed at $2 per 1,000 on the next invoice.
+
+**Good to know**
+- The demo workspace (`is_demo`) can't be deleted, and anyone can leave or rejoin it. Turn off `DEMO_WORKSPACE_JOIN` in production.
+- Deleting a workspace is a soft delete: access ends immediately, the subscription is canceled, and data stays for audit and retention rules.
+- Every workspace, team and billing change is written to the hash-chained `audit_event` ledger.
+

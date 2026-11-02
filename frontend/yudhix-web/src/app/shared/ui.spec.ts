@@ -1,6 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { AgoPipe, CompactPipe, DuePipe, PctPipe, youtubeAt } from './ui';
-import { DEMO_USERS, SessionService } from '../core/session.service';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { SessionService, initials, trialDaysLeft } from '../core/session.service';
 
 describe('formatting pipes', () => {
   it('formats relative times', () => {
@@ -29,17 +31,37 @@ describe('formatting pipes', () => {
 });
 
 describe('SessionService', () => {
-  beforeEach(() => {
-    try { localStorage.removeItem('yudhix.role'); } catch { /* ignore */ }
+  beforeEach(() => TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] }));
+
+  function withRole(role: 'admin' | 'approver' | 'agent' | 'analyst') {
+    const session = TestBed.inject(SessionService);
+    session.me.set({
+      user: { id: 'u1', email: 'asha@example.com', name: 'Asha Rao', emailVerified: true },
+      workspaces: [{ id: 'w1', name: 'Acme', slug: 'acme', isDemo: false, country: 'IN', role, plan: 'Starter', subscriptionStatus: 'ACTIVE', trialEndsAt: null }],
+      pendingInvitations: [],
+      demoAvailable: false,
+    });
+    session.select('w1');
+    return session;
+  }
+
+  it('derives permissions from the workspace role', () => {
+    expect(withRole('admin').can('billing.manage')).toBeTrue();
+    expect(withRole('approver').can('reply.approve')).toBeTrue();
+    expect(withRole('agent').can('reply.approve')).toBeFalse();
+    expect(withRole('analyst').can('content.write')).toBeFalse();
   });
 
-  it('starts as the agent and toggles to the approver', () => {
-    const session = TestBed.inject(SessionService);
-    expect(session.role()).toBe('agent');
-    expect(session.user().id).toBe(DEMO_USERS.agent.id);
-    session.toggleRole();
-    expect(session.role()).toBe('approver');
-    expect(session.user().id).toBe(DEMO_USERS.approver.id);
+  it('builds initials from the name', () => {
+    expect(withRole('agent').initials()).toBe('AR');
+    expect(initials('raj@example.com')).toBe('R');
+  });
+
+  it('counts trial days left', () => {
+    const ws = { id: 'w', name: 'x', slug: 'x', isDemo: false, country: 'IN', role: 'admin' as const, plan: 'Pro',
+      subscriptionStatus: 'TRIALING' as const, trialEndsAt: new Date(Date.now() + 3.5 * 86_400_000).toISOString() };
+    expect(trialDaysLeft(ws)).toBe(4);
+    expect(trialDaysLeft({ ...ws, subscriptionStatus: 'ACTIVE' })).toBeNull();
   });
 
   it('cycles themes system → light → dark → system', () => {

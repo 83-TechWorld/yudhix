@@ -41,6 +41,7 @@ services:
       - kc_admin_password
     volumes:
       - ./keycloak/realm-yudhix.json:/opt/keycloak/data/import/realm-yudhix.json:ro
+      - ./keycloak/themes/yudhix:/opt/keycloak/themes/yudhix:ro
     ports:
       - "8180:8080"
     depends_on:

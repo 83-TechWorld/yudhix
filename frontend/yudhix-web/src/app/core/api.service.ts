@@ -1,6 +1,6 @@
 import { HttpClient, HttpErrorResponse, HttpInterceptorFn, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, catchError, from, switchMap, throwError } from 'rxjs';
 import { environment } from '../../environments/environment';
 import {
   Claim,
@@ -14,23 +14,47 @@ import {
   LeaderboardRow,
   OutreachNote,
   Reply,
+  AppNotification,
+  BillingSummary,
+  Country,
+  Invitation,
+  InvitePreview,
+  Invoice,
+  Me,
+  Member,
+  Onboarding,
+  Plan,
+  Product,
   Summary,
   TrendPoint,
   Video,
+  WorkspaceDetail,
+  WorkspaceRole,
 } from './models';
+import { AuthService } from './auth.service';
 import { SessionService } from './session.service';
 
-/** Adds tenant + acting-user headers. The gateway will set these from the JWT once auth ships. */
+/**
+ * Adds the Keycloak access token and the current workspace to every API call.
+ * A 401 means the session ended: send the user back through sign-in.
+ */
 export const contextInterceptor: HttpInterceptorFn = (req, next) => {
-  if (!req.url.startsWith(environment.apiUrl)) return next(req);
+  if (!req.url.startsWith(environment.apiUrl) || req.url.includes('/api/v1/public/')) return next(req);
+  const auth = inject(AuthService);
   const session = inject(SessionService);
-  return next(
-    req.clone({
-      setHeaders: {
-        'X-Tenant-Id': environment.tenantId,
-        'X-User-Role': session.role(),
-        'X-User-Id': session.user().id,
-      },
+  return from(auth.token()).pipe(
+    switchMap((token) => {
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const ws = session.workspaceId();
+      if (ws && !req.headers.has('X-Tenant-Id')) headers['X-Tenant-Id'] = ws;
+      return next(req.clone({ setHeaders: headers }));
+    }),
+    catchError((err: unknown) => {
+      if (err instanceof HttpErrorResponse && err.status === 401 && auth.authenticated()) {
+        auth.login(location.pathname + location.search);
+      }
+      return throwError(() => err);
     }),
   );
 };
@@ -39,6 +63,7 @@ export const contextInterceptor: HttpInterceptorFn = (req, next) => {
 export function errorMessage(err: unknown): string {
   if (err instanceof HttpErrorResponse) {
     if (err.status === 0) return "Can't reach the Yudhix API. Is yudhix-sense running on " + environment.apiUrl + '?';
+    if (err.status === 402 && typeof err.error?.detail === 'string') return err.error.detail;
     const detail = err.error?.detail;
     if (typeof detail === 'string') return detail;
     if (Array.isArray(detail) && detail[0]?.msg) return detail[0].msg;
@@ -66,7 +91,7 @@ export class ApiService {
   }
 
   // --- Truth -----------------------------------------------------------------
-  analyze(body: { video_url: string; transcript?: string | null }): Observable<Job> {
+  analyze(body: { video_url: string; transcript?: string | null; product_id?: string | null }): Observable<Job> {
     return this.http.post<Job>(`${this.v1}/truth/analyze`, body);
   }
   jobs(): Observable<{ jobs: Job[] }> {
@@ -162,5 +187,96 @@ export class ApiService {
   }
   leaderboard(): Observable<{ videos: LeaderboardRow[] }> {
     return this.http.get<{ videos: LeaderboardRow[] }>(`${this.v1}/insights/videos`);
+  }
+
+  // --- SaaS: public ---------------------------------------------------------------
+  plans(): Observable<{ plans: Plan[] }> {
+    return this.http.get<{ plans: Plan[] }>(`${this.v1}/public/plans`);
+  }
+  countries(): Observable<{ countries: Country[] }> {
+    return this.http.get<{ countries: Country[] }>(`${this.v1}/public/countries`);
+  }
+  invitePreview(token: string): Observable<InvitePreview> {
+    return this.http.get<InvitePreview>(`${this.v1}/public/invitations/${encodeURIComponent(token)}`);
+  }
+
+  // --- SaaS: account & workspaces ---------------------------------------------------
+  me(): Observable<Me> {
+    return this.http.get<Me>(`${this.v1}/me`);
+  }
+  createWorkspace(body: { name: string; country: string; industry?: string | null; teamSize?: string | null }): Observable<WorkspaceDetail> {
+    return this.http.post<WorkspaceDetail>(`${this.v1}/workspaces`, body);
+  }
+  joinDemo(): Observable<WorkspaceDetail> {
+    return this.http.post<WorkspaceDetail>(`${this.v1}/workspaces/demo/join`, {});
+  }
+  acceptInvite(token: string): Observable<WorkspaceDetail> {
+    return this.http.post<WorkspaceDetail>(`${this.v1}/invitations/${encodeURIComponent(token)}/accept`, {});
+  }
+  workspace(): Observable<WorkspaceDetail> {
+    return this.http.get<WorkspaceDetail>(`${this.v1}/workspace`);
+  }
+  updateWorkspace(body: Partial<{ name: string; country: string; industry: string; teamSize: string }>): Observable<WorkspaceDetail> {
+    return this.http.patch<WorkspaceDetail>(`${this.v1}/workspace`, body);
+  }
+  deleteWorkspace(confirmName: string): Observable<void> {
+    return this.http.post<void>(`${this.v1}/workspace/delete`, { confirm_name: confirmName });
+  }
+  leaveWorkspace(): Observable<void> {
+    return this.http.post<void>(`${this.v1}/workspace/leave`, {});
+  }
+  onboarding(): Observable<Onboarding> {
+    return this.http.get<Onboarding>(`${this.v1}/workspace/onboarding`);
+  }
+  products(): Observable<{ products: Product[] }> {
+    return this.http.get<{ products: Product[] }>(`${this.v1}/workspace/products`);
+  }
+  addProduct(name: string, category?: string | null): Observable<Product> {
+    return this.http.post<Product>(`${this.v1}/workspace/products`, { name, category: category || null });
+  }
+
+  // --- SaaS: team ---------------------------------------------------------------------
+  team(): Observable<{ members: Member[]; invitations: Invitation[]; canManage: boolean }> {
+    return this.http.get<{ members: Member[]; invitations: Invitation[]; canManage: boolean }>(`${this.v1}/team`);
+  }
+  invite(emails: string[], role: WorkspaceRole): Observable<{ results: { email: string; ok: boolean; error?: string; invitation?: Invitation }[] }> {
+    return this.http.post<{ results: { email: string; ok: boolean; error?: string; invitation?: Invitation }[] }>(
+      `${this.v1}/team/invitations`,
+      { emails, role },
+    );
+  }
+  resendInvite(id: string): Observable<Invitation> {
+    return this.http.post<Invitation>(`${this.v1}/team/invitations/${id}/resend`, {});
+  }
+  revokeInvite(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.v1}/team/invitations/${id}`);
+  }
+  setRole(userId: string, role: WorkspaceRole): Observable<{ members: Member[] }> {
+    return this.http.patch<{ members: Member[] }>(`${this.v1}/team/members/${userId}`, { role });
+  }
+  removeMember(userId: string): Observable<{ members: Member[] }> {
+    return this.http.delete<{ members: Member[] }>(`${this.v1}/team/members/${userId}`);
+  }
+
+  // --- SaaS: billing ------------------------------------------------------------------
+  billing(): Observable<BillingSummary> {
+    return this.http.get<BillingSummary>(`${this.v1}/billing`);
+  }
+  changePlan(planId: string, interval: 'MONTH' | 'YEAR'): Observable<BillingSummary> {
+    return this.http.post<BillingSummary>(`${this.v1}/billing/plan`, { plan_id: planId, interval });
+  }
+  invoices(): Observable<{ invoices: Invoice[] }> {
+    return this.http.get<{ invoices: Invoice[] }>(`${this.v1}/billing/invoices`);
+  }
+  invoice(id: string): Observable<Invoice> {
+    return this.http.get<Invoice>(`${this.v1}/billing/invoices/${id}`);
+  }
+
+  // --- SaaS: notifications ------------------------------------------------------------
+  notifications(): Observable<{ items: AppNotification[]; unread: number }> {
+    return this.http.get<{ items: AppNotification[]; unread: number }>(`${this.v1}/notifications`);
+  }
+  markRead(ids?: number[]): Observable<void> {
+    return this.http.post<void>(`${this.v1}/notifications/read`, { ids: ids ?? null });
   }
 }

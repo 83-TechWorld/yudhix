@@ -1,4 +1,25 @@
 <div class="page page-narrow">
+  @if (showChecklist()) {
+    @let o = onboarding()!;
+    <section class="card card-pad checklist enter">
+      <div class="row">
+        <div class="grow">
+          <span class="eyebrow">Getting started · {{ o.completed }} of {{ o.total }}</span>
+          <h2>Set up {{ session.workspace()?.name }}</h2>
+        </div>
+        <button class="btn btn-ghost btn-icon btn-sm" type="button" (click)="hideChecklist()" aria-label="Hide checklist"><y-icon name="x" [size]="16" /></button>
+      </div>
+      <div class="bar"><span class="bar-brand" [style.width.%]="(o.completed / o.total) * 100"></span></div>
+      <ul class="steps-list">
+        @for (s of o.steps; track s.key) {
+          <li [class.done]="s.done">
+            <span class="tick">@if (s.done) { <y-icon name="check" [size]="12" [stroke]="3" /> }</span>
+            @if (s.done) { <span>{{ s.label }}</span> } @else { <a [routerLink]="s.link">{{ s.label }}</a> }
+          </li>
+        }
+      </ul>
+    </section>
+  }
   <section class="hero enter">
     <span class="eyebrow">Step 1 · Ground truth</span>
     <h1>Check a video before its comments shape your brand</h1>
@@ -7,7 +28,9 @@
       documents, and shows which audience reactions each claim caused.
     </p>
 
-    @if (!job() || job()!.status === 'FAILED') {
+    @if (!session.can('content.write')) {
+      <div class="callout callout-info"><y-icon name="info" [size]="16" /><span>Your role is read-only in this workspace. Browse existing reports under Videos, or ask an admin for agent access.</span></div>
+    } @else if (!job() || job()!.status === 'FAILED') {
       <form class="card card-pad analyze-form enter" style="--i: 2" (ngSubmit)="submit()">
         <label class="sr-only" for="url">YouTube video link</label>
         <div class="url-row">

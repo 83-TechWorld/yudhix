@@ -26,6 +26,8 @@ from app.core.text import format_timestamp
 from app.db import DEFAULT_PRODUCT_ID, DEFAULT_SOURCE_ID, persist_comment_and_analysis
 from app.pipeline.classifier import FastSentimentClassifier
 from app.pipeline.masker import PiiMasker
+from app.platform import billing
+from app.platform.notifications import notify
 from app.truth import attribution, youtube
 from app.truth.claims import extract_claims
 from app.truth.retrieval import KnowledgeIndex
@@ -91,16 +93,24 @@ def run_job(job_id: str, tenant_id: str, manual_transcript: Optional[str] = None
     job = get_job(tenant_id, job_id)
     if not job:
         return
+    creator = (fetch_one("SELECT created_by FROM video_analysis_job WHERE id = %s", (job_id,)) or {}).get("created_by")
     try:
-        analyze_video(tenant_id, job["videoId"], job["videoUrl"], job.get("productId"), manual_transcript,
-                      progress=lambda stage, pct, msg: _update(job_id, stage, pct, msg))
+        result = analyze_video(tenant_id, job["videoId"], job["videoUrl"], job.get("productId"), manual_transcript,
+                               progress=lambda stage, pct, msg: _update(job_id, stage, pct, msg))
         _update(job_id, "COMPLETED", 100, "Analysis complete", status="COMPLETED")
+        billing.record(tenant_id, "COMMENT_INGESTED", result.get("commentsIngested", 0), key=f"job:{job_id}")
+        notify(tenant_id, "analysis", "Truth report ready",
+               f"{result.get('misleadingClaims', 0)} of {result.get('claims', 0)} claims disputed.",
+               f"/videos/{job['videoId']}", user_ids=[creator])
     except (PipelineError, youtube.YouTubeError) as e:
         _update(job_id, "FAILED", 100, str(e), status="FAILED", error=str(e))
+        notify(tenant_id, "analysis", "Video analysis failed", str(e), "/analyze", user_ids=[creator])
     except Exception as e:  # unexpected: log the detail, show a generic message
         logger.exception("Video analysis job %s failed", job_id)
         _update(job_id, "FAILED", 100, "Something went wrong while analyzing this video.", status="FAILED",
                 error=f"{type(e).__name__}: {e}")
+        notify(tenant_id, "analysis", "Video analysis failed", "Something went wrong. Try again.", "/analyze",
+               user_ids=[creator])
 
 
 # ----------------------------------------------------------------------------- pipeline
@@ -239,6 +249,10 @@ def author_hash(tenant_id: str, platform: str, author_id: str) -> str:
 
 def _ingest_comments(tenant_id: str, video_id: str, meta: youtube.VideoMeta, product_id: Optional[str]) -> int:
     raw = youtube.fetch_comments(video_id, config.MAX_COMMENTS_PER_VIDEO)
+    if raw and not product_id:  # attach to this workspace's own product, never another tenant's
+        first = fetch_one("SELECT id FROM product WHERE tenant_id = %s AND active ORDER BY created_at LIMIT 1",
+                          (tenant_id,))
+        product_id = str(first["id"]) if first else None
     for c in raw:
         masked, _ = _masker.mask(c["text"])
         sentiment, score = _classifier.classify(masked)

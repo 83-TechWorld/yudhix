@@ -1,34 +1,67 @@
-"""Request context: tenant and acting user.
+"""Request context: who is calling (Keycloak token) and which workspace (X-Tenant-Id).
 
-Until the SaaS/auth layer lands, the web app sends X-Tenant-Id, X-User-Id and X-User-Role.
-In production these come from the gateway after it validates the Keycloak JWT; clients must
-never be trusted to set them directly.
+Route dependencies:
+  principal  -> signed-in user, no workspace needed (e.g. /me, create workspace, accept invite)
+  membership -> signed-in member of the X-Tenant-Id workspace (read access)
+  tenant_id  -> just the workspace id, for read routes
+  actor      -> a member who may change content (admin / approver / agent; analysts are read-only)
+  require(p) -> a member holding permission p (e.g. "team.manage")
 """
 import uuid
-from typing import Optional
+from typing import Callable, Optional
 
-from fastapi import Header, HTTPException
+from fastapi import Depends, Header, HTTPException
 
-from app.core import config
+from app.platform.auth import AuthError, Membership, Principal, load_membership, verify_token
 from app.workflow.state import Actor
 
 
-def tenant_id(x_tenant_id: Optional[str] = Header(default=None)) -> str:
-    value = x_tenant_id or config.DEFAULT_TENANT_ID
+def principal(authorization: Optional[str] = Header(default=None)) -> Principal:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(401, "Sign in to continue.", headers={"WWW-Authenticate": "Bearer"})
     try:
-        uuid.UUID(value)
-    except ValueError:
-        raise HTTPException(400, "X-Tenant-Id must be a UUID")
-    return value
+        return verify_token(authorization[7:].strip())
+    except AuthError as e:
+        raise HTTPException(e.status_code, str(e), headers={"WWW-Authenticate": "Bearer"})
 
 
-def actor(x_user_id: Optional[str] = Header(default=None), x_user_role: Optional[str] = Header(default=None)) -> Actor:
-    role = (x_user_role or "agent").lower()
-    if role not in ("agent", "approver"):
-        raise HTTPException(400, "X-User-Role must be 'agent' or 'approver'")
-    user_id = x_user_id or config.DEMO_USERS[role]["id"]
+def membership(user: Principal = Depends(principal), x_tenant_id: Optional[str] = Header(default=None)) -> Membership:
+    if not x_tenant_id:
+        raise HTTPException(400, "Pick a workspace first (X-Tenant-Id header is missing).")
     try:
-        uuid.UUID(user_id)
+        uuid.UUID(x_tenant_id)
     except ValueError:
-        raise HTTPException(400, "X-User-Id must be a UUID")
-    return Actor(id=user_id, role=role)
+        raise HTTPException(400, "X-Tenant-Id must be a workspace id.")
+    try:
+        return load_membership(user, x_tenant_id)
+    except AuthError as e:
+        raise HTTPException(e.status_code, str(e))
+
+
+def tenant_id(member: Membership = Depends(membership)) -> str:
+    return member.tenant_id
+
+
+def require(permission: str) -> Callable[..., Membership]:
+    def check(member: Membership = Depends(membership)) -> Membership:
+        if not member.can(permission):
+            raise HTTPException(403, _denied(permission))
+        return member
+    return check
+
+
+def actor(member: Membership = Depends(membership)) -> Actor:
+    """Someone allowed to change content. Approvers and admins can also review replies."""
+    if not member.can("content.write"):
+        raise HTTPException(403, _denied("content.write"))
+    return Actor(id=member.user_id, role="approver" if member.can("reply.approve") else "agent")
+
+
+def _denied(permission: str) -> str:
+    return {
+        "workspace.manage": "Only workspace admins can change workspace settings.",
+        "team.manage": "Only workspace admins can manage the team.",
+        "billing.manage": "Only workspace admins can change billing.",
+        "content.write": "Your role is read-only in this workspace. Ask an admin for agent access.",
+        "reply.approve": "Only approvers and admins can review replies.",
+    }.get(permission, "You don't have permission to do that.")

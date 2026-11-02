@@ -1,5 +1,8 @@
 from typing import Optional
-from fastapi import FastAPI, HTTPException, Body
+import hmac
+
+from fastapi import FastAPI, HTTPException, Body, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 
@@ -20,7 +23,7 @@ from app.db import (
     tag_comment_product,
     get_video_truth_analysis
 )
-from app.api import truth as truth_api, workflow as workflow_api
+from app.api import platform as platform_api, truth as truth_api, workflow as workflow_api
 from app.core import config, llm
 from app.core.database import run_migrations
 from app.truth import youtube
@@ -39,10 +42,27 @@ app.add_middleware(
     allow_origins=config.CORS_ORIGINS,
     allow_credentials=False,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "X-Tenant-Id", "X-User-Id", "X-User-Role"],
+    allow_headers=["Content-Type", "Authorization", "X-Tenant-Id"],
 )
+app.include_router(platform_api.router)
 app.include_router(truth_api.router)
 app.include_router(workflow_api.router)
+
+
+# Pre-SaaS endpoints below take tenant_id as a query parameter and have no user context.
+# They stay available for internal jobs (Airflow) only, behind INTERNAL_API_KEY.
+LEGACY_PREFIXES = ("/api/v1/products", "/api/v1/comments", "/api/v1/watermark", "/api/v1/mask",
+                   "/api/v1/analyze", "/api/v1/scheduler")
+
+
+@app.middleware("http")
+async def guard_legacy_endpoints(request: Request, call_next):
+    path = request.url.path
+    if request.method != "OPTIONS" and any(path == p or path.startswith(p + "/") for p in LEGACY_PREFIXES):
+        key = request.headers.get("x-internal-key", "")
+        if not config.INTERNAL_API_KEY or not hmac.compare_digest(key, config.INTERNAL_API_KEY):
+            return JSONResponse({"detail": "Internal endpoint. Use the workspace API instead."}, status_code=401)
+    return await call_next(request)
 
 
 @app.on_event("startup")

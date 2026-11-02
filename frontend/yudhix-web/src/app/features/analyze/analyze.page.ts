@@ -3,7 +3,8 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { Subscription, switchMap, takeWhile, timer } from 'rxjs';
 import { ApiService, errorMessage } from '../../core/api.service';
-import { Health, Job, Video } from '../../core/models';
+import { Health, Job, Onboarding, Video } from '../../core/models';
+import { SessionService } from '../../core/session.service';
 import { IconComponent } from '../../shared/icon.component';
 import { AgoPipe, CompactPipe, RingComponent, ToastService } from '../../shared/ui';
 
@@ -28,6 +29,7 @@ export class AnalyzePage {
   private router = inject(Router);
   private toast = inject(ToastService);
   private destroyRef = inject(DestroyRef);
+  protected session = inject(SessionService);
 
   protected readonly stages = STAGES;
   protected url = '';
@@ -39,6 +41,12 @@ export class AnalyzePage {
   protected readonly jobs = signal<Job[]>([]);
   protected readonly videos = signal<Video[] | null>(null);
   protected readonly health = signal<Health | null>(null);
+  protected readonly onboarding = signal<Onboarding | null>(null);
+  protected readonly checklistHidden = signal(this.readHidden());
+  protected readonly showChecklist = computed(() => {
+    const o = this.onboarding();
+    return !!o && o.completed < o.total && !this.session.workspace()?.isDemo && !this.checklistHidden();
+  });
   private poll?: Subscription;
 
   protected readonly stageIndex = computed(() => {
@@ -52,6 +60,7 @@ export class AnalyzePage {
 
   constructor() {
     this.api.health().subscribe({ next: (h) => this.health.set(h), error: () => {} });
+    this.api.onboarding().subscribe({ next: (o) => this.onboarding.set(o), error: () => {} });
     this.api.videos().subscribe({ next: (r) => this.videos.set(r.videos), error: () => this.videos.set([]) });
     this.api.jobs().subscribe({
       next: (r) => {
@@ -107,6 +116,23 @@ export class AnalyzePage {
         },
         error: (e) => this.toast.error(errorMessage(e)),
       });
+  }
+
+  protected hideChecklist(): void {
+    this.checklistHidden.set(true);
+    try {
+      localStorage.setItem(`yudhix.checklist.${this.session.workspaceId()}`, '1');
+    } catch {
+      /* ignore */
+    }
+  }
+
+  private readHidden(): boolean {
+    try {
+      return localStorage.getItem(`yudhix.checklist.${inject(SessionService).workspaceId()}`) === '1';
+    } catch {
+      return false;
+    }
   }
 
   protected reset(): void {

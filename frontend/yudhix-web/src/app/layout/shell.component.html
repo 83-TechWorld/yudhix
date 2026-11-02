@@ -78,9 +78,9 @@
       </nav>
       <span class="spacer hide-mobile"></span>
 
-      <button class="status hide-mobile" type="button" (click)="refreshHealth()" [attr.title]="apiDown() ? 'API offline. Click to retry' : 'Connected'">
-        <span class="dot" [class.live]="!apiDown() && health()" [style.background]="apiDown() ? 'var(--danger)' : health() ? 'var(--ok)' : 'var(--muted)'"></span>
-        @if (apiDown()) { API offline } @else if (health()?.capabilities?.llm) { AI ready } @else if (health()) { Rule-based mode } @else { Connecting… }
+      <button class="btn btn-ghost btn-icon bot-btn" type="button" (click)="refreshHealth()"
+        [attr.aria-label]="botState() === 'offline' ? 'API offline. Retry' : 'AI status. Check again'">
+        <y-bot [state]="botState()" [size]="22" />
       </button>
       <button class="btn btn-ghost btn-icon" type="button" (click)="session.cycleTheme()" [attr.aria-label]="'Theme: ' + session.theme()" [attr.title]="'Theme: ' + session.theme()">
         <y-icon [name]="themeIcon()" [size]="18" />

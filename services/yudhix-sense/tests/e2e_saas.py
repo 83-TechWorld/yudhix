@@ -99,6 +99,7 @@ try:
 
     b = api(A, "GET", "/billing", tenant=ws).json()
     check("trial billing summary", b["status"] == "TRIALING" and b["plan"]["id"] == "PROFESSIONAL" and len(b["meters"]) == 5, b)
+    check("India workspace bills in INR", b["plan"]["currency"] == "INR", b["plan"])
 
     check("add product", api(A, "POST", "/workspace/products", tenant=ws, json={"name": "SoundMax Pro Headphones", "category": "Audio"}).status_code == 201)
     ob = api(A, "GET", "/workspace/onboarding", tenant=ws).json()
@@ -143,17 +144,33 @@ try:
     api(A, "PATCH", f"/team/members/{agent_id}", tenant=ws, json={"role": "agent"})
     check("agent can add knowledge", api(G, "POST", "/truth/knowledge", tenant=ws, json={"title": "Battery life", "statement": "SoundMax Pro battery lasts 40 hours with ANC off."}).status_code == 201)
 
-    # Billing: switch from trial to Starter (India -> GST 18%)
+    # Regional pricing on the public API
+    pr = httpx.get(f"{API}/public/plans", params={"currency": "INR"}).json()
+    check("public INR price list", pr["currency"] == "INR" and pr["plans"][0]["monthlyPrice"] == 7999, pr["plans"][0])
+    check("unknown currency falls back to USD", httpx.get(f"{API}/public/plans", params={"currency": "GBP"}).json()["currency"] == "USD")
+
+    # Billing: switch from trial to Starter (India -> INR + GST 18%)
     r = api(A, "POST", "/billing/plan", tenant=ws, json={"plan_id": "STARTER", "interval": "MONTH"})
     check("switch to Starter", r.status_code == 200 and r.json()["status"] == "ACTIVE", r.text[:200])
     inv = api(A, "GET", "/billing/invoices", tenant=ws).json()["invoices"]
-    check("invoice issued", len(inv) == 1 and inv[0]["subtotal"] == 99 and inv[0]["tax"] == 17.82 and inv[0]["total"] == 116.82, inv)
+    check("INR invoice issued with GST", len(inv) == 1 and inv[0]["currency"] == "INR" and inv[0]["subtotal"] == 7999
+          and inv[0]["tax"] == 1439.82 and inv[0]["total"] == 9438.82, inv)
     d = api(A, "GET", f"/billing/invoices/{inv[0]['id']}", tenant=ws).json()
-    check("invoice detail has lines + GST", d["lines"][0]["amount"] == 99 and d["taxLabel"] == "GST 18%", d)
+    check("invoice detail has lines + GST", d["lines"][0]["amount"] == 7999 and d["taxLabel"] == "GST 18%", d)
     r = api(A, "POST", "/billing/plan", tenant=ws, json={"plan_id": "PROFESSIONAL", "interval": "YEAR"})
     inv = api(A, "GET", "/billing/invoices", tenant=ws).json()["invoices"]
     d = api(A, "GET", f"/billing/invoices/{inv[0]['id']}", tenant=ws).json()
-    check("upgrade prorates old plan", any(l["amount"] < 0 for l in d["lines"]) and d["subtotal"] < 4990, d["lines"])
+    check("upgrade prorates old plan (same currency)", d["currency"] == "INR" and any(l["amount"] < 0 for l in d["lines"])
+          and d["subtotal"] < 399990, d["lines"])
+
+    # A US workspace bills in USD with no GST
+    r = api(A, "POST", "/workspaces", json={"name": f"Acme US {RUN}", "country": "US"})
+    us = r.json()["id"]
+    check("US workspace trial in USD", api(A, "GET", "/billing", tenant=us).json()["plan"]["currency"] == "USD")
+    api(A, "POST", "/billing/plan", tenant=us, json={"plan_id": "STARTER", "interval": "MONTH"})
+    inv = api(A, "GET", "/billing/invoices", tenant=us).json()["invoices"]
+    check("USD invoice, no GST", inv[0]["currency"] == "USD" and inv[0]["subtotal"] == 99 and inv[0]["tax"] == 0, inv)
+    api(A, "POST", "/workspace/delete", tenant=us, json={"confirm_name": f"Acme US {RUN}"})
 
     # Notifications
     n = api(A, "GET", "/notifications", tenant=ws).json()

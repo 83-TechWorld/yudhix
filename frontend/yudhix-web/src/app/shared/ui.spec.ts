@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { AgoPipe, CompactPipe, DuePipe, PctPipe, youtubeAt } from './ui';
+import { AgoPipe, CompactPipe, DuePipe, PctPipe, formatMoney, youtubeAt } from './ui';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { SessionService, initials, trialDaysLeft } from '../core/session.service';
@@ -23,6 +23,14 @@ describe('formatting pipes', () => {
     expect(new CompactPipe().transform(2662)).toMatch(/2[.,]7\s?K/i);
     expect(new CompactPipe().transform(null)).toBe('–');
     expect(new PctPipe().transform(0.101)).toBe('10%');
+  });
+
+  it('formats rupees with Indian grouping and dollars normally', () => {
+    expect(formatMoney(159999, 'INR')).toBe('₹1,59,999');
+    expect(formatMoney(1439.82, 'INR')).toBe('₹1,439.82');
+    expect(formatMoney(1999, 'USD')).toBe('$1,999');
+    expect(formatMoney(116.8, 'USD', 2)).toBe('$116.80');
+    expect(formatMoney(null)).toBe('–');
   });
 
   it('builds YouTube deep links', () => {

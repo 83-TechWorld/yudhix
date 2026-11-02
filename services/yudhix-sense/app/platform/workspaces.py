@@ -110,7 +110,8 @@ def create(user: Principal, name: str, country: str, industry: Optional[str], te
         cur.execute("""INSERT INTO tenant_user (id, tenant_id, keycloak_user_id, email, full_name, roles, active)
                        VALUES (%s, %s, %s, %s, %s, '{admin}', true)""",
                     (str(uuid.uuid4()), tenant_id, user.sub, user.email, user.name))
-        billing.start_trial(cur, tenant_id)
+        currency = fetch_one("SELECT currency FROM country_config WHERE country_code = %s", (country,))["currency"]
+        billing.start_trial(cur, tenant_id, currency)
         append_audit(cur, tenant_id, user.sub, "USER", "WORKSPACE_CREATED", "TENANT", tenant_id,
                      {"name": name, "slug": slug, "country": country})
     notify(tenant_id, "welcome", f"Welcome to {name}",

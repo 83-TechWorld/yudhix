@@ -1,4 +1,3 @@
-import { CurrencyPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { environment } from '../../../environments/environment';
@@ -6,6 +5,8 @@ import { ApiService, errorMessage } from '../../core/api.service';
 import { AuthService } from '../../core/auth.service';
 import { Plan } from '../../core/models';
 import { IconComponent } from '../../shared/icon.component';
+import { MoneyPipe, detectCurrency } from '../../shared/ui';
+import { SessionService } from '../../core/session.service';
 import { PublicFooterComponent, PublicHeaderComponent } from './public-chrome';
 
 export function quota(n: number, unit = ''): string {
@@ -14,7 +15,7 @@ export function quota(n: number, unit = ''): string {
 
 @Component({
   selector: 'y-pricing',
-  imports: [RouterLink, CurrencyPipe, IconComponent, PublicHeaderComponent, PublicFooterComponent],
+  imports: [RouterLink, MoneyPipe, IconComponent, PublicHeaderComponent, PublicFooterComponent],
   template: `
     <y-public-header />
     <main class="wrap">
@@ -22,9 +23,18 @@ export function quota(n: number, unit = ''): string {
         <span class="eyebrow">Pricing</span>
         <h1>Simple plans that grow with your brands</h1>
         <p class="lead">Every plan starts with a 14-day Professional trial. No credit card needed.</p>
-        <div class="segmented" role="radiogroup" aria-label="Billing period">
-          <button type="button" [class.active]="interval() === 'MONTH'" (click)="interval.set('MONTH')">Monthly</button>
-          <button type="button" [class.active]="interval() === 'YEAR'" (click)="interval.set('YEAR')">Yearly <span class="save">2 months free</span></button>
+        <div class="toggles">
+          <div class="segmented" role="radiogroup" aria-label="Billing period">
+            <button type="button" [class.active]="interval() === 'MONTH'" (click)="interval.set('MONTH')">Monthly</button>
+            <button type="button" [class.active]="interval() === 'YEAR'" (click)="interval.set('YEAR')">Yearly <span class="save">2 months free</span></button>
+          </div>
+          @if (currencies().length > 1) {
+            <div class="segmented" role="radiogroup" aria-label="Currency">
+              @for (c of currencies(); track c) {
+                <button type="button" [class.active]="currency() === c" (click)="setCurrency(c)">{{ currencyLabel(c) }}</button>
+              }
+            </div>
+          }
         </div>
       </header>
 
@@ -40,7 +50,7 @@ export function quota(n: number, unit = ''): string {
               <h2>{{ p.name }}</h2>
               <p class="subtle tag">{{ p.tagline }}</p>
               <div class="price">
-                <strong>{{ price(p) | currency: p.currency : 'symbol' : '1.0-0' }}</strong>
+                <strong>{{ price(p) | money: p.currency : 0 }}</strong>
                 <span class="subtle">/ month{{ interval() === 'YEAR' ? ', billed yearly' : '' }}</span>
               </div>
               @if (p.id === 'ENTERPRISE') {
@@ -74,7 +84,15 @@ export function quota(n: number, unit = ''): string {
               </tbody>
             </table>
           </div>
-          <p class="subtle">Prices in USD, excluding tax (GST is added for India-based workspaces). Extra comments beyond your plan are billed at $2 per 1,000.</p>
+          @if (plans()?.[0]; as first) {
+            <p class="subtle">
+              @if (currency() === 'INR') { Prices in Indian rupees, excluding 18% GST. }
+              @else { Prices in US dollars, excluding applicable taxes. }
+              Extra comments beyond your plan are billed at {{ first.overagePer1000 | money: first.currency }} per 1,000.
+              @if (currency() === 'INR') { Rupee pricing applies to workspaces based in India. }
+              @else if (currencies().includes('INR')) { India-based workspaces are billed in rupees. }
+            </p>
+          }
         </section>
       }
 
@@ -96,6 +114,7 @@ export function quota(n: number, unit = ''): string {
     .head { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 56px 0 36px; }
     .head h1 { font-size: clamp(28px, 4vw, 44px); letter-spacing: -0.03em; }
     .lead { color: var(--text-2); font-size: 17px; }
+    .toggles { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
     .save { font-size: 11.5px; color: var(--ok-text); background: var(--ok-soft); padding: 1px 6px; border-radius: 6px; }
     .plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; align-items: start; }
     @media (max-width: 900px) { .plans { grid-template-columns: 1fr; max-width: 480px; margin: 0 auto; } }
@@ -131,7 +150,10 @@ export class PricingPage {
   protected auth = inject(AuthService);
   protected readonly plans = signal<Plan[] | null>(null);
   protected readonly error = signal('');
+  private session = inject(SessionService);
   protected readonly interval = signal<'MONTH' | 'YEAR'>('MONTH');
+  protected readonly currency = signal<string>('USD');
+  protected readonly currencies = signal<string[]>([]);
   protected readonly salesHref = `mailto:${environment.salesEmail}?subject=${encodeURIComponent('Yudhix Enterprise')}`;
   protected readonly q = (n: number) => quota(n);
   protected readonly price = (p: Plan) =>
@@ -147,6 +169,33 @@ export class PricingPage {
   ];
 
   constructor() {
-    this.api.plans().subscribe({ next: (r) => this.plans.set(r.plans), error: (e) => this.error.set(errorMessage(e)) });
+    // ?currency=INR wins; signed-in users see their workspace's currency; otherwise guess from the browser.
+    const fromUrl = new URLSearchParams(location.search).get('currency');
+    this.load(fromUrl || detectCurrency());
+    if (!fromUrl && this.auth.authenticated()) {
+      this.session.refresh().then(() => {
+        const country = this.session.workspace()?.country;
+        if (country) this.load(country === 'IN' ? 'INR' : 'USD');
+      }).catch(() => {});
+    }
+  }
+
+  protected setCurrency(code: string): void {
+    this.load(code);
+  }
+
+  protected currencyLabel(code: string): string {
+    return code === 'INR' ? '₹ INR' : code === 'USD' ? '$ USD' : code;
+  }
+
+  private load(currency: string): void {
+    this.api.plans(currency).subscribe({
+      next: (r) => {
+        this.currency.set(r.currency);
+        this.currencies.set([...r.currencies].sort((a, b) => (a === 'USD' ? -1 : b === 'USD' ? 1 : a.localeCompare(b))));
+        this.plans.set(r.plans);
+      },
+      error: (e) => this.error.set(errorMessage(e)),
+    });
   }
 }

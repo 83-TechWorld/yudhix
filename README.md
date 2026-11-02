@@ -561,9 +561,9 @@ Before submitting to the stores you still need app icons and splash images (`npx
 
 ```bash
 ./yudhix.sh unit                                   # both suites
-cd services/yudhix-sense && ./.venv/bin/python -m pytest -q tests     # 31 backend unit tests
-cd frontend/yudhix-web && npm test                                    # 9 frontend unit tests (headless Chrome)
-./yudhix.sh e2e                                                        # 40 end-to-end checks through the real Keycloak
+cd services/yudhix-sense && ./.venv/bin/python -m pytest -q tests     # 34 backend unit tests
+cd frontend/yudhix-web && npm test                                    # 10 frontend unit tests (headless Chrome)
+./yudhix.sh e2e                                                        # ~47 end-to-end checks through the real Keycloak
 ```
 
 The end-to-end test (`services/yudhix-sense/tests/e2e_saas.py`) creates two throwaway Keycloak users, signs in with the real PKCE flow, and checks workspaces, invitations (incl. the Mailpit email), role permissions, tenant isolation, plan changes with GST invoices and proration, notifications, the demo workspace and deletion. It removes its users at the end.
@@ -968,7 +968,8 @@ Every route except `/health` and `/api/v1/public/*` needs `Authorization: Bearer
 
 | Method | Path | Who | Purpose |
 |---|---|---|---|
-| `GET` | `/api/v1/public/plans`, `/public/countries` | anyone | Pricing and supported countries |
+| `GET` | `/api/v1/public/plans?currency=INR\|USD` | anyone | Plans priced in a currency (unknown → USD), plus the list of priced currencies |
+| `GET` | `/api/v1/public/countries` | anyone | Supported countries |
 | `GET` | `/api/v1/public/invitations/{token}` | anyone | Invite preview (workspace, inviter, role, masked email) |
 | `GET` | `/api/v1/me` | signed in | Profile, workspaces with role/plan/trial, pending invites |
 | `POST` | `/api/v1/workspaces` | signed in, verified email | Create a workspace (caller becomes admin, trial starts) |
@@ -1021,7 +1022,7 @@ Every state change appends a hash-chained `audit_event` (`row_hash = SHA-256(pre
 |---|---|---|
 | **Auth & tenancy** | Keycloak PKCE sign-in; per-workspace roles enforced in the API. | Route through `yudhix-gateway`; enable PostgreSQL RLS on the new tables as defense in depth; move workspace/billing APIs into `yudhix-tenant` / `yudhix-meter`. |
 | **Payments** | Plans, quotas, proration and invoices are real, issued net 30 with status `OPEN`; no card is charged. | Stripe / Razorpay checkout + webhooks that mark invoices `PAID`; dunning for unpaid invoices. |
-| **Tax** | GST 18% for India-based workspaces; other countries show "Tax (not collected)". Prices in USD. | Tax engine (US sales tax, EU VAT), INR pricing, GSTIN on invoices. |
+| **Tax** | GST 18% for India-based workspaces (billed in INR); other countries billed in USD with "Tax (not collected)". | Tax engine (US sales tax, EU VAT), GSTIN / place of supply on invoices. |
 | **SEO** | Landing and pricing pages are client-rendered. | Prerender / SSR for `/` and `/pricing`. |
 | **Posting replies** | Approved replies are recorded as `SIMULATED` (nothing is sent to YouTube). | YouTube OAuth connector in `yudhix-link`, `delivery_mode = LIVE`, automatic +24h/+72h/+7d outcome checks. |
 | **Outcomes** | Recorded by hand from the customer's follow-up (scored automatically) or chosen directly. | Automatic from live threads (`/outcomes/check` is ready for `LIVE` replies). |
@@ -1037,6 +1038,12 @@ Every state change appends a hash-chained `audit_event` (`row_hash = SHA-256(pre
 
 ## 14. Changelog
 
+### 2026-11-02: Regional pricing, robot AI status, new favicon
+- **INR pricing for India, USD elsewhere:** `plan_price` table, billing currency per workspace, currency-aware invoices and proration, ₹ / $ toggle and auto-detection on the pricing page, Indian digit grouping.
+- **AI status robot** in the app bar: awake when the local AI model is available, asleep (with floating "z"s) in rule-based mode, x-eyes when the API is offline.
+- **Favicon & app icons:** Yudhix mark as SVG + ICO, PWA / apple-touch icons, and the Keycloak sign-in pages.
+- **Professional redesign:** Inter font, zinc palette, grouped sidebar, slim app bar, work-focused Analyze page.
+
 ### 2026-11-02: SaaS layer
 - **Public site:** landing page and live pricing page (monthly / yearly, comparison table, FAQ).
 - **Sign-up & sign-in with Keycloak:** PKCE, verified email, password policy, brute-force protection, branded login theme, `configure_realm.py`. The password grant is disabled.
@@ -1045,7 +1052,7 @@ Every state change appends a hash-chained `audit_event` (`row_hash = SHA-256(pre
 - **Billing:** 14-day trial, Starter / Professional / Enterprise, usage meters vs quotas (hard limits on analyses and posted replies), plan changes with proration, GST invoices with printable view.
 - **Notifications:** in-app bell for reviews, approvals, joins, quota warnings and finished analyses.
 - **Security:** every API call needs a verified Keycloak token and workspace membership; demo identity headers removed; legacy endpoints locked behind `INTERNAL_API_KEY`.
-- **Tests:** 31 backend + 9 frontend unit tests; 40-check end-to-end API test through the real Keycloak.
+- **Tests:** 34 backend + 10 frontend unit tests; end-to-end API test through the real Keycloak (incl. INR and USD invoices).
 
 ### 2026-11-01: Truth-first product, new UI
 - **New web app:** Angular 20 PWA, responsive from phone to desktop, light/dark, ready for App Store / Play Store via Capacitor 8. Replaces the vanilla JS single page (still available in git history before this commit).
@@ -1085,17 +1092,26 @@ Landing / Pricing ──► Start free trial ──► Keycloak sign-up ──�
 | Approve / reject replies (never their own) | ✓ | ✓ | | |
 | Workspace settings, team, billing | ✓ | | | |
 
-**Plans** (USD / month; yearly = 10× monthly)
+**Plans.** Yearly = 10× monthly (2 months free).
 
-| | Starter $99 | Professional $499 | Enterprise $1,999 |
+| | Starter | Professional | Enterprise |
 |---|---|---|---|
+| **India (INR, + 18% GST)** | ₹7,999 / month | ₹39,999 / month | ₹1,59,999 / month |
+| **All other countries (USD)** | $99 / month | $499 / month | $1,999 / month |
 | Video analyses | 20 | 100 | Unlimited |
 | Comments | 10,000 | 100,000 | Unlimited |
 | AI drafts & checks (fair use) | 2,000 | 25,000 | Unlimited |
 | Replies posted | 500 | 5,000 | Unlimited |
 | Team members (incl. pending invites) | 5 | 20 | Unlimited |
 
-Trials and quotas: when the trial ends, reports stay readable but new analyses and posting return **402** until an admin picks a plan. Admins get notifications at 80% and 100% of each quota. Extra comments are billed at $2 per 1,000 on the next invoice.
+**Regional pricing.** Prices live in the `plan_price` table, one row per plan and currency (migration `V4__regional_pricing.sql`):
+- A workspace's **billing currency comes from its headquarters country**: India → INR (with 18% GST), every other country → USD. A country whose currency has no `plan_price` rows is billed in USD.
+- The currency is stored on `subscription.currency` and **stays fixed while a paid plan is active**, so an invoice never mixes currencies. Proration credits use the same currency.
+- The public pricing page shows **₹ to visitors in India** (India time zone or `en-IN` locale) and **$ to everyone else**, with a ₹ / $ toggle. Signed-in users see their workspace's currency, and `?currency=INR` forces one. Rupees use Indian digit grouping (₹1,59,999).
+- To change a price: `UPDATE plan_price SET monthly_price = 8999, yearly_price = 89990 WHERE plan_id = 'STARTER' AND currency = 'INR';`. To add a currency: insert rows for each plan and set `country_config.currency` for its countries.
+- Extra comments: $2 or ₹150 per 1,000.
+
+Trials and quotas: when the trial ends, reports stay readable but new analyses and posting return **402** until an admin picks a plan. Admins get notifications at 80% and 100% of each quota. Extra comments are billed on the next invoice ($2 / ₹150 per 1,000).
 
 **Good to know**
 - The demo workspace (`is_demo`) can't be deleted, and anyone can leave or rejoin it. Turn off `DEMO_WORKSPACE_JOIN` in production.

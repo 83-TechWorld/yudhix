@@ -28,7 +28,8 @@ METRICS = {
     "AI_CALL": ("llm_quota", "AI drafts & checks", False),
     "REPLY_POSTED": ("reply_quota", "Replies posted", True),
 }
-COMMENT_OVERAGE_PER_1000 = Decimal("2.00")
+COMMENT_OVERAGE_PER_1000 = Decimal("2.00")   # fallback; real rates live in plan_price.overage_per_1000
+DEFAULT_CURRENCY = "USD"
 NET_DAYS = 30
 TAX = {"IN_GST_18": (Decimal("0.18"), "GST 18%")}   # other profiles: tax not collected yet
 
@@ -80,10 +81,10 @@ def overage_lines(usage: Dict[str, int], plan: Dict) -> List[Dict]:
     quota = plan["comment_quota"]
     extra = usage.get("COMMENT_INGESTED", 0) - quota if quota >= 0 else 0
     if extra > 0:
+        rate = Decimal(str(plan.get("overage_per_1000") or COMMENT_OVERAGE_PER_1000))
         blocks = Decimal(extra) / Decimal(1000)
         lines.append({"description": f"Comment overage: {extra:,} over the {quota:,} included",
-                      "quantity": money(blocks), "unit_price": COMMENT_OVERAGE_PER_1000,
-                      "amount": money(blocks * COMMENT_OVERAGE_PER_1000)})
+                      "quantity": money(blocks), "unit_price": rate, "amount": money(blocks * rate)})
     return lines
 
 
@@ -96,24 +97,48 @@ def effective_status(sub: Dict, now: Optional[datetime] = None) -> str:
 
 # ----------------------------------------------------------------------------- reads
 
-def plans() -> List[Dict]:
-    rows = fetch_all("SELECT * FROM plan WHERE active ORDER BY sort_order, monthly_price")
+def priced_currencies() -> List[str]:
+    return [r["currency"] for r in fetch_all("SELECT DISTINCT currency FROM plan_price ORDER BY currency")]
+
+
+def billing_currency(currency: Optional[str], priced: Optional[List[str]] = None) -> str:
+    """The currency we can actually bill in: the requested one if plans are priced in it, else USD."""
+    priced = priced if priced is not None else priced_currencies()
+    code = (currency or "").upper()
+    return code if code in priced else DEFAULT_CURRENCY
+
+
+def workspace_currency(tenant_id: str) -> str:
+    """INR for India-based workspaces; USD for every country without its own price list."""
+    row = fetch_one("""SELECT c.currency FROM tenant t LEFT JOIN country_config c ON c.country_code = t.hq_country
+                       WHERE t.id = %s""", (tenant_id,))
+    return billing_currency(row["currency"] if row else None)
+
+
+def plans(currency: Optional[str] = None) -> List[Dict]:
+    code = billing_currency(currency)
+    rows = fetch_all("""SELECT p.*, pp.currency AS price_currency, pp.monthly_price AS price_monthly,
+                               pp.yearly_price AS price_yearly, pp.overage_per_1000
+                        FROM plan p JOIN plan_price pp ON pp.plan_id = p.id AND pp.currency = %s
+                        WHERE p.active ORDER BY p.sort_order, pp.monthly_price""", (code,))
     return [_plan(r) for r in rows if r["id"] in ("STARTER", "PROFESSIONAL", "ENTERPRISE")]
 
 
 def _plan(r: Dict) -> Dict:
-    return {"id": r["id"], "name": r["name"], "tagline": r.get("tagline"), "currency": r["currency"],
-            "monthlyPrice": float(r["monthly_price"]),
-            "yearlyPrice": float(r["yearly_price"]) if r.get("yearly_price") is not None else None,
+    return {"id": r["id"], "name": r["name"], "tagline": r.get("tagline"), "currency": r["price_currency"],
+            "monthlyPrice": float(r["price_monthly"]), "yearlyPrice": float(r["price_yearly"]),
+            "overagePer1000": float(r["overage_per_1000"]),
             "features": r.get("features") or [], "highlighted": bool(r.get("highlighted")),
             "quotas": {"videos": r["video_quota"], "comments": r["comment_quota"], "aiCalls": r["llm_quota"],
                        "replies": r["reply_quota"], "seats": r["seat_limit"]}}
 
 
 def _subscription(tenant_id: str) -> Dict:
-    sub = fetch_one("""SELECT s.*, p.name AS plan_name, p.monthly_price, p.yearly_price, p.video_quota, p.comment_quota,
-                              p.llm_quota, p.reply_quota, p.seat_limit, p.currency
-                       FROM subscription s JOIN plan p ON p.id = s.plan_id WHERE s.tenant_id = %s""", (tenant_id,))
+    sub = fetch_one("""SELECT s.*, p.name AS plan_name, p.video_quota, p.comment_quota, p.llm_quota, p.reply_quota,
+                              p.seat_limit, pp.monthly_price, pp.yearly_price, pp.overage_per_1000
+                       FROM subscription s JOIN plan p ON p.id = s.plan_id
+                       JOIN plan_price pp ON pp.plan_id = s.plan_id AND pp.currency = COALESCE(s.currency, 'USD')
+                       WHERE s.tenant_id = %s""", (tenant_id,))
     if not sub:
         raise QuotaError("This workspace has no subscription. Contact support.")
     return sub
@@ -183,13 +208,13 @@ def _tax_profile(tenant_id: str) -> Optional[str]:
 
 # ----------------------------------------------------------------------------- writes
 
-def start_trial(cur, tenant_id: str, now: Optional[datetime] = None) -> None:
+def start_trial(cur, tenant_id: str, currency: str = DEFAULT_CURRENCY, now: Optional[datetime] = None) -> None:
     now = now or _now()
     ends = now + timedelta(days=config.TRIAL_DAYS)
     cur.execute("""INSERT INTO subscription (tenant_id, plan_id, status, current_period_start, current_period_end,
-                       billing_interval, trial_ends_at)
-                   VALUES (%s, %s, 'TRIALING', %s, %s, 'MONTH', %s)""",
-                (tenant_id, config.TRIAL_PLAN, now, ends, ends))
+                       billing_interval, trial_ends_at, currency)
+                   VALUES (%s, %s, 'TRIALING', %s, %s, 'MONTH', %s, %s)""",
+                (tenant_id, config.TRIAL_PLAN, now, ends, ends, billing_currency(currency)))
 
 
 def check_quota(tenant_id: str, metric: str, quantity: int = 1) -> None:
@@ -259,6 +284,12 @@ def change_plan(tenant_id: str, actor_id: str, plan_id: str, interval: str) -> D
         raise ValueError("Unknown plan.")
     old = _subscription(tenant_id)
     now = _now()
+    # A paid plan keeps its currency (one invoice never mixes currencies). Otherwise bill in the
+    # workspace's local currency: INR for India, USD elsewhere.
+    currency = old["currency"] if old["status"] == "ACTIVE" else workspace_currency(tenant_id)
+    price_row = fetch_one("SELECT * FROM plan_price WHERE plan_id = %s AND currency = %s", (plan_id, currency))
+    if not price_row:
+        raise ValueError(f"{plan['name']} isn't available in {currency}.")
     seats = seats_used(tenant_id)
     if plan["seat_limit"] >= 0 and seats > plan["seat_limit"]:
         raise ValueError(f"{plan['name']} includes {plan['seat_limit']} team members and you have {seats} "
@@ -266,7 +297,7 @@ def change_plan(tenant_id: str, actor_id: str, plan_id: str, interval: str) -> D
     if old["status"] == "ACTIVE" and old["plan_id"] == plan_id and old["billing_interval"] == interval:
         raise ValueError("You're already on this plan.")
 
-    price = money(plan["yearly_price"] if interval == "YEAR" else plan["monthly_price"])
+    price = money(price_row["yearly_price"] if interval == "YEAR" else price_row["monthly_price"])
     end = add_interval(now, interval)
     lines = [{"description": f"{plan['name']} plan, {now:%d %b %Y} – {end:%d %b %Y}", "quantity": 1,
               "unit_price": price, "amount": price}]
@@ -281,10 +312,10 @@ def change_plan(tenant_id: str, actor_id: str, plan_id: str, interval: str) -> D
     with cursor(commit=True) as cur:
         cur.execute("""UPDATE subscription SET plan_id = %s, status = 'ACTIVE', billing_interval = %s,
                               current_period_start = %s, current_period_end = %s, trial_ends_at = NULL,
-                              cancel_at_period_end = false, updated_at = now()
-                       WHERE tenant_id = %s""", (plan_id, interval, now, end, tenant_id))
+                              cancel_at_period_end = false, currency = %s, updated_at = now()
+                       WHERE tenant_id = %s""", (plan_id, interval, now, end, currency, tenant_id))
         cur.execute("UPDATE tenant SET plan_code = %s, updated_at = now() WHERE id = %s", (plan_id, tenant_id))
-        invoice_id = _issue_invoice(cur, tenant_id, Period(now, end), lines, plan["currency"])
+        invoice_id = _issue_invoice(cur, tenant_id, Period(now, end), lines, currency)
         append_audit(cur, tenant_id, actor_id, "USER", "PLAN_CHANGED", "SUBSCRIPTION", tenant_id,
                      {"from": old["plan_id"], "from_status": old["status"], "to": plan_id, "interval": interval,
                       "invoice_id": invoice_id})

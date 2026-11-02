@@ -7,6 +7,7 @@ import { ApiService, errorMessage } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
 import { AppNotification, Health, WorkspaceSummary } from '../core/models';
 import { ROLE_INFO, SessionService, initials, trialDaysLeft } from '../core/session.service';
+import { BotState, BotStatusComponent } from '../shared/bot-status.component';
 import { IconComponent } from '../shared/icon.component';
 import { AgoPipe, ToastService } from '../shared/ui';
 
@@ -16,7 +17,7 @@ type Menu = 'workspace' | 'user' | 'notifications' | null;
 
 @Component({
   selector: 'y-shell',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, NgTemplateOutlet, IconComponent, AgoPipe],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, NgTemplateOutlet, IconComponent, BotStatusComponent, AgoPipe],
   templateUrl: './shell.component.html',
   styleUrl: './shell.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -55,6 +56,13 @@ export class ShellComponent {
   protected readonly notes = signal<AppNotification[]>([]);
   protected readonly unread = signal(0);
 
+  /** Robot in the app bar: awake when the AI model is available, asleep in rule-based mode. */
+  protected readonly botState = computed<BotState>(() => {
+    if (this.apiDown()) return 'offline';
+    const h = this.health();
+    if (!h) return 'connecting';
+    return h.capabilities.llm ? 'awake' : 'asleep';
+  });
   protected readonly themeIcon = computed(() => ({ system: 'monitor', light: 'sun', dark: 'moon' })[this.session.theme()]);
   protected readonly trialDays = computed(() => trialDaysLeft(this.session.workspace()));
   /** How much of the 14-day trial is used, for the sidebar progress bar. */

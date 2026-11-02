@@ -26,8 +26,11 @@ def _run(fn, *args, **kwargs):
 # ----------------------------------------------------------------------------- public
 
 @router.get("/public/plans")
-def public_plans():
-    return {"plans": billing.plans()}
+def public_plans(currency: Optional[str] = None):
+    """Plans priced in `currency` (INR, USD…). Unknown or missing currency falls back to USD."""
+    priced = billing.priced_currencies()
+    code = billing.billing_currency(currency, priced)
+    return {"currency": code, "currencies": priced, "plans": billing.plans(code)}
 
 
 @router.get("/public/countries")

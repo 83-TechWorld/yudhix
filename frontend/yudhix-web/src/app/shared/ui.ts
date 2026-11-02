@@ -190,6 +190,39 @@ export class CompactPipe implements PipeTransform {
   }
 }
 
+/**
+ * Money in the right local style: INR uses Indian digit grouping (₹1,59,999), USD uses $1,999.
+ * Whole amounts drop the decimals; anything with paise / cents keeps two.
+ */
+export function formatMoney(value: number | null | undefined, currency = 'USD', decimals?: 0 | 2): string {
+  if (value === null || value === undefined) return '–';
+  const locale = currency === 'INR' ? 'en-IN' : 'en-US';
+  const digits = decimals ?? (Number.isInteger(value) ? 0 : 2);
+  return new Intl.NumberFormat(locale, { style: 'currency', currency, minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value);
+}
+
+@Pipe({ name: 'money' })
+export class MoneyPipe implements PipeTransform {
+  transform(value: number | null | undefined, currency = 'USD', decimals?: 0 | 2): string {
+    return formatMoney(value, currency, decimals);
+  }
+}
+
+/**
+ * Best guess at the visitor's pricing currency, without asking a server for their IP location:
+ * India time zone or an Indian locale means INR, everyone else sees USD.
+ */
+export function detectCurrency(): 'INR' | 'USD' {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone ?? '';
+    if (tz === 'Asia/Kolkata' || tz === 'Asia/Calcutta') return 'INR';
+    if ((navigator.languages ?? [navigator.language]).some((l) => /-IN$/i.test(l))) return 'INR';
+  } catch {
+    /* fall through */
+  }
+  return 'USD';
+}
+
 @Pipe({ name: 'pct' })
 export class PctPipe implements PipeTransform {
   transform(value: number | null | undefined): string {

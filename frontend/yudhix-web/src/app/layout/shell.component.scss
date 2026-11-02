@@ -100,11 +100,7 @@
 .crumbs { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-3); min-width: 0; }
 .crumb-ws { max-width: 260px; }
 .crumb-page { color: var(--text); font-weight: 550; }
-.status { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 10px; margin-right: 6px; border-radius: 999px;
-  border: 1px solid var(--border); background: var(--surface); color: var(--text-2); font-size: 12px; font-weight: 500; cursor: pointer; }
-.status:hover { border-color: var(--border-strong); }
-.status .dot { width: 7px; height: 7px; }
-.dot.live { box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 20%, transparent); }
+.bot-btn { overflow: visible; }
 .grow { flex: 1; min-width: 0; }
 .avatar-btn { border: 0; background: none; padding: 4px; cursor: pointer; }
 .bell { position: relative; display: inline-flex; }

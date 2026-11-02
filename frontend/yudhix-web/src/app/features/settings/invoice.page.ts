@@ -1,14 +1,15 @@
-import { CurrencyPipe, DatePipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, effect, inject, input, signal, untracked } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ApiService, errorMessage } from '../../core/api.service';
 import { Invoice } from '../../core/models';
 import { IconComponent } from '../../shared/icon.component';
+import { MoneyPipe } from '../../shared/ui';
 
 /** Printable invoice. "Download PDF" uses the browser's print-to-PDF. */
 @Component({
   selector: 'y-invoice',
-  imports: [RouterLink, CurrencyPipe, DatePipe, IconComponent],
+  imports: [RouterLink, MoneyPipe, DatePipe, IconComponent],
   template: `
     <div class="page page-narrow">
       <div class="row-wrap no-print toolbar">
@@ -44,13 +45,13 @@ import { IconComponent } from '../../shared/icon.component';
             <thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th></tr></thead>
             <tbody>
               @for (l of i.lines; track $index) {
-                <tr><td>{{ l.description }}</td><td class="num">{{ l.quantity }}</td><td class="num">{{ l.unitPrice | currency: i.currency }}</td><td class="num">{{ l.amount | currency: i.currency }}</td></tr>
+                <tr><td>{{ l.description }}</td><td class="num">{{ l.quantity }}</td><td class="num">{{ l.unitPrice | money: i.currency : 2 }}</td><td class="num">{{ l.amount | money: i.currency : 2 }}</td></tr>
               }
             </tbody>
             <tfoot>
-              <tr><td colspan="3">Subtotal</td><td class="num">{{ i.subtotal | currency: i.currency }}</td></tr>
-              <tr><td colspan="3">{{ i.taxLabel }}</td><td class="num">{{ i.tax | currency: i.currency }}</td></tr>
-              <tr class="total"><td colspan="3">Total due</td><td class="num">{{ i.total | currency: i.currency }}</td></tr>
+              <tr><td colspan="3">Subtotal</td><td class="num">{{ i.subtotal | money: i.currency : 2 }}</td></tr>
+              <tr><td colspan="3">{{ i.taxLabel }}</td><td class="num">{{ i.tax | money: i.currency : 2 }}</td></tr>
+              <tr class="total"><td colspan="3">Total due</td><td class="num">{{ i.total | money: i.currency : 2 }}</td></tr>
             </tfoot>
           </table>
           <p class="subtle foot">Payment terms: net 30. Questions about this invoice? Reply to your billing email or contact your account manager.</p>

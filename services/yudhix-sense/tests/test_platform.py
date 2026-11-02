@@ -94,3 +94,19 @@ class PermissionsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RegionalPricingTest(unittest.TestCase):
+    def test_billing_currency_falls_back_to_usd(self):
+        priced = ["INR", "USD"]
+        self.assertEqual(billing.billing_currency("INR", priced), "INR")
+        self.assertEqual(billing.billing_currency("inr", priced), "INR")
+        self.assertEqual(billing.billing_currency("GBP", priced), "USD")
+        self.assertEqual(billing.billing_currency(None, priced), "USD")
+
+    def test_overage_uses_the_plan_currency_rate(self):
+        line = billing.overage_lines({"COMMENT_INGESTED": 12000}, {"comment_quota": 10000, "overage_per_1000": 150})[0]
+        self.assertEqual(line["amount"], Decimal("300.00"))  # 2 x ₹150
+
+    def test_gst_on_rupee_price(self):
+        self.assertEqual(billing.tax_for("IN_GST_18", Decimal("7999")), (Decimal("1439.82"), "GST 18%"))

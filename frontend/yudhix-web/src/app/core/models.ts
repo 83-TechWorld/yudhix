@@ -290,6 +290,7 @@ export interface Plan {
   currency: string;
   monthlyPrice: number;
   yearlyPrice: number | null;
+  overagePer1000: number;
   features: string[];
   highlighted: boolean;
   quotas: { videos: number; comments: number; aiCalls: number; replies: number; seats: number };

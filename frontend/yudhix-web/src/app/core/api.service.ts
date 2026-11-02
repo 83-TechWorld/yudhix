@@ -190,8 +190,10 @@ export class ApiService {
   }
 
   // --- SaaS: public ---------------------------------------------------------------
-  plans(): Observable<{ plans: Plan[] }> {
-    return this.http.get<{ plans: Plan[] }>(`${this.v1}/public/plans`);
+  plans(currency?: string | null): Observable<{ currency: string; currencies: string[]; plans: Plan[] }> {
+    return this.http.get<{ currency: string; currencies: string[]; plans: Plan[] }>(`${this.v1}/public/plans`, {
+      params: params({ currency }),
+    });
   }
   countries(): Observable<{ countries: Country[] }> {
     return this.http.get<{ countries: Country[] }>(`${this.v1}/public/countries`);

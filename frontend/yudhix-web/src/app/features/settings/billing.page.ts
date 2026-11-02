@@ -1,4 +1,4 @@
-import { CurrencyPipe, DatePipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { environment } from '../../../environments/environment';
@@ -6,12 +6,12 @@ import { ApiService, errorMessage } from '../../core/api.service';
 import { BillingSummary, Invoice, Meter, Plan } from '../../core/models';
 import { SessionService } from '../../core/session.service';
 import { IconComponent } from '../../shared/icon.component';
-import { EmptyStateComponent, ToastService } from '../../shared/ui';
+import { EmptyStateComponent, MoneyPipe, ToastService } from '../../shared/ui';
 import { quota } from '../public/pricing.page';
 
 @Component({
   selector: 'y-billing',
-  imports: [RouterLink, CurrencyPipe, DatePipe, IconComponent, EmptyStateComponent],
+  imports: [RouterLink, MoneyPipe, DatePipe, IconComponent, EmptyStateComponent],
   template: `
     @if (!summary()) {
       <div class="stack"><div class="skeleton" style="height: 160px"></div><div class="skeleton" style="height: 260px"></div></div>
@@ -32,7 +32,7 @@ import { quota } from '../public/pricing.page';
                 }
               </h2>
               @if (s.status === 'ACTIVE') {
-                <p class="muted">{{ s.plan.price | currency: s.plan.currency : 'symbol' : '1.0-0' }} / {{ s.plan.interval === 'YEAR' ? 'year' : 'month' }} · renews {{ s.periodEnd | date: 'mediumDate' }}</p>
+                <p class="muted">{{ s.plan.price | money: s.plan.currency : 0 }} / {{ s.plan.interval === 'YEAR' ? 'year' : 'month' }} · renews {{ s.periodEnd | date: 'mediumDate' }}</p>
               } @else if (s.status === 'TRIALING') {
                 <p class="muted">Your trial ends {{ s.trialEndsAt | date: 'mediumDate' }}. Pick a plan any time; your data stays as it is.</p>
               } @else {
@@ -40,7 +40,7 @@ import { quota } from '../public/pricing.page';
               }
             </div>
           </div>
-          <div class="callout callout-info"><y-icon name="info" [size]="16" /><span>Invoice billing, net 30. Online card payments aren't connected yet; Enterprise customers can always pay by invoice.</span></div>
+          <div class="callout callout-info"><y-icon name="info" [size]="16" /><span>Billed in {{ s.plan.currency === 'INR' ? 'Indian rupees (₹), plus 18% GST' : 'US dollars ($)' }} · invoice billing, net 30. Online card payments aren't connected yet.</span></div>
         </section>
 
         <!-- Usage -->
@@ -68,10 +68,10 @@ import { quota } from '../public/pricing.page';
             <div class="row"><h2>Next invoice</h2><span class="spacer"></span><span class="subtle">{{ s.upcoming.date | date: 'mediumDate' }}</span></div>
             <table class="lines">
               @for (l of s.upcoming.lines; track l.description) {
-                <tr><td>{{ l.description }}</td><td class="num">{{ l.amount | currency: s.plan.currency }}</td></tr>
+                <tr><td>{{ l.description }}</td><td class="num">{{ l.amount | money: s.plan.currency : 2 }}</td></tr>
               }
-              <tr class="sub"><td>{{ s.upcoming.taxLabel }}</td><td class="num">{{ s.upcoming.tax | currency: s.plan.currency }}</td></tr>
-              <tr class="total"><td>Estimated total</td><td class="num">{{ s.upcoming.total | currency: s.plan.currency }}</td></tr>
+              <tr class="sub"><td>{{ s.upcoming.taxLabel }}</td><td class="num">{{ s.upcoming.tax | money: s.plan.currency : 2 }}</td></tr>
+              <tr class="total"><td>Estimated total</td><td class="num">{{ s.upcoming.total | money: s.plan.currency : 2 }}</td></tr>
             </table>
           </section>
         }
@@ -91,7 +91,7 @@ import { quota } from '../public/pricing.page';
               @let current = isCurrent(p);
               <div class="card card-pad plan" [class.current]="current">
                 <div class="row"><strong>{{ p.name }}</strong>@if (current) { <span class="chip chip-ok">Current</span> }</div>
-                <div class="price">{{ priceOf(p) | currency: p.currency : 'symbol' : '1.0-0' }}<span class="subtle"> / {{ interval() === 'YEAR' ? 'year' : 'month' }}</span></div>
+                <div class="price">{{ priceOf(p) | money: p.currency : 0 }}<span class="subtle"> / {{ interval() === 'YEAR' ? 'year' : 'month' }}</span></div>
                 <ul class="subtle">
                   <li>{{ q(p.quotas.videos) }} video analyses</li>
                   <li>{{ q(p.quotas.comments) }} comments</li>
@@ -100,7 +100,7 @@ import { quota } from '../public/pricing.page';
                 @if (canManage && !current) {
                   @if (confirming() === p.id) {
                     <div class="confirm stack enter-fade">
-                      <span class="subtle">Switch now? You'll get an invoice for {{ priceOf(p) | currency: p.currency : 'symbol' : '1.0-0' }}@if (s.status === 'ACTIVE') {, minus credit for unused time on {{ s.plan.name }}}.</span>
+                      <span class="subtle">Switch now? You'll get an invoice for {{ priceOf(p) | money: p.currency : 0 }}@if (s.status === 'ACTIVE') {, minus credit for unused time on {{ s.plan.name }}}.</span>
                       <div class="row-wrap">
                         <button class="btn btn-primary btn-sm" type="button" (click)="change(p)" [disabled]="changing()">{{ changing() ? 'Switching…' : 'Confirm' }}</button>
                         <button class="btn btn-sm" type="button" (click)="confirming.set(null)">Cancel</button>
@@ -130,7 +130,7 @@ import { quota } from '../public/pricing.page';
                   <y-icon name="file" [size]="18" />
                   <div class="grow"><strong>{{ i.number }}</strong><span class="subtle"> · {{ i.issuedAt | date: 'mediumDate' }}</span></div>
                   <span class="chip" [class.chip-ok]="i.status === 'PAID'" [class.chip-warn]="i.status === 'OPEN'">{{ i.status === 'OPEN' ? 'Due ' + (i.dueAt | date: 'd MMM') : i.status }}</span>
-                  <strong class="num">{{ i.total | currency: i.currency }}</strong>
+                  <strong class="num">{{ i.total | money: i.currency : 2 }}</strong>
                 </a>
               } @empty {
                 <y-empty icon="file" title="No invoices yet" text="Your first invoice appears when you choose a plan." />
@@ -192,7 +192,6 @@ export class BillingPage {
 
   constructor() {
     this.load();
-    this.api.plans().subscribe({ next: (r) => this.plans.set(r.plans), error: () => {} });
   }
 
   private load(): void {
@@ -200,6 +199,10 @@ export class BillingPage {
       next: (s) => {
         this.summary.set(s);
         if (s.status === 'ACTIVE') this.interval.set(s.plan.interval);
+        // Plans in this workspace's billing currency (INR for India, USD elsewhere)
+        if (this.plans()[0]?.currency !== s.plan.currency) {
+          this.api.plans(s.plan.currency).subscribe({ next: (r) => this.plans.set(r.plans), error: () => {} });
+        }
       },
       error: (e) => this.toast.error(errorMessage(e)),
     });

@@ -11,6 +11,7 @@ import { IconComponent } from '../shared/icon.component';
 import { AgoPipe, ToastService } from '../shared/ui';
 
 interface NavItem { path: string; label: string; icon: string; mobile: boolean; }
+interface NavGroup { label: string; items: NavItem[]; }
 type Menu = 'workspace' | 'user' | 'notifications' | null;
 
 @Component({
@@ -38,6 +39,11 @@ export class ShellComponent {
     { path: '/knowledge', label: 'Knowledge', icon: 'book', mobile: false },
     { path: '/settings', label: 'Settings', icon: 'settings', mobile: false },
   ];
+  protected readonly groups: NavGroup[] = [
+    { label: 'Workflow', items: this.nav.slice(0, 5) },
+    { label: 'Workspace', items: this.nav.slice(5) },
+  ];
+  protected readonly mobileNav = this.nav.filter((n) => n.mobile);
 
   protected readonly health = signal<Health | null>(null);
   protected readonly apiDown = signal(false);
@@ -51,6 +57,11 @@ export class ShellComponent {
 
   protected readonly themeIcon = computed(() => ({ system: 'monitor', light: 'sun', dark: 'moon' })[this.session.theme()]);
   protected readonly trialDays = computed(() => trialDaysLeft(this.session.workspace()));
+  /** How much of the 14-day trial is used, for the sidebar progress bar. */
+  protected readonly trialProgress = computed(() => {
+    const left = this.trialDays();
+    return left === null ? 0 : Math.min(100, Math.max(4, ((14 - left) / 14) * 100));
+  });
   protected readonly status = computed(() => this.session.workspace()?.subscriptionStatus ?? null);
   /** Re-creates the routed page when the workspace changes, so no data from the old brand lingers. */
   protected readonly outletKeys = computed(() => [this.session.workspaceId() ?? 'none']);

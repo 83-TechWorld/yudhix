@@ -13,7 +13,6 @@ import { AgoPipe, EmptyStateComponent, ToastService } from '../../shared/ui';
     <div class="page page-narrow">
       <header class="page-head">
         <div>
-          <span class="eyebrow">Ground truth</span>
           <h1>Knowledge base</h1>
           <p>The official facts Yudhix checks creator claims against. Better sources mean better verdicts.</p>
         </div>

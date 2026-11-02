@@ -1,11 +1,10 @@
 <div class="page">
   <header class="page-head">
     <div>
-      <span class="eyebrow">Track</span>
       <h1>Outcomes</h1>
       <p>Did your replies turn people around? Where is negativity coming from?</p>
     </div>
-    <div class="row-wrap">
+    <div class="row-wrap head-actions">
       <select class="select video-select" [ngModel]="videoId()" (ngModelChange)="selectVideo($event)" aria-label="Scope">
         <option value="">All videos</option>
         @for (v of videos(); track v.id) { <option [value]="v.videoId">{{ v.title }}</option> }

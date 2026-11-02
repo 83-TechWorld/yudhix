@@ -99,7 +99,8 @@ export class SessionService {
 }
 
 export function initials(name: string): string {
-  const parts = name.replace(/@.*/, '').split(/[\s._-]+/).filter(Boolean);
+  // Letters and digits only, so "PlayStation (Demo)" becomes "PD", not "P("
+  const parts = name.replace(/@.*/, '').replace(/[^\p{L}\p{N}]+/gu, ' ').split(' ').filter(Boolean);
   return ((parts[0]?.[0] ?? '?') + (parts[1]?.[0] ?? '')).toUpperCase();
 }
 

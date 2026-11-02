@@ -1,178 +1,191 @@
-<div class="page page-narrow">
-  @if (showChecklist()) {
-    @let o = onboarding()!;
-    <section class="card card-pad checklist enter">
-      <div class="row">
-        <div class="grow">
-          <span class="eyebrow">Getting started · {{ o.completed }} of {{ o.total }}</span>
-          <h2>Set up {{ session.workspace()?.name }}</h2>
-        </div>
-        <button class="btn btn-ghost btn-icon btn-sm" type="button" (click)="hideChecklist()" aria-label="Hide checklist"><y-icon name="x" [size]="16" /></button>
-      </div>
-      <div class="bar"><span class="bar-brand" [style.width.%]="(o.completed / o.total) * 100"></span></div>
-      <ul class="steps-list">
-        @for (s of o.steps; track s.key) {
-          <li [class.done]="s.done">
-            <span class="tick">@if (s.done) { <y-icon name="check" [size]="12" [stroke]="3" /> }</span>
-            @if (s.done) { <span>{{ s.label }}</span> } @else { <a [routerLink]="s.link">{{ s.label }}</a> }
-          </li>
-        }
-      </ul>
-    </section>
-  }
-  <section class="hero enter">
-    <span class="eyebrow">Step 1 · Ground truth</span>
-    <h1>Check a video before its comments shape your brand</h1>
-    <p class="muted">
-      Paste a YouTube link. Yudhix pulls out what the creator claims, checks each claim against your official
-      documents, and shows which audience reactions each claim caused.
-    </p>
+<div class="page">
+  <header class="page-head enter">
+    <div>
+      <h1>Analyze</h1>
+      <p>Check what a creator claims against your official facts, then see which reactions each claim caused.</p>
+    </div>
+    <a class="btn hide-mobile" routerLink="/videos"><y-icon name="video" [size]="16" /> All videos</a>
+  </header>
 
-    @if (!session.can('content.write')) {
-      <div class="callout callout-info"><y-icon name="info" [size]="16" /><span>Your role is read-only in this workspace. Browse existing reports under Videos, or ask an admin for agent access.</span></div>
-    } @else if (!job() || job()!.status === 'FAILED') {
-      <form class="card card-pad analyze-form enter" style="--i: 2" (ngSubmit)="submit()">
-        <label class="sr-only" for="url">YouTube video link</label>
-        <div class="url-row">
-          <div class="search grow">
-            <y-icon name="video" />
-            <input id="url" name="url" class="input input-lg" [(ngModel)]="url" placeholder="https://www.youtube.com/watch?v=…"
-              autocomplete="off" inputmode="url" enterkeyhint="go" />
+  <div class="layout">
+    <!-- ===================== Main column ===================== -->
+    <div class="main-col">
+      @if (!session.can('content.write')) {
+        <div class="callout callout-info enter"><y-icon name="info" [size]="16" /><span>Your role is read-only in this workspace. Browse existing reports under Videos, or ask an admin for agent access.</span></div>
+      } @else if (!job() || job()!.status === 'FAILED') {
+        <form class="card new enter" style="--i: 1" (ngSubmit)="submit()">
+          <div class="card-head">
+            <div>
+              <h2>New analysis</h2>
+              <p class="subtle">Paste a YouTube link: a review, unboxing or opinion video.</p>
+            </div>
           </div>
-          <button class="btn btn-primary btn-lg" type="submit" [disabled]="submitting()">
-            @if (submitting()) { <y-icon name="loader" class="spin" /> Starting… } @else { <y-icon name="scan" /> Analyze }
-          </button>
-        </div>
-        @if (formError()) {
-          <div class="callout callout-danger"><y-icon name="alert" [size]="16" />{{ formError() }}</div>
-        }
-        @if (job()?.status === 'FAILED') {
-          <div class="callout callout-danger"><y-icon name="alert" [size]="16" /><span><strong>Analysis failed.</strong> {{ job()!.message }}</span></div>
-        }
-
-        <button type="button" class="link-btn" (click)="showTranscript.set(!showTranscript())" [attr.aria-expanded]="showTranscript()">
-          <y-icon [name]="showTranscript() ? 'chevronDown' : 'chevronRight'" [size]="16" />
-          Paste a transcript instead (optional)
-        </button>
-        @if (showTranscript()) {
-          <div class="field">
-            <textarea class="textarea mono" name="transcript" [(ngModel)]="transcript" rows="6"
-              placeholder="[00:42] Sony is forcing an online check on disc drives…&#10;[01:14] …"></textarea>
-            <span class="hint">Use this when the video has no captions. Start lines with [mm:ss] so claims link back to the right moment.</span>
+          <div class="card-body stack">
+            <div class="field">
+              <label for="url">Video URL</label>
+              <div class="url-row">
+                <div class="search grow">
+                  <y-icon name="link" [size]="16" />
+                  <input id="url" name="url" class="input" [(ngModel)]="url" placeholder="https://www.youtube.com/watch?v=…"
+                    autocomplete="off" inputmode="url" enterkeyhint="go" />
+                </div>
+                <button class="btn btn-primary" type="submit" [disabled]="submitting()">
+                  @if (submitting()) { <y-icon name="loader" class="spin" [size]="16" /> Starting… } @else { Analyze video }
+                </button>
+              </div>
+            </div>
+            @if (formError()) {
+              <div class="callout callout-danger"><y-icon name="alert" [size]="16" />{{ formError() }}</div>
+            }
+            @if (job()?.status === 'FAILED') {
+              <div class="callout callout-danger"><y-icon name="alert" [size]="16" /><span><strong>Analysis failed.</strong> {{ job()!.message }}</span></div>
+            }
+            <button type="button" class="link-btn" (click)="showTranscript.set(!showTranscript())" [attr.aria-expanded]="showTranscript()">
+              <y-icon [name]="showTranscript() ? 'chevronDown' : 'chevronRight'" [size]="15" />
+              Paste a transcript instead
+            </button>
+            @if (showTranscript()) {
+              <div class="field enter-fade">
+                <textarea class="textarea mono" name="transcript" [(ngModel)]="transcript" rows="6"
+                  placeholder="[00:42] Sony is forcing an online check on disc drives…&#10;[01:14] …"></textarea>
+                <span class="hint">For videos without captions. Start lines with [mm:ss] so claims link to the right moment.</span>
+              </div>
+            }
           </div>
-        }
-
-        <div class="caps">
           @if (health(); as h) {
-            <span class="chip" [class.chip-ok]="h.capabilities.llm">
-              <y-icon [name]="h.capabilities.llm ? 'sparkles' : 'info'" [size]="13" />
-              {{ h.capabilities.llm ? 'AI fact-checking (' + h.capabilities.llmModel + ')' : 'Rule-based fact-checking' }}
-            </span>
-            <span class="chip" [class.chip-ok]="h.capabilities.captions || h.capabilities.whisper">
-              <y-icon name="file" [size]="13" />
-              {{ h.capabilities.whisper ? 'Captions + Whisper' : h.capabilities.captions ? 'YouTube captions' : 'Paste transcript' }}
-            </span>
-            <span class="chip" [class.chip-ok]="h.capabilities.youtubeApi" [attr.title]="h.capabilities.youtubeApi ? '' : 'Set YOUTUBE_API_KEY on the server to pull comments for new videos'">
-              <y-icon name="message" [size]="13" />
-              {{ h.capabilities.youtubeApi ? 'Pulls comments' : 'Comments: existing only' }}
-            </span>
-          }
-        </div>
-      </form>
-    } @else {
-      <div class="card card-pad progress-card enter-fade" aria-live="polite">
-        <div class="row">
-          <div class="grow">
-            <div class="eyebrow">{{ job()!.status === 'COMPLETED' ? 'Done' : 'Analyzing' }}</div>
-            <h2 class="truncate">{{ job()!.videoUrl }}</h2>
-          </div>
-          <span class="pct">{{ job()!.progress }}%</span>
-        </div>
-        <div class="bar progress"><span class="bar-brand" [style.width.%]="job()!.progress"></span></div>
-        <ol class="steps">
-          @for (s of stages; track s.key; let i = $index) {
-            <li [class.done]="i < stageIndex()" [class.current]="i === stageIndex()">
-              <span class="step-dot">
-                @if (i < stageIndex()) { <y-icon name="check" [size]="13" [stroke]="3" /> }
-                @else if (i === stageIndex()) { <y-icon name="loader" [size]="13" [stroke]="3" class="spin" /> }
+            <div class="caps">
+              <span class="cap"><i class="dot" [class.on]="h.capabilities.llm"></i>{{ h.capabilities.llm ? 'AI fact-checking · ' + h.capabilities.llmModel : 'Rule-based fact-checking' }}</span>
+              <span class="cap"><i class="dot" [class.on]="h.capabilities.captions || h.capabilities.whisper"></i>{{ h.capabilities.whisper ? 'Captions + Whisper' : h.capabilities.captions ? 'YouTube captions' : 'Paste transcript' }}</span>
+              <span class="cap" [attr.title]="h.capabilities.youtubeApi ? '' : 'Set YOUTUBE_API_KEY on the server to pull comments for new videos'">
+                <i class="dot" [class.on]="h.capabilities.youtubeApi"></i>{{ h.capabilities.youtubeApi ? 'Pulls new comments' : 'Comments: existing only' }}
               </span>
-              <span>{{ s.label }}</span>
-            </li>
+            </div>
           }
-        </ol>
-        <p class="muted">{{ job()!.message }}</p>
-        <div class="row-wrap">
-          @if (job()!.status === 'COMPLETED') {
-            <a class="btn btn-primary" [routerLink]="['/videos', job()!.videoId]">Open truth report <y-icon name="arrowRight" /></a>
-          }
-          <button class="btn" type="button" (click)="reset()">Analyze another video</button>
+        </form>
+      } @else {
+        <div class="card progress-card enter-fade" aria-live="polite">
+          <div class="card-head">
+            <div class="grow">
+              <h2>{{ job()!.status === 'COMPLETED' ? 'Analysis complete' : 'Analyzing video' }}</h2>
+              <p class="subtle truncate">{{ job()!.videoUrl }}</p>
+            </div>
+            <span class="pct">{{ job()!.progress }}%</span>
+          </div>
+          <div class="card-body stack">
+            <div class="bar progress"><span class="bar-brand" [style.width.%]="job()!.progress"></span></div>
+            <ol class="steps">
+              @for (s of stages; track s.key; let i = $index) {
+                <li [class.done]="i < stageIndex()" [class.current]="i === stageIndex()">
+                  <span class="step-dot">
+                    @if (i < stageIndex()) { <y-icon name="check" [size]="12" [stroke]="3" /> }
+                    @else if (i === stageIndex()) { <y-icon name="loader" [size]="12" [stroke]="3" class="spin" /> }
+                  </span>
+                  <span>{{ s.label }}</span>
+                </li>
+              }
+            </ol>
+            <p class="muted">{{ job()!.message }}</p>
+            <div class="row-wrap">
+              @if (job()!.status === 'COMPLETED') {
+                <a class="btn btn-primary" [routerLink]="['/videos', job()!.videoId]">Open truth report <y-icon name="arrowRight" [size]="16" /></a>
+              }
+              <button class="btn" type="button" (click)="reset()">Analyze another video</button>
+            </div>
+          </div>
         </div>
-      </div>
-    }
-  </section>
+      }
 
-  <section class="how">
-    <div class="how-item enter" style="--i: 3"><span class="how-n">1</span><div><strong>Decode</strong><p class="subtle">Transcript → timestamped claims</p></div></div>
-    <div class="how-item enter" style="--i: 4"><span class="how-n">2</span><div><strong>Fact-check</strong><p class="subtle">Against your official knowledge</p></div></div>
-    <div class="how-item enter" style="--i: 5"><span class="how-n">3</span><div><strong>Trace reactions</strong><p class="subtle">Which claim caused which comments</p></div></div>
-    <div class="how-item enter" style="--i: 6"><span class="how-n">4</span><div><strong>Respond & track</strong><p class="subtle">Approved replies, measured outcomes</p></div></div>
-  </section>
-
-  <section class="stack">
-    <div class="row">
-      <h2>Recently analyzed</h2>
-      <span class="spacer"></span>
-      <a routerLink="/videos" class="btn btn-ghost btn-sm">All videos <y-icon name="arrowRight" [size]="15" /></a>
+      <section class="card enter" style="--i: 2">
+        <div class="card-head">
+          <h2>Recent videos</h2>
+          <a routerLink="/videos" class="btn btn-ghost btn-sm">View all <y-icon name="arrowRight" [size]="14" /></a>
+        </div>
+        @if (videos() === null) {
+          <div class="card-body stack">@for (i of [1, 2, 3]; track i) { <div class="skeleton" style="height: 52px"></div> }</div>
+        } @else if (recentVideos().length === 0) {
+          <div class="empty">
+            <div class="empty-icon"><y-icon name="video" [size]="20" /></div>
+            <h3>No videos analyzed yet</h3>
+            <p>Your truth reports will appear here. Start with a video that's getting a lot of comments.</p>
+          </div>
+        } @else {
+          <div class="vtable" role="table" aria-label="Recent videos">
+            <div class="vrow vhead" role="row">
+              <span role="columnheader">Video</span><span role="columnheader">Claims</span>
+              <span role="columnheader" class="hide-mobile">Comments</span><span role="columnheader" class="num">Accuracy</span>
+            </div>
+            @for (v of recentVideos(); track v.id; let i = $index) {
+              <a class="vrow enter" [style.--i]="i + 3" role="row" [routerLink]="['/videos', v.videoId]">
+                <span class="vcell video" role="cell">
+                  <img [src]="v.thumbnailUrl" alt="" loading="lazy" />
+                  <span class="vtitle"><strong class="truncate">{{ v.title }}</strong><small class="truncate">{{ v.channel }}</small></span>
+                </span>
+                <span role="cell">
+                  @if (v.misleadingClaims) { <span class="chip chip-warn">{{ v.misleadingClaims }} disputed</span> }
+                  @else { <span class="chip chip-ok">All accurate</span> }
+                </span>
+                <span role="cell" class="hide-mobile subtle-num">{{ v.comments | compact }}</span>
+                <span role="cell" class="num"><y-ring [value]="v.factualAccuracy" [size]="34" label="Accuracy" /></span>
+              </a>
+            }
+          </div>
+        }
+      </section>
     </div>
 
-    @if (videos() === null) {
-      <div class="recent">
-        @for (i of [1, 2, 3, 4]; track i) { <div class="skeleton" style="height: 92px"></div> }
-      </div>
-    } @else if (recentVideos().length === 0) {
-      <div class="card card-pad empty">
-        <h3>No videos yet</h3>
-        <p>Analyze your first video above, or try the example.</p>
-        <button class="btn" type="button" (click)="tryExample()">Try an example video</button>
-      </div>
-    } @else {
-      <div class="recent">
-        @for (v of recentVideos(); track v.id; let i = $index) {
-          <a class="card card-interactive recent-item enter" [style.--i]="i + 4" [routerLink]="['/videos', v.videoId]">
-            <img class="thumb" [src]="v.thumbnailUrl" alt="" loading="lazy" />
-            <div class="recent-body">
-              <strong class="clamp-2">{{ v.title }}</strong>
-              <span class="subtle truncate">{{ v.channel }} · {{ v.comments | compact }} comments</span>
-              @if (v.misleadingClaims) {
-                <span class="chip chip-warn">{{ v.misleadingClaims }} of {{ v.totalClaims }} claims disputed</span>
-              } @else {
-                <span class="chip chip-ok">No disputed claims</span>
-              }
+    <!-- ===================== Side column ===================== -->
+    <aside class="side-col">
+      @if (showChecklist()) {
+        @let o = onboarding()!;
+        <section class="card enter" style="--i: 1">
+          <div class="card-head">
+            <div>
+              <h2>Get started</h2>
+              <p class="subtle">{{ o.completed }} of {{ o.total }} done</p>
             </div>
-            <y-ring [value]="v.factualAccuracy" [size]="48" label="Accuracy" class="hide-mobile" />
-          </a>
-        }
-      </div>
-    }
+            <button class="btn btn-ghost btn-icon btn-sm" type="button" (click)="hideChecklist()" aria-label="Hide checklist"><y-icon name="x" [size]="15" /></button>
+          </div>
+          <div class="card-body">
+            <div class="bar thin"><span class="bar-brand" [style.width.%]="(o.completed / o.total) * 100"></span></div>
+            <ul class="checklist">
+              @for (s of o.steps; track s.key) {
+                <li [class.done]="s.done">
+                  <span class="tick">@if (s.done) { <y-icon name="check" [size]="11" [stroke]="3" /> }</span>
+                  @if (s.done) { <span>{{ s.label }}</span> } @else { <a [routerLink]="s.link">{{ s.label }}</a> }
+                </li>
+              }
+            </ul>
+          </div>
+        </section>
+      }
 
-    @if (jobs().length) {
-      <details class="card jobs">
-        <summary>Recent analysis runs ({{ jobs().length }})</summary>
-        <div class="list">
-          @for (j of jobs(); track j.id) {
-            <div class="list-item">
-              <span class="chip" [class.chip-ok]="j.status === 'COMPLETED'" [class.chip-danger]="j.status === 'FAILED'" [class.chip-info]="j.status === 'RUNNING'">{{ j.status }}</span>
-              <div class="grow" style="min-width: 0">
-                <div class="truncate">{{ j.videoUrl }}</div>
-                <div class="subtle">{{ j.createdAt | ago }} · {{ j.message }}</div>
-              </div>
-              @if (j.status === 'COMPLETED') {
-                <a class="btn btn-sm" [routerLink]="['/videos', j.videoId]">Report</a>
-              }
-            </div>
-          }
-        </div>
-      </details>
-    }
-  </section>
+      <section class="card how-card enter" style="--i: 2">
+        <div class="card-head"><h2>How it works</h2></div>
+        <ol class="how">
+          <li><span class="n">1</span><div><strong>Decode</strong><span>Transcript → timestamped claims</span></div></li>
+          <li><span class="n">2</span><div><strong>Fact-check</strong><span>Against your knowledge base</span></div></li>
+          <li><span class="n">3</span><div><strong>Trace reactions</strong><span>Which claim caused which comments</span></div></li>
+          <li><span class="n">4</span><div><strong>Respond & track</strong><span>Approved replies, measured outcomes</span></div></li>
+        </ol>
+      </section>
+
+      @if (jobs().length) {
+        <section class="card enter" style="--i: 3">
+          <div class="card-head"><h2>Recent runs</h2></div>
+          <ul class="runs">
+            @for (j of jobs().slice(0, 5); track j.id) {
+              <li>
+                <i class="dot" [style.background]="j.status === 'COMPLETED' ? 'var(--ok)' : j.status === 'FAILED' ? 'var(--danger)' : 'var(--brand)'"></i>
+                <div class="grow">
+                  @if (j.status === 'COMPLETED') { <a class="truncate" [routerLink]="['/videos', j.videoId]">{{ j.videoId }}</a> }
+                  @else { <span class="truncate">{{ j.videoId }}</span> }
+                  <small>{{ j.status === 'FAILED' ? 'Failed' : j.status === 'COMPLETED' ? 'Completed' : 'Running' }} · {{ j.createdAt | ago }}</small>
+                </div>
+              </li>
+            }
+          </ul>
+        </section>
+      }
+    </aside>
+  </div>
 </div>

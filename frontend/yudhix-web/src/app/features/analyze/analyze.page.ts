@@ -56,7 +56,7 @@ export class AnalyzePage {
     return STAGES.findIndex((s) => s.key === j.stage);
   });
 
-  protected readonly recentVideos = computed(() => (this.videos() ?? []).slice(0, 4));
+  protected readonly recentVideos = computed(() => (this.videos() ?? []).slice(0, 6));
 
   constructor() {
     this.api.health().subscribe({ next: (h) => this.health.set(h), error: () => {} });

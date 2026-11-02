@@ -15,7 +15,6 @@ type Filter = 'all' | 'disputed' | 'accurate';
     <div class="page">
       <header class="page-head">
         <div>
-          <span class="eyebrow">Truth reports</span>
           <h1>Videos</h1>
           <p>Every analyzed video, with how accurate it is and how the audience reacted.</p>
         </div>

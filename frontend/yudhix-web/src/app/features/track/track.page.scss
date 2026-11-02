@@ -1,6 +1,8 @@
-.video-select { height: 40px; max-width: 280px; padding: 0 10px; }
+.video-select { width: 240px; max-width: 100%; }
+.head-actions { flex-wrap: nowrap; }
+@media (max-width: 640px) { .head-actions { flex-wrap: wrap; } .video-select { width: 100%; } }
 .kpis { margin-bottom: 16px; }
-.kpi-main { background: linear-gradient(135deg, var(--brand-soft), var(--surface)); }
+.kpi-main { background: linear-gradient(160deg, color-mix(in srgb, var(--brand-soft) 70%, var(--surface)), var(--surface) 70%); }
 .alert { border-color: var(--danger); }
 .card-lift { transition: transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out); }
 @media (hover: hover) { .card-lift:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); } }
@@ -21,15 +23,15 @@
 .pipe-row strong { text-align: right; }
 
 .verdicts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-.verdicts div { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); }
-.verdicts strong { font-size: 20px; }
+.verdicts div { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: var(--radius); background: var(--surface-2); border: 1px solid var(--border); }
+.verdicts strong { font-size: 18px; font-weight: 650; }
 .prio-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-.prio { padding: 10px 12px; border-radius: 10px; display: flex; flex-direction: column; }
+.prio { padding: 10px 12px; border-radius: var(--radius); display: flex; flex-direction: column; background: var(--surface-2); border: 1px solid var(--border); }
 .prio span { font-size: 12px; font-weight: 700; }
-.prio strong { font-size: 20px; }
-.p1 { background: var(--danger-soft); color: var(--danger-text); }
-.p2 { background: var(--warn-soft); color: var(--warn-text); }
-.p3 { background: var(--surface-2); color: var(--text-2); }
+.prio strong { font-size: 18px; font-weight: 650; }
+.p1 span { color: var(--danger-text); }
+.p2 span { color: var(--warn-text); }
+.p3 span { color: var(--text-3); }
 
 .trend-card { margin-bottom: 16px; display: flex; flex-direction: column; gap: 12px; }
 .legend-inline { display: flex; gap: 12px; flex-wrap: wrap; }

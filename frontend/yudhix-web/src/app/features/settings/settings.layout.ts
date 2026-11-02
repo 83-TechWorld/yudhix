@@ -10,7 +10,6 @@ import { IconComponent } from '../../shared/icon.component';
     <div class="page page-narrow">
       <header class="page-head">
         <div>
-          <span class="eyebrow">{{ session.workspace()?.name }}</span>
           <h1>Settings</h1>
           <p>You're {{ roleInfo[session.role()].label }} in this workspace.</p>
         </div>

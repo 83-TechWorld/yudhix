@@ -55,6 +55,7 @@ describe('SessionService', () => {
   it('builds initials from the name', () => {
     expect(withRole('agent').initials()).toBe('AR');
     expect(initials('raj@example.com')).toBe('R');
+    expect(initials('PlayStation (Demo)')).toBe('PD');
   });
 
   it('counts trial days left', () => {

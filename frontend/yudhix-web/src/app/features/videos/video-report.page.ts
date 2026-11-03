@@ -3,7 +3,7 @@ import { LowerCasePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiService, errorMessage } from '../../core/api.service';
-import { Claim, ClaimComment, Impact, OutreachNote, RootCause, Verdict, Video } from '../../core/models';
+import { Claim, ClaimComment, Health, Impact, OutreachNote, RootCause, Verdict, Video } from '../../core/models';
 import { SessionService } from '../../core/session.service';
 import { IconComponent } from '../../shared/icon.component';
 import {
@@ -46,6 +46,8 @@ export class VideoReportPage {
   protected readonly notes = signal<OutreachNote[] | null>(null);
   protected readonly verdictFilter = signal<VerdictFilter>('all');
   protected readonly recomputing = signal(false);
+  /** Server capabilities: tells us whether comments can be pulled from YouTube. */
+  protected readonly health = signal<Health | null>(null);
 
   // Linked-comments sheet
   protected readonly sheetClaim = signal<Claim | null>(null);
@@ -74,6 +76,7 @@ export class VideoReportPage {
   protected readonly maxLinked = computed(() => Math.max(1, ...(this.impact()?.claims ?? []).map((c) => c.linkedComments)));
 
   constructor() {
+    this.api.health().subscribe({ next: (h) => this.health.set(h), error: () => {} });
     effect(() => {
       const id = this.videoId();
       this.video.set(null);

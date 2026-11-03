@@ -58,6 +58,22 @@
       </div>
     </section>
 
+    @if (!v.comments && health(); as h) {
+      <div class="callout callout-warn no-comments enter" style="--i: 5">
+        <y-icon name="info" [size]="16" />
+        <div>
+          @if (h.capabilities.youtubeApi) {
+            <strong>No comments were collected for this video.</strong>
+            Comments may be turned off on YouTube. <a routerLink="/analyze">Analyze the link again</a> to retry.
+          } @else {
+            <strong>Comments weren't collected: the server has no YouTube API key.</strong>
+            Claims still work, but audience impact needs comments. Add <code>YOUTUBE_API_KEY</code> to
+            <code>services/yudhix-sense/.env</code>, restart the API, then <a routerLink="/analyze">analyze the link again</a>.
+          }
+        </div>
+      </div>
+    }
+
     <!-- Tabs -->
     <nav class="tabs" role="tablist">
       <button type="button" role="tab" [class.active]="tab() === 'claims'" (click)="setTab('claims')">

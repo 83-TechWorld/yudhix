@@ -13,6 +13,7 @@
 @media (max-width: 767px) { .report-head { grid-template-columns: 1fr; } .head-text h1 { font-size: 19px; } }
 
 .scores { margin-bottom: 24px; }
+.no-comments { margin: -8px 0 24px; a { color: inherit; font-weight: 600; text-decoration: underline; } code { font-size: 12px; } }
 .score { display: flex; align-items: center; gap: 14px; }
 .of { font-size: 16px; color: var(--text-3); font-weight: 600; }
 

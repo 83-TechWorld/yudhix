@@ -261,6 +261,7 @@ App: http://localhost:8080 · Keycloak admin: http://localhost:8080/auth/admin (
 | Postgres won't start after a restart or crash | `tail /opt/homebrew/var/log/postgresql@16.log`. If it says `lock file "postmaster.pid" already exists` and `pgrep postgres` shows nothing, run `rm /opt/homebrew/var/postgresql@16/postmaster.pid && brew services restart postgresql@16`. |
 | Sign-in page doesn't load | Keycloak takes ~30 s to start. `docker compose ps` should show `yudhix-keycloak` up. |
 | No verification email | Check http://localhost:8025. Re-run `./yudhix.sh keycloak` if SMTP settings were lost. |
+| Video report shows **0 comments** | The API has no YouTube API key. Put `YOUTUBE_API_KEY=...` in `services/yudhix-sense/.env`, run `./yudhix.sh restart`, then analyze the link again. |
 | Robot in the top bar is asleep | The AI model isn't reachable. Run `ollama serve` and `ollama pull llama3.1`. The app still works in rule-based mode. |
 | `./yudhix.sh k8s-up` can't find images | Docker Desktop's Kubernetes in **kind** mode doesn't share local images. Switch it to **kubeadm** (Settings → Kubernetes), or push to a registry: `REGISTRY=ghcr.io/<you> ./yudhix.sh k8s-up`. |
 | Old icon or old page after an update | Hard reload (Cmd+Shift+R). The PWA service worker caches the app. |
@@ -272,6 +273,8 @@ App: http://localhost:8080 · Keycloak admin: http://localhost:8080/auth/admin (
 ## 4. Configuration
 
 API settings are environment variables (`services/yudhix-sense/app/core/config.py`). All have working local defaults.
+
+For local secrets, copy `services/yudhix-sense/.env.example` to `.env` in the same folder (git-ignored) and restart the API. **To pull comments for new videos, set `YOUTUBE_API_KEY` there**: without it, analysis still finds and checks claims, but collects no comments.
 
 | Variable | Default | Purpose |
 |---|---|---|

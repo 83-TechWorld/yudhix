@@ -1,5 +1,16 @@
-"""Central settings for yudhix-sense. Everything is read from environment variables."""
+"""Central settings for yudhix-sense. Everything is read from environment variables.
+
+For local development, put secrets such as YOUTUBE_API_KEY in services/yudhix-sense/.env
+(git-ignored; see .env.example). Real environment variables always win over the file.
+"""
 import os
+from pathlib import Path
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
+except ImportError:  # python-dotenv is optional in container images
+    pass
 
 DEFAULT_TENANT_ID = "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
 

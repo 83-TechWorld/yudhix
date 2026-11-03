@@ -27,8 +27,8 @@ x-api-env: &api-env
   OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:latest}
   AUTHOR_HMAC_KEY: ${AUTHOR_HMAC_KEY:-local-only-change-me}
   DEMO_WORKSPACE_JOIN: "true"
-  YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
   WEB_CONCURRENCY: "2"
+  # YOUTUBE_API_KEY comes from services/yudhix-sense/.env (env_file below), the same file dev mode uses.
 
 services:
   postgres:
@@ -93,6 +93,9 @@ services:
   api:
     build: { context: ../.., dockerfile: services/yudhix-sense/Dockerfile }
     image: yudhix/api:local
+    env_file:
+      - path: ../../services/yudhix-sense/.env   # local secrets (git-ignored); optional
+        required: false
     environment: *api-env
     extra_hosts: ["host.docker.internal:host-gateway"]
     depends_on:

@@ -252,7 +252,7 @@ Logs are in `.logs/` (`sense.log` for the API, `frontend.log` for the web app).
 API_REPLICAS=4 ./yudhix.sh docker-up      # run 4 API copies behind the gateway
 ```
 
-App: http://localhost:8080 · Keycloak admin: http://localhost:8080/auth/admin (`admin` / `admin_local_pw`) · Emails: http://localhost:8026. This stack has its **own empty database**: sign up, create a workspace and analyze a video.
+It reads `YOUTUBE_API_KEY` from the same `services/yudhix-sense/.env` file as dev mode. App: http://localhost:8080 · Keycloak admin: http://localhost:8080/auth/admin (`admin` / `admin_local_pw`) · Emails: http://localhost:8026. This stack has its **own empty database**: sign up, create a workspace and analyze a video.
 
 ### Troubleshooting
 

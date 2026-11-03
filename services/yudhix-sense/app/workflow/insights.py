@@ -23,7 +23,7 @@ def summary(tenant_id: str, video_id: Optional[str] = None) -> Dict:
             JOIN comment_analysis ca ON ca.tenant_id = c.tenant_id AND ca.comment_id = c.id
             LEFT JOIN comment_claim_link l ON l.tenant_id = c.tenant_id AND l.comment_id = c.id
             LEFT JOIN video_claim vc ON vc.id = l.claim_id
-            WHERE c.tenant_id = %s {vf}""", (tenant_id, *vp))
+            WHERE c.tenant_id = %s AND c.status = 'ACTIVE' {vf}""", (tenant_id, *vp))
 
     replies = fetch_one(
         f"""SELECT count(*) FILTER (WHERE r.status = 'DRAFT') AS draft,
@@ -81,7 +81,7 @@ def sentiment_trend(tenant_id: str, video_id: Optional[str] = None, days: int = 
                    count(*) FILTER (WHERE ca.sentiment = 'NEGATIVE') AS negative,
                    count(*) FILTER (WHERE ca.sentiment = 'NEUTRAL') AS neutral
             FROM comment c JOIN comment_analysis ca ON ca.tenant_id = c.tenant_id AND ca.comment_id = c.id
-            WHERE c.tenant_id = %s {vf}
+            WHERE c.tenant_id = %s AND c.status = 'ACTIVE' {vf}
               AND c.platform_created_at >= (SELECT max(platform_created_at) FROM comment WHERE tenant_id = %s)
                                             - make_interval(days => %s)
             GROUP BY 1 ORDER BY 1""",
@@ -95,7 +95,7 @@ def video_leaderboard(tenant_id: str) -> list:
         """SELECT v.video_id, v.video_title, v.channel_title, v.factual_accuracy_score, v.misleading_claims_count,
                   v.total_claims,
                   (SELECT count(*) FROM comment c WHERE c.tenant_id = v.tenant_id
-                       AND c.custom_attributes->>'video_id' = v.video_id) AS comments,
+                       AND c.custom_attributes->>'video_id' = v.video_id AND c.status = 'ACTIVE') AS comments,
                   (SELECT count(*) FROM reply r JOIN comment c ON c.id = r.comment_id
                        WHERE r.tenant_id = v.tenant_id AND r.status = 'POSTED'
                          AND c.custom_attributes->>'video_id' = v.video_id) AS replies_posted

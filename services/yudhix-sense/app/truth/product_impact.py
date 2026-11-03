@@ -124,7 +124,7 @@ def load(tenant_id: str, video_id: str) -> Dict:
            JOIN comment_analysis ca ON ca.tenant_id = c.tenant_id AND ca.comment_id = c.id
            LEFT JOIN comment_claim_link l ON l.tenant_id = c.tenant_id AND l.comment_id = c.id
            LEFT JOIN video_claim vc ON vc.id = l.claim_id
-           WHERE c.tenant_id = %s AND c.custom_attributes->>'video_id' = %s""",
+           WHERE c.tenant_id = %s AND c.custom_attributes->>'video_id' = %s AND c.status = 'ACTIVE'""",
         (tenant_id, video_id))
     return compute(rows)
 

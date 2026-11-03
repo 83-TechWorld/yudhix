@@ -41,7 +41,7 @@ def _comment_stats(tenant_id: str, video_id: Optional[str] = None) -> Dict[str, 
             FROM comment c
             LEFT JOIN comment_analysis ca ON ca.tenant_id = c.tenant_id AND ca.comment_id = c.id
             LEFT JOIN comment_claim_link l ON l.tenant_id = c.tenant_id AND l.comment_id = c.id
-            WHERE c.tenant_id = %s {"AND c.custom_attributes->>'video_id' = %s" if video_id else ""}
+            WHERE c.tenant_id = %s AND c.status = 'ACTIVE' {"AND c.custom_attributes->>'video_id' = %s" if video_id else ""}
             GROUP BY 1""",
         (tenant_id, video_id) if video_id else (tenant_id,))
     return {r["video_id"]: r for r in rows}
@@ -99,7 +99,7 @@ def get_impact(tenant_id: str, video_id: str) -> Optional[Dict]:
            JOIN comment_analysis ca ON ca.tenant_id = c.tenant_id AND ca.comment_id = c.id
            LEFT JOIN comment_claim_link l ON l.tenant_id = c.tenant_id AND l.comment_id = c.id
            LEFT JOIN video_claim vc ON vc.id = l.claim_id
-           WHERE c.tenant_id = %s AND c.custom_attributes->>'video_id' = %s
+           WHERE c.tenant_id = %s AND c.custom_attributes->>'video_id' = %s AND c.status = 'ACTIVE'
            GROUP BY 1, 2, 3""",
         (tenant_id, video_id))
 

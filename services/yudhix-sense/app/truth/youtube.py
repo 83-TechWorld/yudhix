@@ -1,6 +1,7 @@
 """YouTube access for the truth pipeline. Runs on the server only, so the API key never
 reaches the browser or the mobile app."""
 import logging
+import random
 import re
 import shutil
 import subprocess
@@ -109,14 +110,36 @@ def fetch_metadata(video_id: str) -> Optional[VideoMeta]:
     )
 
 
-def fetch_comments(video_id: str, limit: int) -> List[Dict]:
-    """Top-level comments, most relevant first. Returns [] without an API key."""
+def sample_comments(video_id: str, limit: int, pool_max: int, seed: Optional[str] = None) -> List[Dict]:
+    """A cross-section over time: 40% newest, 40% oldest, 20% random from the middle.
+
+    Reads up to `pool_max` comments newest-first to reach the oldest ones. If the video has more than
+    that, "oldest" means the oldest within the pool. The middle pick is random on every run
+    (pass a seed to make it repeatable, e.g. in tests).
+    """
+    pool = fetch_comments(video_id, max(limit, pool_max), order="time")
+    return pick_spread(pool, limit, seed)
+
+
+def pick_spread(pool: List[Dict], limit: int, seed: Optional[str] = None) -> List[Dict]:
+    """pool is newest first. Returns up to `limit` comments: newest, oldest and a random middle."""
+    if len(pool) <= limit:
+        return pool
+    n_new = n_old = round(limit * 0.4)
+    n_mid = limit - n_new - n_old
+    newest, oldest, middle = pool[:n_new], pool[-n_old:], pool[n_new:-n_old]
+    picked = random.Random(seed).sample(middle, min(n_mid, len(middle)))
+    return newest + picked + oldest
+
+
+def fetch_comments(video_id: str, limit: int, order: str = "relevance") -> List[Dict]:
+    """Top-level comments, most relevant (or newest, order="time") first. Returns [] without an API key."""
     if not has_api_key():
         return []
     out: List[Dict] = []
     page_token = None
     while len(out) < limit:
-        params = {"part": "snippet", "videoId": video_id, "maxResults": 100, "order": "relevance",
+        params = {"part": "snippet", "videoId": video_id, "maxResults": 100, "order": order,
                   "textFormat": "plainText", "key": config.YOUTUBE_API_KEY}
         if page_token:
             params["pageToken"] = page_token

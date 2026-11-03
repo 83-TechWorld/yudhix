@@ -57,7 +57,7 @@ def _inbox_item(r: Dict) -> Dict:
 def inbox(tenant_id: str, video_id: Optional[str] = None, priority: Optional[str] = None,
           sentiment: Optional[str] = None, cause: Optional[str] = None, status: str = "OPEN",
           q: Optional[str] = None, limit: int = 50, offset: int = 0) -> Dict:
-    where, params = ["c.tenant_id = %s"], [tenant_id]
+    where, params = ["c.tenant_id = %s", "c.status = 'ACTIVE'"], [tenant_id]
     if video_id:
         where.append("c.custom_attributes->>'video_id' = %s"); params.append(video_id)
     if priority:

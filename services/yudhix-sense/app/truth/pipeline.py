@@ -260,7 +260,11 @@ def author_hash(tenant_id: str, platform: str, author_id: str) -> str:
 
 
 def _ingest_comments(tenant_id: str, video_id: str, meta: youtube.VideoMeta, product_id: Optional[str]) -> int:
-    raw = youtube.fetch_comments(video_id, config.MAX_COMMENTS_PER_VIDEO)
+    spread = config.COMMENT_SAMPLING == "spread"
+    if spread:
+        raw = youtube.sample_comments(video_id, config.MAX_COMMENTS_PER_VIDEO, config.COMMENT_POOL_MAX)
+    else:
+        raw = youtube.fetch_comments(video_id, config.MAX_COMMENTS_PER_VIDEO)
     if raw and not product_id:  # attach to this workspace's own product, never another tenant's
         first = fetch_one("SELECT id FROM product WHERE tenant_id = %s AND active ORDER BY created_at LIMIT 1",
                           (tenant_id,))
@@ -280,7 +284,21 @@ def _ingest_comments(tenant_id: str, video_id: str, meta: youtube.VideoMeta, pro
             "platform_created_at": c.get("published_at") or "now()",
             "source_id": DEFAULT_SOURCE_ID, "product_id": product_id or DEFAULT_PRODUCT_ID,
         })
+    if spread and raw:
+        _keep_only(tenant_id, video_id, [c["comment_id"] for c in raw])
     return len(raw)
+
+
+def _keep_only(tenant_id: str, video_id: str, platform_ids: List[str]) -> None:
+    """Show only this run's sample: archive the video's other comments (kept in the database, hidden
+    everywhere), except comments that already have a reply. Re-sampled comments become active again."""
+    with cursor(commit=True) as cur:
+        cur.execute(
+            """UPDATE comment c SET status = CASE WHEN c.platform_comment_id = ANY(%s) THEN 'ACTIVE' ELSE 'ARCHIVED' END
+               WHERE c.tenant_id = %s AND c.custom_attributes->>'video_id' = %s
+                 AND (c.platform_comment_id = ANY(%s)
+                      OR NOT EXISTS (SELECT 1 FROM reply r WHERE r.tenant_id = c.tenant_id AND r.comment_id = c.id))""",
+            (platform_ids, tenant_id, video_id, platform_ids))
 
 
 # ----------------------------------------------------------------------------- attribution
@@ -291,7 +309,7 @@ def _video_comments(tenant_id: str, video_id: str) -> List[Dict]:
                   c.custom_attributes->'ai' AS ai,
                   ca.churn_risk, ca.toxic, ca.model_version, ca.sentiment, ca.sentiment_score
            FROM comment c LEFT JOIN comment_analysis ca ON ca.tenant_id = c.tenant_id AND ca.comment_id = c.id
-           WHERE c.tenant_id = %s AND c.custom_attributes->>'video_id' = %s""",
+           WHERE c.tenant_id = %s AND c.custom_attributes->>'video_id' = %s AND c.status = 'ACTIVE'""",
         (tenant_id, video_id))
 
 

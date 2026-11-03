@@ -230,3 +230,20 @@ class ProductImpactTest(unittest.TestCase):
         r = product_impact.compute([])
         self.assertEqual((r["score"], r["level"], r["trend"]), (0, "LOW", "QUIET"))
         self.assertEqual(r["timeline"]["points"], [])
+
+
+class SamplingTest(unittest.TestCase):
+    def test_spread_picks_newest_oldest_and_middle(self):
+        pool = [{"comment_id": str(i)} for i in range(500)]  # newest first
+        picked = youtube.pick_spread(pool, 100, seed="x")
+        ids = [int(c["comment_id"]) for c in picked]
+        self.assertEqual(len(ids), 100)
+        self.assertEqual(len(set(ids)), 100)
+        self.assertEqual(ids[:40], list(range(40)))            # 40 newest
+        self.assertEqual(ids[-40:], list(range(460, 500)))     # 40 oldest
+        self.assertTrue(all(40 <= i < 460 for i in ids[40:60]))  # 20 from the middle
+        self.assertEqual(ids, [int(c["comment_id"]) for c in youtube.pick_spread(pool, 100, seed="x")])
+
+    def test_small_videos_keep_everything(self):
+        pool = [{"comment_id": str(i)} for i in range(30)]
+        self.assertEqual(youtube.pick_spread(pool, 100), pool)

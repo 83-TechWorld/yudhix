@@ -52,8 +52,15 @@ LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "60"))
 # Time the AI may spend reading comments per analysis; the rest fall back to rules.
 LLM_COMMENT_BUDGET_SECONDS = float(os.getenv("LLM_COMMENT_BUDGET_SECONDS", "240"))
 
-# How many comments a single "Analyze video" job pulls from YouTube.
-MAX_COMMENTS_PER_VIDEO = int(os.getenv("MAX_COMMENTS_PER_VIDEO", "500"))
+# How many comments a single "Analyze video" job keeps.
+MAX_COMMENTS_PER_VIDEO = int(os.getenv("MAX_COMMENTS_PER_VIDEO", "100"))
+# Which comments:
+#   spread : 40% newest, 40% oldest, 20% random from the middle (a cross-section over time; demo default)
+#   top    : the most relevant ones, as YouTube ranks them
+# In spread mode the video's other stored comments are archived (hidden, not deleted), except ones with a reply.
+COMMENT_SAMPLING = os.getenv("COMMENT_SAMPLING", "spread").lower()
+# spread mode reads at most this many of the newest comments to find the oldest ones (100 per API call).
+COMMENT_POOL_MAX = int(os.getenv("COMMENT_POOL_MAX", "2000"))
 
 # SLA per priority band, in hours.
 SLA_HOURS = {"P1": 2, "P2": 24, "P3": 72}

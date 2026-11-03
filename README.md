@@ -308,7 +308,9 @@ For local secrets, copy `services/yudhix-sense/.env.example` to `.env` in the sa
 | `AUTHOR_HMAC_KEY` | `dev-only-change-me` | Secret for hashing comment authors. **Set a strong value in production.** |
 | `TRIAL_DAYS` / `TRIAL_PLAN` | `14` / `PROFESSIONAL` | Free trial for new workspaces. |
 | `DEMO_WORKSPACE_JOIN` | `true` | Anyone signed in can join the demo workspace. **Turn off in production.** |
-| `MAX_COMMENTS_PER_VIDEO` | `500` | Comments pulled per analysis. |
+| `MAX_COMMENTS_PER_VIDEO` | `100` | Comments kept per analysis. |
+| `COMMENT_SAMPLING` | `spread` | `spread`: 40% newest, 40% oldest, 20% random from the middle, so the charts show a cross-section over time; the video's other stored comments are archived (hidden, not deleted), except ones with a reply. `top`: the most relevant comments as YouTube ranks them. |
+| `COMMENT_POOL_MAX` | `2000` | `spread` reads up to this many comments, newest first, to find the oldest (1 YouTube quota unit per 100). |
 | `LLM_COMMENT_BUDGET_SECONDS` | `240` | Time the AI may spend reading comments per analysis (most-liked first); the rest use keyword rules. About 20 comments per 50 s on an M-series Mac with `llama3.1`. |
 | `INTERNAL_API_KEY` | empty (disabled) | Unlocks the old internal endpoints (`/api/v1/comments`, `/analyze`, `/scheduler/…`). |
 

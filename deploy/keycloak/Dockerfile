@@ -6,7 +6,10 @@ ENV KC_DB=postgres \
     KC_HEALTH_ENABLED=true \
     KC_METRICS_ENABLED=true \
     KC_HTTP_RELATIVE_PATH=/auth \
-    KC_CACHE=ispn
+    KC_CACHE=ispn \
+    KC_FEATURES=persistent-user-sessions
+# persistent-user-sessions: sign-in sessions are stored in Postgres, so restarting or redeploying
+# Keycloak doesn't sign everyone out (without it, sessions live only in memory).
 COPY keycloak/themes/yudhix /opt/keycloak/themes/yudhix
 RUN /opt/keycloak/bin/kc.sh build
 

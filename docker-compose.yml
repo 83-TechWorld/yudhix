@@ -35,6 +35,7 @@ services:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin_yudhix_2026
       KC_HEALTH_ENABLED: "true"
+      KC_FEATURES: persistent-user-sessions   # sessions survive Keycloak restarts
       KC_METRICS_ENABLED: "true"
     secrets:
       - pg_password

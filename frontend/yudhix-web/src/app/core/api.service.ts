@@ -52,9 +52,8 @@ export const contextInterceptor: HttpInterceptorFn = (req, next) => {
       return next(req.clone({ setHeaders: headers }));
     }),
     catchError((err: unknown) => {
-      if (err instanceof HttpErrorResponse && err.status === 401 && auth.authenticated()) {
-        auth.login(location.pathname + location.search);
-      }
+      // 401: the API no longer accepts this session. Sign in again (once) and come back here.
+      if (err instanceof HttpErrorResponse && err.status === 401) auth.sessionEnded();
       return throwError(() => err);
     }),
   );

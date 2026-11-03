@@ -1,0 +1,98 @@
+:host { display: block; }
+
+.pi { position: relative; display: flex; flex-direction: column; gap: 24px; }
+
+h3 { font-size: 14px; font-weight: 600; margin: 0 0 12px; }
+
+/* ---------- headline ---------- */
+.pi-head { display: flex; gap: 24px; align-items: flex-start; }
+.pi-score { display: flex; flex-direction: column; gap: 6px; min-width: 150px; }
+.pi-score-num { font-size: 44px; font-weight: 700; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
+  span { font-size: 16px; font-weight: 500; color: var(--text-muted, var(--muted)); margin-left: 2px; } }
+.pi-score .chip { align-self: flex-start; display: inline-flex; gap: 5px; align-items: center; }
+.pi-head-text { flex: 1; min-width: 0; }
+.pi-headline { font-size: 17px; font-weight: 600; line-height: 1.45; margin: 18px 0 8px; }
+.pi-meta { gap: 6px; font-size: 13px; .row { gap: 6px; } }
+.pi-how { margin-top: 8px; font-size: 13px;
+  summary { cursor: pointer; color: var(--muted-text); width: fit-content; }
+  p { margin: 8px 0 0; color: var(--muted-text); max-width: 70ch; line-height: 1.55; } }
+
+/* ---------- legend & shared marks ---------- */
+.pi-legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--muted-text); margin-bottom: -8px;
+  span { display: inline-flex; align-items: center; gap: 6px; } }
+.sw { width: 10px; height: 10px; border-radius: 3px; flex: none; display: inline-block; }
+
+/* 100% stacked bar: 2px surface gap between segments, rounded ends. */
+.pi-bar { display: flex; flex-direction: row; gap: 2px; height: 14px; border-radius: 4px; overflow: hidden; }
+.pi-bar.thin { height: 10px; min-width: 6px; }
+.seg { display: block; min-width: 3px; flex-basis: 0; outline-offset: 2px; cursor: default;
+  &:hover, &:focus-visible { filter: brightness(1.12); } }
+
+.pi-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; }
+.pi-row { margin-bottom: 18px; &:last-child { margin-bottom: 0; } }
+.pi-row-label { gap: 8px; margin-bottom: 6px; font-size: 13px; .subtle { font-size: 12px; } }
+.pi-values { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 6px; font-size: 12px; strong { color: var(--text); } }
+
+/* ---------- causes ---------- */
+.causes { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 12px;
+  li { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; }
+  .sw { margin-top: 4px; }
+  .num { font-variant-numeric: tabular-nums; }
+  .subtle { font-size: 12px; margin-top: 2px; } }
+
+/* ---------- topics ---------- */
+.topics { display: flex; flex-direction: column; gap: 10px; }
+.topic { display: grid; grid-template-columns: 170px minmax(0, 1fr) 96px; gap: 12px; align-items: center; font-size: 13px; }
+.topic-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topic-num { text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; strong { color: var(--text); } }
+
+/* ---------- timeline: stacked columns ---------- */
+.tl { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 8px; }
+.tl-axis { position: relative; height: 160px; font-size: 11px; color: var(--muted);
+  span { position: absolute; right: 0; transform: translateY(50%); font-variant-numeric: tabular-nums; } }
+.tl-plot { position: relative; height: 160px; display: flex; align-items: flex-end; gap: 2px; margin-bottom: 22px; }
+.tl-grid { position: absolute; left: 0; right: 0; height: 1px; background: var(--chart-grid); }
+.tl-col { position: relative; flex: 1; height: 100%; display: flex; align-items: flex-end; justify-content: center; outline-offset: 2px;
+  &:hover .tl-bar, &:focus-visible .tl-bar { filter: brightness(1.12); } }
+.tl-bar { position: relative; width: 100%; max-width: 28px; min-height: 2px; display: flex; flex-direction: column-reverse; gap: 1px;
+  border-radius: 4px 4px 0 0; overflow: hidden;
+  span { display: block; min-height: 1px; flex-basis: 0; } }
+.tl-x { position: absolute; top: 100%; left: 0;
+  &.last { left: auto; right: 0; } margin-top: 6px; font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+/* ---------- top comments ---------- */
+.top { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column;
+  li { display: flex; gap: 14px; align-items: flex-start; padding: 12px 0; border-top: 1px solid var(--border); }
+  li:first-child { border-top: 0; padding-top: 0; }
+  p { margin: 0 0 4px; font-size: 14px; line-height: 1.5; }
+  .tags { font-size: 12px; gap: 4px; } }
+.likes { display: inline-flex; align-items: center; gap: 4px; min-width: 64px; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* ---------- tables & tooltip ---------- */
+.pi-tables { font-size: 13px;
+  summary { cursor: pointer; color: var(--muted-text); width: fit-content; }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; font-variant-numeric: tabular-nums; }
+  caption { text-align: left; font-weight: 600; padding: 4px 0; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  th { font-weight: 500; color: var(--muted-text); } }
+
+.pi-tip { position: absolute; z-index: 5; transform: translate(-50%, calc(-100% - 8px)); pointer-events: none;
+  background: var(--text); color: var(--bg); border-radius: 8px; padding: 7px 10px; font-size: 12px; line-height: 1.45;
+  display: flex; flex-direction: column; white-space: nowrap; box-shadow: 0 6px 20px rgb(0 0 0 / 0.18); }
+
+/* ---------- responsive ---------- */
+@media (max-width: 900px) {
+  .pi-grid { grid-template-columns: 1fr; gap: 24px; }
+}
+@media (max-width: 639px) {
+  .pi-head { flex-direction: column; gap: 4px; }
+  .pi-headline { margin-top: 8px; font-size: 16px; }
+  .topic { grid-template-columns: 1fr auto; row-gap: 4px; }
+  .topic-num { white-space: nowrap; }
+  .tl-x.minor { display: none; }
+  .topic-track { grid-column: 1 / -1; grid-row: 2; }
+  .topic-num { grid-row: 1; grid-column: 2; }
+  .likes { min-width: 48px; }
+}
+.pi-fill { flex: 1; min-width: 0; }
+.pi-note { display: flex; gap: 6px; align-items: center; font-size: 13px; margin-top: 6px; }

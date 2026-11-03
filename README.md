@@ -45,9 +45,10 @@ flowchart LR
     B --> C[2. Transcribe<br/>captions / Whisper / pasted]
     C --> D[3. Extract claims<br/>up to 8, timestamped]
     D --> E[4. Fact-check<br/>search official facts → verdict]
-    E --> F[5. Ingest comments<br/>mask PII, hash authors, sentiment]
-    F --> G[6. Attribute<br/>comment → claim, root cause, priority]
-    G --> H[Truth report<br/>+ prioritized inbox]
+    E --> F[5. Ingest comments<br/>mask PII, hash authors]
+    F --> U[6. Read comments<br/>AI: sentiment, topics, claim]
+    U --> G[7. Attribute<br/>comment → claim, root cause, priority]
+    G --> H[Truth report, product impact<br/>+ prioritized inbox]
 ```
 
 | Stage | Code (`services/yudhix-sense/app/truth/`) | How | Fallback when an optional piece is missing |
@@ -56,12 +57,30 @@ flowchart LR
 | Transcribe | `youtube.py` | YouTube captions, else Whisper (`faster-whisper` + `yt-dlp`) | Pasted transcript (`[mm:ss] text` lines) |
 | Extract claims | `claims.py` | Local LLM (Ollama, `llama3.1`) | Rules: sentences with numbers, prices, absolutes, policy verbs |
 | Fact-check | `retrieval.py`, `verifier.py` | BM25 search over `product_knowledge`, then the LLM says whether the source *supports* or *contradicts* the claim; code maps that to a verdict | Rules: matching figures, absolutes the source negates, predictions → Unverified |
-| Ingest comments | `pipeline.py` | Regex PII masking, keyed HMAC-SHA256 author hash, keyword sentiment | Uses comments already stored for the video |
-| Attribute | `attribution.py`, `scoring.py` | Links a comment to the claim it shares the most specific words with (or a timestamp it mentions); stores the matched words as "why linked" evidence | – |
+| Ingest comments | `pipeline.py` | YouTube Data API (needs `YOUTUBE_API_KEY`), regex PII masking, keyed HMAC-SHA256 author hash | Uses comments already stored for the video |
+| Read comments | `audience.py` | Local LLM reads comments in batches of 20, **most-liked first**, within a time budget (`LLM_COMMENT_BUDGET_SECONDS`, default 240 s): sentiment, up to 2 topics, and which claim (if any) the comment responds to | Keyword sentiment and keyword topics |
+| Attribute | `attribution.py`, `scoring.py` | Uses the AI's claim decision where it read the comment; otherwise needs two specific words shared with the claim (or one plus a related concept or a timestamp pointing at it). Stores "why linked" evidence | – |
 
 **Root cause:** `MISINFORMATION` (reacts to a misleading, false or unverified claim), `VALID_CONCERN` (reacts to an accurate claim), or `UNLINKED`.
 
 **Priority:** impact score 0–100 = `100 × severity^0.8 × engagement × recency`, +10% for misinformation. **P1** ≥ 80, **P2** ≥ 50, else **P3**.
+
+**Topics:** Price & value, Quality & hardware, Performance, Features & software, Games & content, Online & subscriptions, Support & warranty, Trust in the company, Competitors & switching.
+
+### Product impact
+
+Truth report → **Audience impact** tab (or **View impact** in the Inbox once a video is picked) shows how the comments affect the product (`app/truth/product_impact.py`, `GET /api/v1/truth/videos/{id}/product-impact`):
+
+| Part | What it shows |
+|---|---|
+| Impact score | 0–100 and High / Medium / Low, with the trend of negative comments (rising, steady, fading). Score = `100 × (negative share of reach)^0.75 × size`, where size grows with total reach (max at ~10,000). |
+| Sentiment | Negative / neutral / positive **by comments** and **by reach**. Reach weights each comment by `1 + likes + 2 × replies`, so one comment with 2,500 likes counts more than fifty with none. |
+| What can fix it | Negative reach split into disputed claims (creator note and replies), real product concerns (product team) and general negativity, with links to the inbox. |
+| Topics | What people talk about, split by sentiment, ordered by negative reach. |
+| Over time | Comments per day (per week for long spans). |
+| Most-liked negative comments | The five with the most reach, with **Reply** opening them in the inbox. |
+
+Charts use their own colour tokens (`--chart-*` in `styles.scss`), checked for colour-blind separation in light and dark mode, and every chart has hover details and a table view.
 
 Every verdict shows how it was made (`LLM`, `HEURISTIC` or `SEEDED`). The app works without the AI model; it switches to rules, and the robot in the top bar goes to sleep.
 
@@ -290,6 +309,7 @@ For local secrets, copy `services/yudhix-sense/.env.example` to `.env` in the sa
 | `TRIAL_DAYS` / `TRIAL_PLAN` | `14` / `PROFESSIONAL` | Free trial for new workspaces. |
 | `DEMO_WORKSPACE_JOIN` | `true` | Anyone signed in can join the demo workspace. **Turn off in production.** |
 | `MAX_COMMENTS_PER_VIDEO` | `500` | Comments pulled per analysis. |
+| `LLM_COMMENT_BUDGET_SECONDS` | `240` | Time the AI may spend reading comments per analysis (most-liked first); the rest use keyword rules. About 20 comments per 50 s on an M-series Mac with `llama3.1`. |
 | `INTERNAL_API_KEY` | empty (disabled) | Unlocks the old internal endpoints (`/api/v1/comments`, `/analyze`, `/scheduler/…`). |
 
 Web app settings: `frontend/yudhix-web/src/environments/` (`apiUrl`, `keycloak`, `salesEmail`). Container builds read `/config.json` at start instead, written from env vars. `GET /health` shows which optional features are active.
@@ -418,7 +438,8 @@ Production checklist: strong `AUTHOR_HMAC_KEY` and database passwords, `DEMO_WOR
 | Ingestion | One video at a time, on demand. | Channel watchers and scheduled re-scans (the Airflow DAGs in `airflow/`). |
 | Attribution | Keyword matching with evidence; weak on sarcasm and memes. | Embedding similarity (pgvector) with LLM re-ranking. |
 | Fact-checking | BM25 + local 8B model. | Document upload, vector search, human verdict override. |
-| Sentiment | Keyword classifier. | Transformer model plus agent corrections. |
+| Sentiment & topics | Local LLM for the most-liked comments, keyword rules for the rest. | Faster model or GPU so the AI reads every comment; agent corrections. |
+| Product impact | Per video. | **Product health** across all videos of a product: trend, top issues, which creators drive negativity. |
 | Services | One Python API does everything. | Split into the planned Java services (`services/yudhix-*`) as load requires. |
 | Mobile | Capacitor configured. | Generate native projects, icons, store listings, push alerts. |
 

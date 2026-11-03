@@ -30,6 +30,9 @@ export class InboxPage {
   /** Query params (bound by the router): ?video=…&cause=… */
   readonly video = input<string | undefined>();
   readonly cause = input<string | undefined>();
+  /** ?comment=<id> opens that comment (used by "Reply" on the Product impact panel). */
+  readonly comment = input<string | undefined>();
+  private deepLinkId: string | null = null;
 
   protected readonly causeMeta = CAUSE_META;
   protected readonly verdictMeta = VERDICT_META;
@@ -73,7 +76,9 @@ export class InboxPage {
     effect(() => {
       const video = this.video() ?? '';
       const cause = (this.cause() ?? '') as RootCause | '';
+      const comment = this.comment() ?? null;
       untracked(() => {
+        this.deepLinkId = comment;
         this.videoFilter.set(video);
         this.causeFilter.set(cause);
         this.load();
@@ -110,8 +115,18 @@ export class InboxPage {
       next: (page) => {
         this.items.set(page.items);
         this.total.set(page.total);
-        if (window.matchMedia('(min-width: 1100px)').matches && page.items.length && !this.selectedId()) {
-          this.select(page.items[0], false);
+        const wide = window.matchMedia('(min-width: 1100px)').matches;
+        const linked = this.deepLinkId;
+        this.deepLinkId = null;
+        if (linked) {
+          // Open the linked comment even if the current filters hide it from the list.
+          const inList = page.items.find((i) => i.id === linked);
+          if (inList) this.select(inList, !wide);
+          else this.selectById(linked, !wide);
+        } else if (!page.items.some((i) => i.id === this.selectedId())) {
+          // The selected comment no longer matches the filters: never show it next to a list it isn't in.
+          if (wide && page.items.length) this.select(page.items[0], false);
+          else this.clearSelection();
         }
       },
       error: (e) => this.error.set(errorMessage(e)),
@@ -160,6 +175,25 @@ export class InboxPage {
     this.citesFact.set(false);
     if (openSheet && !window.matchMedia('(min-width: 1100px)').matches) this.sheetOpen.set(true);
     this.api.inboxItem(item.id).subscribe({ next: (d) => this.detail.set(d), error: () => {} });
+  }
+
+  private selectById(id: string, openSheet: boolean): void {
+    this.selectedId.set(id);
+    this.draft = '';
+    this.citesFact.set(false);
+    this.api.inboxItem(id).subscribe({
+      next: (d) => {
+        this.detail.set(d);
+        if (openSheet) this.sheetOpen.set(true);
+      },
+      error: () => this.clearSelection(),
+    });
+  }
+
+  private clearSelection(): void {
+    this.selectedId.set(null);
+    this.detail.set(null);
+    this.sheetOpen.set(false);
   }
 
   protected closeSheet(): void {

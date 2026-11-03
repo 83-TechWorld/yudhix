@@ -49,6 +49,8 @@ OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:latest")
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "small")
 LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "60"))
+# Time the AI may spend reading comments per analysis; the rest fall back to rules.
+LLM_COMMENT_BUDGET_SECONDS = float(os.getenv("LLM_COMMENT_BUDGET_SECONDS", "240"))
 
 # How many comments a single "Analyze video" job pulls from YouTube.
 MAX_COMMENTS_PER_VIDEO = int(os.getenv("MAX_COMMENTS_PER_VIDEO", "500"))

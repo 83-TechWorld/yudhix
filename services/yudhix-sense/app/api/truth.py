@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from app.api.deps import actor, membership, tenant_id
 from app.platform import billing
 from app.platform.auth import Membership
-from app.truth import pipeline, repository, youtube
+from app.truth import pipeline, product_impact, repository, youtube
 from app.workflow.state import Actor
 
 router = APIRouter(prefix="/api/v1/truth", tags=["truth"])
@@ -69,6 +69,13 @@ def impact(video_id: str, tenant: str = Depends(tenant_id)):
     if not found:
         raise HTTPException(404, "Video not found")
     return found
+
+
+@router.get("/videos/{video_id}/product-impact")
+def product_impact_view(video_id: str, tenant: str = Depends(tenant_id)):
+    if not repository.get_video(tenant, video_id):
+        raise HTTPException(404, "Video not found")
+    return product_impact.load(tenant, video_id)
 
 
 @router.post("/videos/{video_id}/reattribute")

@@ -35,16 +35,19 @@ def is_available() -> bool:
     return available
 
 
-def generate_json(prompt: str) -> Optional[Any]:
+def generate_json(prompt: str, timeout: Optional[float] = None, max_tokens: Optional[int] = None) -> Optional[Any]:
     """Run a prompt in JSON mode. Returns parsed JSON or None."""
     if not is_available():
         return None
+    options = {"temperature": 0.1}
+    if max_tokens:
+        options["num_predict"] = max_tokens
     try:
         res = httpx.post(
             f"{config.OLLAMA_URL}/api/generate",
             json={"model": config.OLLAMA_MODEL, "prompt": prompt, "format": "json", "stream": False,
-                  "options": {"temperature": 0.1}},
-            timeout=config.LLM_TIMEOUT_SECONDS,
+                  "options": options},
+            timeout=timeout or config.LLM_TIMEOUT_SECONDS,
         )
         if res.status_code != 200:
             return None

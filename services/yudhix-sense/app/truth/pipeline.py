@@ -5,8 +5,9 @@
   3. EXTRACTING_CLAIMS  atomic, timestamped claims
   4. FACT_CHECKING      retrieve brand knowledge + verdict per claim
   5. INGESTING_COMMENTS pull comments, mask PII, pseudonymize authors, classify
-  6. ATTRIBUTING        link comments to claims, re-score impact and priority
-  7. COMPLETED
+  6. UNDERSTANDING      sentiment, topics and claim reference per comment (AI first, rules fallback)
+  7. ATTRIBUTING        link comments to claims, re-score impact and priority
+  8. COMPLETED
 
 Runs in a worker thread (FastAPI BackgroundTasks) and writes progress to
 video_analysis_job, which the UI polls.
@@ -20,7 +21,7 @@ from typing import Dict, List, Optional
 
 import httpx
 
-from app.core import config
+from app.core import config, llm
 from app.core.database import append_audit, cursor, fetch_all, fetch_one
 from app.core.text import format_timestamp
 from app.db import DEFAULT_PRODUCT_ID, DEFAULT_SOURCE_ID, persist_comment_and_analysis
@@ -28,7 +29,7 @@ from app.pipeline.classifier import FastSentimentClassifier
 from app.pipeline.masker import PiiMasker
 from app.platform import billing
 from app.platform.notifications import notify
-from app.truth import attribution, youtube
+from app.truth import attribution, audience, youtube
 from app.truth.claims import extract_claims
 from app.truth.retrieval import KnowledgeIndex
 from app.truth.scoring import impact_score, priority_band
@@ -162,8 +163,19 @@ def analyze_video(tenant_id: str, video_id: str, video_url: str, product_id: Opt
     progress("INGESTING_COMMENTS", 70, "Collecting audience comments")
     ingested = _ingest_comments(tenant_id, video_id, meta, product_id)
 
-    # 6. Attribution + scoring
-    progress("ATTRIBUTING", 85, "Linking comments to the claims that triggered them")
+    # 6. Sentiment, topics and claim references (AI for the most-liked comments, rules for the rest)
+    comments = _video_comments(tenant_id, video_id)
+    claims = fetch_all("SELECT * FROM video_claim WHERE tenant_id = %s AND video_analysis_id = %s ORDER BY timestamp_seconds",
+                       (tenant_id, analysis_id))
+    if comments:
+        use_ai = llm.is_available()
+        progress("UNDERSTANDING", 76, f"Reading {len(comments)} comments with AI" if use_ai
+                 else f"Reading {len(comments)} comments (rule-based: AI model is offline)")
+        audience.understand(tenant_id, claims, comments, lambda done, total: progress(
+            "UNDERSTANDING", 76 + int(12 * done / max(1, total)), f"Reading comments with AI ({done}/{total} batches)"))
+
+    # 7. Attribution + scoring
+    progress("ATTRIBUTING", 90, "Linking comments to the claims that triggered them")
     stats = attribute_video(tenant_id, video_id)
 
     with cursor(commit=True) as cur:
@@ -273,6 +285,16 @@ def _ingest_comments(tenant_id: str, video_id: str, meta: youtube.VideoMeta, pro
 
 # ----------------------------------------------------------------------------- attribution
 
+def _video_comments(tenant_id: str, video_id: str) -> List[Dict]:
+    return fetch_all(
+        """SELECT c.id, c.masked_text, c.like_count, c.reply_count, c.platform_created_at,
+                  c.custom_attributes->'ai' AS ai,
+                  ca.churn_risk, ca.toxic, ca.model_version, ca.sentiment, ca.sentiment_score
+           FROM comment c LEFT JOIN comment_analysis ca ON ca.tenant_id = c.tenant_id AND ca.comment_id = c.id
+           WHERE c.tenant_id = %s AND c.custom_attributes->>'video_id' = %s""",
+        (tenant_id, video_id))
+
+
 def attribute_video(tenant_id: str, video_id: str) -> Dict:
     """(Re)link a video's comments to its claims, re-score them, and refresh the video's scores."""
     video = fetch_one("SELECT * FROM video_truth_analysis WHERE tenant_id = %s AND video_id = %s",
@@ -281,14 +303,12 @@ def attribute_video(tenant_id: str, video_id: str) -> Dict:
         raise PipelineError("This video hasn't been analyzed yet.")
     claims = fetch_all("SELECT * FROM video_claim WHERE tenant_id = %s AND video_analysis_id = %s",
                        (tenant_id, video["id"]))
-    comments = fetch_all(
-        """SELECT c.id, c.masked_text, c.like_count, c.reply_count, c.platform_created_at,
-                  ca.churn_risk, ca.toxic, ca.model_version
-           FROM comment c LEFT JOIN comment_analysis ca ON ca.tenant_id = c.tenant_id AND ca.comment_id = c.id
-           WHERE c.tenant_id = %s AND c.custom_attributes->>'video_id' = %s""",
-        (tenant_id, video_id))
+    comments = _video_comments(tenant_id, video_id)
+    # Comments the AI read keep its sentiment and claim decision; the rest use rules.
+    ai_read = {str(c["id"]): c["ai"] for c in comments
+               if (c.get("model_version") or "").startswith("llm/") and isinstance(c.get("ai"), dict)}
 
-    links = attribution.attribute(claims, comments)
+    links = attribution.attribute(claims, comments, ai_read)
     link_by_comment = {l.comment_id: l for l in links}
     verdict_by_claim = {str(c["id"]): c["verdict"] for c in claims}
 
@@ -302,7 +322,11 @@ def attribute_video(tenant_id: str, video_id: str) -> Dict:
                     (tenant_id, tenant_id, video["id"]))
         for c in comments:
             cid = str(c["id"])
-            sentiment, s_score = _classifier.classify(c["masked_text"] or "")
+            if cid in ai_read:
+                sentiment, s_score = c["sentiment"], float(c["sentiment_score"] or 0)
+            else:
+                sentiment, s_score = _classifier.classify(c["masked_text"] or "")
+                audience.store_rule_topics(cur, tenant_id, cid, c["masked_text"] or "", sentiment)
             link = link_by_comment.get(cid)
             verdict = verdict_by_claim.get(link.claim_id) if link else None
             misinfo = verdict in MISINFO_VERDICTS
@@ -311,9 +335,10 @@ def attribute_video(tenant_id: str, video_id: str) -> Dict:
                                  bool(c.get("toxic")), misinfo)
             cur.execute(
                 """UPDATE comment_analysis SET sentiment = %s, sentiment_score = %s, impact_score = %s, priority = %s,
-                          model_version = CASE WHEN model_version LIKE 'llm/%%' THEN model_version ELSE %s END
+                          model_version = %s
                    WHERE tenant_id = %s AND comment_id = %s""",
-                (sentiment, s_score, score, priority_band(score), CLASSIFIER_VERSION, tenant_id, cid))
+                (sentiment, s_score, score, priority_band(score),
+                 c["model_version"] if cid in ai_read else CLASSIFIER_VERSION, tenant_id, cid))
             sentiments[sentiment] += 1
             if link:
                 cur.execute(

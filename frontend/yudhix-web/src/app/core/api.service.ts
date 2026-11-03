@@ -7,6 +7,7 @@ import {
   ClaimComment,
   Health,
   Impact,
+  ProductImpact,
   InboxItem,
   InboxPage,
   Job,
@@ -108,6 +109,9 @@ export class ApiService {
   }
   impact(videoId: string): Observable<Impact> {
     return this.http.get<Impact>(`${this.v1}/truth/videos/${videoId}/impact`);
+  }
+  productImpact(videoId: string): Observable<ProductImpact> {
+    return this.http.get<ProductImpact>(`${this.v1}/truth/videos/${videoId}/product-impact`);
   }
   reattribute(videoId: string): Observable<unknown> {
     return this.http.post(`${this.v1}/truth/videos/${videoId}/reattribute`, {});

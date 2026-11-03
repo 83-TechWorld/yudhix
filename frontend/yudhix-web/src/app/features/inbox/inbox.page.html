@@ -13,6 +13,11 @@
         <option value="">All videos</option>
         @for (v of videos(); track v.id) { <option [value]="v.videoId">{{ v.title }}</option> }
       </select>
+      @if (videoFilter()) {
+        <a class="btn" [routerLink]="['/videos', videoFilter()]" [queryParams]="{ tab: 'impact' }" title="Charts: sentiment, topics, what can fix it">
+          <y-icon name="chart" [size]="16" /> View impact
+        </a>
+      }
       <div class="search grow">
         <y-icon name="search" />
         <input class="input" placeholder="Search comments" (input)="onSearch($any($event.target).value)" aria-label="Search comments" />

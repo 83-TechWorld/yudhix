@@ -98,6 +98,32 @@ export interface Impact {
   headline: string;
 }
 
+export type ImpactLevel = 'HIGH' | 'MEDIUM' | 'LOW';
+export type ImpactTrend = 'RISING' | 'STEADY' | 'FADING' | 'QUIET';
+export interface SentimentSplit { positive: number; neutral: number; negative: number }
+
+/** GET /truth/videos/:id/product-impact: how the comments affect the product. */
+export interface ProductImpact {
+  score: number;
+  level: ImpactLevel;
+  trend: ImpactTrend;
+  headline: string;
+  totals: { comments: number; reach: number; likes: number };
+  sentiment: { byComments: SentimentSplit; byReach: SentimentSplit };
+  negativeShareOfReach: number;
+  negativeByCause: { cause: RootCause; comments: number; reach: number; share: number }[];
+  topics: {
+    topic: string; label: string; comments: number; positive: number; neutral: number; negative: number;
+    reach: number; negativeReach: number;
+  }[];
+  timeline: { bucket: 'day' | 'week'; points: ({ date: string } & SentimentSplit)[] };
+  topNegative: {
+    id: string; text: string; likes: number; replies: number; priority: string | null; cause: RootCause;
+    claimTimestamp: string | null; topics: string[];
+  }[];
+  coverage: { aiComments: number; aiShareOfReach: number };
+}
+
 export interface ClaimComment {
   id: string;
   text: string;

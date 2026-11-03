@@ -14,6 +14,7 @@ const STAGES = [
   { key: 'EXTRACTING_CLAIMS', label: 'Find claims' },
   { key: 'FACT_CHECKING', label: 'Fact-check' },
   { key: 'INGESTING_COMMENTS', label: 'Comments' },
+  { key: 'UNDERSTANDING', label: 'Read comments' },
   { key: 'ATTRIBUTING', label: 'Link reactions' },
 ];
 

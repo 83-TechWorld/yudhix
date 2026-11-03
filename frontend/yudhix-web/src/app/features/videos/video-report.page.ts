@@ -3,6 +3,7 @@ import { LowerCasePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiService, errorMessage } from '../../core/api.service';
+import { ProductImpactComponent } from './product-impact.component';
 import { Claim, ClaimComment, Health, Impact, OutreachNote, RootCause, Verdict, Video } from '../../core/models';
 import { SessionService } from '../../core/session.service';
 import { IconComponent } from '../../shared/icon.component';
@@ -17,6 +18,7 @@ type VerdictFilter = 'all' | 'disputed' | Verdict;
 @Component({
   selector: 'y-video-report',
   imports: [
+    ProductImpactComponent,
     FormsModule, RouterLink, IconComponent, RingComponent, VerdictBadgeComponent, SentimentBarComponent,
     CompactPipe, PctPipe, AgoPipe, LowerCasePipe,
   ],
@@ -46,6 +48,8 @@ export class VideoReportPage {
   protected readonly notes = signal<OutreachNote[] | null>(null);
   protected readonly verdictFilter = signal<VerdictFilter>('all');
   protected readonly recomputing = signal(false);
+  /** Bumped after "Re-link" so the Product impact panel reloads. */
+  protected readonly impactVersion = signal(0);
   /** Server capabilities: tells us whether comments can be pulled from YouTube. */
   protected readonly health = signal<Health | null>(null);
 
@@ -118,6 +122,7 @@ export class VideoReportPage {
         this.recomputing.set(false);
         this.toast.show('Reactions re-linked to claims.');
         this.loadImpact();
+        this.impactVersion.update((n) => n + 1);
         this.api.video(this.videoId()).subscribe((v) => this.video.set(v));
       },
       error: (e) => {

@@ -35,6 +35,11 @@
   --danger: #dc2626;  --danger-soft: #fef2f2;  --danger-text: #b91c1c;
   --muted: #71717a;   --muted-soft: #f4f4f5;   --muted-text: #52525b;
   --info: #0891b2;    --info-soft: #ecfeff;    --info-text: #0e7490;
+  /* Chart tokens (validated for colour-blind separation, light surface).
+     Sentiment is diverging: negative red ↔ positive blue, grey midpoint. */
+  --chart-neg: #dc2626; --chart-pos: #2563eb; --chart-neu: #d4d4d8;
+  --chart-misinfo: #d97706; --chart-valid: #4f46e5; --chart-general: #a1a1aa;
+  --chart-grid: #ececef;
 
   /* Shape & depth: quiet borders, almost no shadow */
   --radius-sm: 6px;
@@ -89,6 +94,9 @@
   --danger: #ef4444;  --danger-soft: #2c1213;  --danger-text: #f87171;
   --muted: #8b8b94;   --muted-soft: #1b1b1f;   --muted-text: #c4c4cc;
   --info: #06b6d4;    --info-soft: #0a2229;    --info-text: #22d3ee;
+  --chart-neg: #ef4444; --chart-pos: #3b82f6; --chart-neu: #3f3f46;
+  --chart-misinfo: #d97706; --chart-valid: #6366f1; --chart-general: #52525b;
+  --chart-grid: #232328;
   --shadow-sm: none;
   --shadow: none;
   --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--border);

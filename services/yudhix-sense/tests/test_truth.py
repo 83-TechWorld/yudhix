@@ -102,7 +102,10 @@ class AttributionTest(unittest.TestCase):
             {"id": "a", "masked_text": "Needing an online handshake to play my own discs is insane"},
             {"id": "b", "masked_text": "Losing my cloud saves because the subscription expires? No way"},
             {"id": "c", "masked_text": "Sony boycott activated"},
-            {"id": "d", "masked_text": "At 5:10 he is just wrong"},
+            {"id": "d", "masked_text": "At 5:10 he is just wrong about saves"},
+            {"id": "e", "masked_text": "At 5:10 he is just wrong"},
+            {"id": "f", "masked_text": "Bro put a song in for no reason 1:20"},
+            {"id": "g", "masked_text": "I thought he was right, the tech is fine"},
         ]
         links = {l.comment_id: l for l in attribution.attribute(self.CLAIMS, comments)}
         self.assertEqual(links["a"].claim_id, "c1")
@@ -110,6 +113,17 @@ class AttributionTest(unittest.TestCase):
         self.assertNotIn("c", links)  # brand words alone don't link
         self.assertEqual((links["d"].claim_id, links["d"].method), ("c2", "TIMESTAMP"))
         self.assertIn("handshake", links["a"].evidence)
+        self.assertNotIn("e", links)  # a timestamp alone isn't enough
+        self.assertNotIn("f", links)
+        self.assertNotIn("g", links)  # everyday words don't link
+
+    def test_ai_decision_wins(self):
+        comments = [{"id": "a", "masked_text": "Needing an online handshake to play my own discs is insane"},
+                    {"id": "b", "masked_text": "Whatever, cloud saves expire anyway"}]
+        ai = {"a": {"claim": None, "why": ""}, "b": {"claim": "c2", "why": "cloud saves expire"}}
+        links = {l.comment_id: l for l in attribution.attribute(self.CLAIMS, comments, ai)}
+        self.assertNotIn("a", links)
+        self.assertEqual((links["b"].claim_id, links["b"].method, links["b"].evidence), ("c2", "AI", "cloud saves expire"))
 
     def test_root_cause(self):
         self.assertEqual(attribution.root_cause("MISLEADING"), "MISINFORMATION")
@@ -164,3 +178,55 @@ class WorkflowStateTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AudienceTest(unittest.TestCase):
+    def test_rule_topics(self):
+        from app.truth.audience import rule_topics
+        self.assertEqual(rule_topics("The PS5 should only cost $299, way too expensive")[0], "PRICE")
+        self.assertIn("SERVICE", rule_topics("Paying monthly for PS Plus online is a joke"))
+        self.assertEqual(rule_topics("lol"), [])
+
+    def test_parse_ai_results(self):
+        from app.truth.audience import _parse
+        batch = [{"id": "x"}, {"id": "y"}, {"id": "z"}]
+        claims = [{"id": "c1"}, {"id": "c2"}]
+        out = _parse({"results": [
+            {"i": 1, "s": "NEG", "t": ["price", "BOGUS"], "c": 2, "w": "costs too much"},
+            {"i": 2, "s": "POS", "t": [], "c": 0, "w": "ignored"},
+            {"i": 3, "s": "???"},               # unknown sentiment: left to rules
+            {"i": 9, "s": "NEG"},               # out of range
+        ]}, batch, claims)
+        self.assertEqual(out["x"], {"sentiment": "NEGATIVE", "topics": ["PRICE"], "claim": "c2", "why": "costs too much"})
+        self.assertEqual(out["y"]["claim"], None)
+        self.assertEqual(out["y"]["why"], "")
+        self.assertNotIn("z", out)
+
+
+class ProductImpactTest(unittest.TestCase):
+    def test_reach_weighting_and_score(self):
+        from app.truth import product_impact
+        now = datetime.now(timezone.utc)
+        rows = [
+            {"id": "1", "like_count": 2500, "reply_count": 100, "sentiment": "NEGATIVE", "verdict": "MISLEADING",
+             "topics": ["PRICE"], "platform_created_at": now, "model_version": "llm/x"},
+            {"id": "2", "like_count": 0, "reply_count": 0, "sentiment": "POSITIVE", "verdict": None,
+             "topics": [], "platform_created_at": now, "model_version": "rules"},
+        ] + [{"id": f"p{i}", "like_count": 0, "reply_count": 0, "sentiment": "POSITIVE", "verdict": None,
+              "topics": ["QUALITY"], "platform_created_at": now - timedelta(days=30)} for i in range(50)]
+        r = product_impact.compute(rows, now)
+        # 51 positive comments vs 1 negative, but the negative one has almost all the reach
+        self.assertEqual(r["sentiment"]["byComments"], {"positive": 51, "neutral": 0, "negative": 1})
+        self.assertGreater(r["negativeShareOfReach"], 0.95)
+        self.assertEqual(r["level"], "HIGH")
+        self.assertEqual(r["topics"][0]["topic"], "PRICE")
+        self.assertEqual(r["negativeByCause"][0], {"cause": "MISINFORMATION", "comments": 1, "reach": 2701, "share": 1.0})
+        self.assertEqual(r["topNegative"][0]["id"], "1")
+        self.assertEqual(r["coverage"]["aiComments"], 1)
+        self.assertIn("price", r["headline"])
+
+    def test_empty(self):
+        from app.truth import product_impact
+        r = product_impact.compute([])
+        self.assertEqual((r["score"], r["level"], r["trend"]), (0, "LOW", "QUIET"))
+        self.assertEqual(r["timeline"]["points"], [])

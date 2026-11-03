@@ -5,8 +5,11 @@ How it works (deterministic, explainable, fast enough for 10k comments):
    thesaurus (e.g. "disc" also covers "physical", "blu-ray").
 2. Terms shared by most claims (brand names, "game") are down-weighted. They show the
    comment is on-topic, but not which claim it is about.
-3. A comment that names the claim's timestamp ("at 1:14 he says...") links directly.
+3. A link needs two specific words shared with the claim, or one plus a related concept word
+   or a timestamp that points at the claim ("at 1:14 he says..."). One word or a timestamp
+   alone isn't enough.
 4. Each comment links to at most one claim: the best score above a threshold.
+5. Comments the AI model read use its decision instead (method AI).
 
 Root cause per comment:
 - MISINFORMATION: reacting to a MISLEADING / FALSE / UNVERIFIED claim
@@ -23,7 +26,7 @@ from app.core.text import tokens
 from app.truth.verifier import MISINFO_VERDICTS
 
 CONCEPTS: List[Set[str]] = [
-    {"disc", "physical", "blu-ray", "bluray", "cartridge", "media"},
+    {"disc", "discs", "disk", "disks", "physical", "digital", "blu-ray", "bluray", "cartridge", "media"},
     {"own", "owning", "ownership", "license", "licence", "rent", "renting", "rental"},
     {"online", "internet", "server", "offline", "connection", "handshake", "drm", "always-online", "check-in"},
     {"save", "cloud", "progress", "backup", "storage", "upload"},
@@ -42,9 +45,13 @@ GENERIC_TERMS = set(tokens("sony playstation ps ps5 ps4 ps6 xbox nintendo game g
 WEAK_TERMS = set(tokens(
     "buy buying bought next still go going gone down up make making made add adds extra basically entire existing "
     "full get take use play playing want need know think see look say said new old good bad thing things time year "
-    "years way day days lot little big really actually literally sold separately edition version their your"))
+    "years way day days lot little big really actually literally sold separately edition version their your "
+    "thought think right tech technology machine video videos learn learned rights clearly everyone look looked "
+    "release released releasing wait talk talking world point thing stuff guy guys man start started"))
 _TS_RE = re.compile(r"\b(?:(\d{1,2}):)?(\d{1,2}):(\d{2})\b")
 LINK_THRESHOLD = 2.2
+# A timestamp counts when it points just after the claim starts (people quote what they just heard).
+TS_BEFORE, TS_AFTER = 5, 25
 
 
 @dataclass
@@ -52,7 +59,7 @@ class Link:
     comment_id: str
     claim_id: str
     score: float
-    method: str  # LEXICAL | TIMESTAMP
+    method: str  # AI | LEXICAL | TIMESTAMP
     evidence: str = ""  # matched words, shown in the UI as "why linked"
 
 
@@ -73,9 +80,18 @@ def _claim_terms(claim: Dict) -> Dict[str, float]:
     return weights
 
 
-def attribute(claims: List[Dict], comments: List[Dict]) -> List[Link]:
+def attribute(claims: List[Dict], comments: List[Dict], ai: Optional[Dict[str, Dict]] = None) -> List[Link]:
+    """Link comments to claims.
+
+    `ai` maps comment id -> {"claim": claim id or None, "why": "..."} for comments the AI model read.
+    The AI decision wins for those comments (including "no claim"); the rest use lexical rules:
+    - at least two specific words shared with the claim itself (not only synonyms or everyday words), or
+    - one specific word plus a timestamp that points at the claim.
+    """
     if not claims or not comments:
         return []
+    ai = ai or {}
+    claim_ids = {str(c["id"]) for c in claims}
 
     claim_terms = {str(c["id"]): _claim_terms(c) for c in claims}
     # Terms appearing in most claims don't discriminate between them.
@@ -96,19 +112,21 @@ def attribute(claims: List[Dict], comments: List[Dict]) -> List[Link]:
     links: List[Link] = []
     for c in comments:
         cid = str(c["id"])
+        if cid in ai:
+            reading = ai[cid] or {}
+            if reading.get("claim") in claim_ids:
+                links.append(Link(cid, reading["claim"], 0.9, "AI", (reading.get("why") or "read by the AI model")[:200]))
+            continue
+
         toks = comment_tokens[cid]
         text = c.get("masked_text") or c.get("text") or ""
-
-        ts_claim = _timestamp_match(text, claims)
-        if ts_claim:
-            links.append(Link(cid, ts_claim, 1.0, "TIMESTAMP", "mentions the claim's timestamp"))
-            continue
         if not toks:
             continue
+        ts_claim = _timestamp_match(text, claims)
 
         best: Optional[tuple] = None
         for claim_id, terms in claim_terms.items():
-            score, specific_base, matched = 0.0, 0, []
+            score, specific_base, related, matched = 0.0, 0, 0, []
             for t in toks & terms.keys():
                 matched.append(t)
                 w = terms[t]
@@ -116,15 +134,22 @@ def attribute(claims: List[Dict], comments: List[Dict]) -> List[Link]:
                     w *= 0.35
                 elif w == 1.0:
                     specific_base += 1
+                else:
+                    related += 1
                 score += w * idf(t)
-            # Must share at least one specific word with the claim itself, not just a synonym.
-            if specific_base == 0:
-                continue
-            if best is None or score > best[1]:
-                best = (claim_id, score, matched)
+            near = claim_id == ts_claim
+            # Two specific words, or one plus a related concept or a timestamp pointing at the claim.
+            if specific_base >= 2 or (specific_base >= 1 and (related >= 1 or near)):
+                if near:
+                    score += 2.0
+                if best is None or score > best[1]:
+                    best = (claim_id, score, matched, near)
         if best and best[1] >= LINK_THRESHOLD:
-            links.append(Link(cid, best[0], round(min(1.0, best[1] / 6.0), 3), "LEXICAL",
-                              _original_words(text, set(best[2]))))
+            evidence = _original_words(text, set(best[2]))
+            if best[3]:
+                evidence = (evidence + " · mentions the claim's timestamp").lstrip(" ·")
+            links.append(Link(cid, best[0], round(min(1.0, best[1] / 6.0), 3),
+                              "TIMESTAMP" if best[3] else "LEXICAL", evidence))
     return links
 
 
@@ -144,7 +169,8 @@ def _timestamp_match(text: str, claims: List[Dict]) -> Optional[str]:
         h = int(m.group(1) or 0)
         secs = h * 3600 + int(m.group(2)) * 60 + int(m.group(3))
         nearest = min(claims, key=lambda cl: abs(int(cl.get("timestamp_seconds") or 0) - secs))
-        if abs(int(nearest.get("timestamp_seconds") or 0) - secs) <= 30:
+        delta = secs - int(nearest.get("timestamp_seconds") or 0)
+        if -TS_BEFORE <= delta <= TS_AFTER:
             return str(nearest["id"])
     return None
 

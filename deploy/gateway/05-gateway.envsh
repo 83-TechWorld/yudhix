@@ -14,5 +14,20 @@ if [ "${KEYCLOAK_ADMIN_PUBLIC:-false}" = "true" ]; then
 else
   export KEYCLOAK_ADMIN_ACCESS="return 404;"
 fi
+# Upstream DNS. dynamic: re-resolve names at runtime (Docker, Zoho), so recreated containers with
+# new IPs keep working. static: resolve once at start (Kubernetes: stable Service IPs, and nginx's
+# resolver ignores the cluster's search domains used by short names like "api").
+if [ -z "${GATEWAY_DNS:-}" ]; then
+  if [ -n "${KUBERNETES_SERVICE_HOST:-}" ]; then GATEWAY_DNS=static; else GATEWAY_DNS=dynamic; fi
+fi
+RESOLVER="${RESOLVER:-$(awk '/^nameserver/ { print $2; exit }' /etc/resolv.conf 2>/dev/null)}"
+if [ "$GATEWAY_DNS" = "dynamic" ] && [ -n "$RESOLVER" ]; then
+  case "$RESOLVER" in *:*) RESOLVER="[$RESOLVER]";; esac   # IPv6 nameserver
+  export UPSTREAM_DNS="resolver $RESOLVER valid=10s ipv6=off; set \$web_upstream $WEB_UPSTREAM; set \$api_upstream $API_UPSTREAM; set \$keycloak_upstream $KEYCLOAK_UPSTREAM;"
+  export WEB_PASS='$web_upstream' API_PASS='$api_upstream' KEYCLOAK_PASS='$keycloak_upstream'
+else
+  export UPSTREAM_DNS="# upstream DNS: resolved once at start"
+  export WEB_PASS="$WEB_UPSTREAM" API_PASS="$API_UPSTREAM" KEYCLOAK_PASS="$KEYCLOAK_UPSTREAM"
+fi
 # Only substitute our own variables (keep nginx's $uri, $host, ...).
-export NGINX_ENVSUBST_FILTER="^(PORT|WEB_UPSTREAM|API_UPSTREAM|KEYCLOAK_UPSTREAM|API_RATE_LIMIT|API_RATE_BURST|LOGIN_RATE_LIMIT|MAX_BODY_SIZE|KEYCLOAK_ADMIN_ACCESS)$"
+export NGINX_ENVSUBST_FILTER="^(PORT|API_RATE_LIMIT|API_RATE_BURST|LOGIN_RATE_LIMIT|MAX_BODY_SIZE|KEYCLOAK_ADMIN_ACCESS|UPSTREAM_DNS|WEB_PASS|API_PASS|KEYCLOAK_PASS)$"

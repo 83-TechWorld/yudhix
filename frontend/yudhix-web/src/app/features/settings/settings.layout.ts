@@ -16,6 +16,7 @@ import { IconComponent } from '../../shared/icon.component';
       </header>
       <nav class="tabs" aria-label="Settings sections">
         <a routerLink="workspace" routerLinkActive="active"><y-icon name="building" [size]="16" /> Workspace</a>
+        <a routerLink="ai" routerLinkActive="active"><y-icon name="sparkles" [size]="16" /> AI</a>
         <a routerLink="team" routerLinkActive="active"><y-icon name="users" [size]="16" /> Team</a>
         <a routerLink="billing" routerLinkActive="active"><y-icon name="card" [size]="16" /> Plan & billing</a>
       </nav>

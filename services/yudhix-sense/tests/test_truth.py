@@ -31,9 +31,10 @@ APPROVER = Actor("22222222-2222-4222-8222-222222222222", "approver")
 
 class NoLlm(unittest.TestCase):
     def setUp(self):
-        patcher = mock.patch.object(llm, "is_available", return_value=False)
-        patcher.start()
-        self.addCleanup(patcher.stop)
+        for name in ("cloud", "local"):  # no AI engine at all: rules and retrieval only
+            patcher = mock.patch.object(llm, name, return_value=None)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
 
 class VideoIdTest(unittest.TestCase):

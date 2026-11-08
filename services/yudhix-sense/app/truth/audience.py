@@ -19,10 +19,12 @@ Results are stored on the comment so "Re-link" can re-run attribution without th
   comment.custom_attributes.ai = {"claim": <claim id or null>, "why": "...", "idea": "...", "v": 1}
 Feature requests are then grouped into product ideas (app/truth/growth.py).
 """
+import contextvars
 import json
 import logging
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable, Dict, List, Optional, Tuple
 
 from app.core import config, llm
@@ -100,6 +102,7 @@ RULES_VERSION = "rules/sentiment-v2"
 BATCH_SIZE = 10
 BATCH_TIMEOUT_SECONDS = 120
 MAX_FAILURES_IN_A_ROW = 2
+CLOUD_PARALLEL = 4
 
 
 # ----------------------------------------------------------------------------- rules
@@ -209,24 +212,41 @@ def _parse(raw, batch: List[Dict], claims: List[Dict]) -> Dict[str, Dict]:
 
 def classify_with_ai(claims: List[Dict], comments: List[Dict], budget_seconds: float,
                      on_progress: Optional[Callable[[int, int], None]] = None) -> Dict[str, Dict]:
-    """AI reading for as many comments as fit in the time budget, most-liked first."""
+    """AI reading for as many comments as fit in the time budget, most-liked first.
+    A local model serves one request at a time, so batches run in sequence there; cloud providers
+    take CLOUD_PARALLEL batches at once."""
     if not comments or not llm.is_available():
         return {}
     ordered = sorted(comments, key=lambda c: -(int(c.get("like_count") or 0) + 2 * int(c.get("reply_count") or 0)))
     batches = [ordered[i:i + BATCH_SIZE] for i in range(0, len(ordered), BATCH_SIZE)]
     deadline = time.time() + budget_seconds
     results: Dict[str, Dict] = {}
-    failures = 0
-    for done, batch in enumerate(batches, start=1):
-        if time.time() > deadline or failures >= MAX_FAILURES_IN_A_ROW:
-            break
+
+    def read(batch: List[Dict]) -> Dict[str, Dict]:
+        if time.time() > deadline:
+            return {}
         raw = llm.generate_json(_prompt(claims, batch), timeout=BATCH_TIMEOUT_SECONDS,
                                 max_tokens=60 * len(batch) + 100)
-        parsed = _parse(raw or {}, batch, claims)
-        failures = 0 if parsed else failures + 1
-        results.update(parsed)
-        if on_progress:
-            on_progress(done, len(batches))
+        return _parse(raw or {}, batch, claims)
+
+    if llm.is_cloud():
+        with ThreadPoolExecutor(max_workers=CLOUD_PARALLEL) as pool:
+            # each task gets its own copy of the context, so it keeps using this workspace's provider
+            futures = [pool.submit(contextvars.copy_context().run, read, b) for b in batches]
+            for done, f in enumerate(as_completed(futures), start=1):
+                results.update(f.result())
+                if on_progress:
+                    on_progress(done, len(batches))
+    else:
+        failures = 0
+        for done, batch in enumerate(batches, start=1):
+            if time.time() > deadline or failures >= MAX_FAILURES_IN_A_ROW:
+                break
+            parsed = read(batch)
+            failures = 0 if parsed else failures + 1
+            results.update(parsed)
+            if on_progress:
+                on_progress(done, len(batches))
     logger.info("AI classified %d of %d comments", len(results), len(comments))
     return results
 
@@ -239,7 +259,8 @@ def understand(tenant_id: str, claims: List[Dict], comments: List[Dict],
     from app.truth import growth  # growth imports this module
 
     ai = classify_with_ai(claims, comments, config.LLM_COMMENT_BUDGET_SECONDS, progress)
-    model = f"llm/{config.OLLAMA_MODEL}"
+    engine = llm.engine()
+    model = f"llm/{engine.model if engine else config.OLLAMA_MODEL}"[:100]
     ideas = []
     with cursor(commit=True) as cur:
         for c in comments:

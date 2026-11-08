@@ -146,16 +146,22 @@
               </div>
               <blockquote class="quote" [class]="verdictMeta[c.verdict].quote">"{{ c.quote }}"</blockquote>
               <p class="analysis">{{ c.analysis }}</p>
+              @if (c.needsReview) {
+                <div class="callout callout-warn review"><y-icon name="help" [size]="15" /><span><strong>Needs review.</strong> {{ c.reviewReason }}</span></div>
+              }
 
               @if (c.knowledge) {
                 <div class="source">
                   <div class="source-title"><y-icon name="book" [size]="14" /> {{ c.knowledge.title }}@if (c.knowledge.clauseRef) { <span class="mono"> · {{ c.knowledge.clauseRef }}</span> }</div>
+                  @if (c.sourceQuote) {
+                    <p class="evidence" title="The sentence the verdict rests on. Checked to be in the official text."><y-icon name="checkCircle" [size]="13" /> “{{ c.sourceQuote }}”</p>
+                  }
                   <p>{{ c.knowledge.statement }}</p>
                 </div>
               } @else if (c.citation) {
                 <div class="source"><div class="source-title"><y-icon name="book" [size]="14" /> {{ c.citation }}</div></div>
               } @else {
-                <div class="callout callout-warn"><y-icon name="info" [size]="15" /><span>No official document covers this yet. <a routerLink="/knowledge">Add one to the knowledge base</a> and re-analyze.</span></div>
+                <div class="callout callout-warn"><y-icon name="info" [size]="15" /><span>No official document covers this yet. <a routerLink="/knowledge">Add one to the knowledge base</a>, then re-check the claims.</span></div>
               }
 
               <div class="row-wrap claim-foot">
@@ -164,6 +170,16 @@
                 </button>
                 @if (c.isMisinformation && c.linkedComments) {
                   <a class="btn btn-sm btn-ghost" routerLink="/inbox" [queryParams]="{ video: v.videoId, cause: 'MISINFORMATION' }">Reply with the facts <y-icon name="arrowRight" [size]="15" /></a>
+                }
+                <span class="spacer"></span>
+                @if (session.can('content.write')) {
+                  @if (c.verificationMethod === 'HUMAN') { <span class="chip chip-outline" title="Set by a person. Re-checks keep it.">Verdict set by a person</span> }
+                  <label class="override">
+                    <span class="subtle">Verdict</span>
+                    <select class="select input" [ngModel]="c.verdict" (ngModelChange)="overrideVerdict(c, $event)" [attr.aria-label]="'Set the verdict for the claim at ' + c.timestamp">
+                      @for (o of verdictOptions; track o) { <option [value]="o">{{ verdictMeta[o].label }}</option> }
+                    </select>
+                  </label>
                 }
               </div>
             </div>

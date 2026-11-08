@@ -42,6 +42,7 @@ export class VideoReportPage {
   protected readonly sentimentChip = SENTIMENT_CHIP;
   protected readonly priorityChip = PRIORITY_CHIP;
   protected readonly youtubeAt = youtubeAt;
+  protected readonly verdictOptions: Verdict[] = ['FACTUALLY_CORRECT', 'MISLEADING', 'FALSE', 'UNVERIFIED_SPECULATION'];
 
   protected readonly tab = signal<Tab>('claims');
   protected readonly video = signal<(Video & { claims: Claim[] }) | null>(null);
@@ -264,6 +265,23 @@ export class VideoReportPage {
   }
 
   protected methodLabel(method: string | null): string {
-    return method === 'LLM' ? 'AI-checked' : method === 'HEURISTIC' ? 'Rule-based' : 'Curated';
+    return method === 'LLM' ? 'AI-checked' : method === 'HEURISTIC' ? 'Rule-based' : method === 'HUMAN' ? 'Set by a person' : 'Curated';
+  }
+
+  /** A person sets the verdict (e.g. for "Needs review"). Re-checks keep it; reactions are re-linked. */
+  protected overrideVerdict(claim: Claim, verdict: Verdict): void {
+    if (verdict === claim.verdict) return;
+    this.api.overrideClaim(claim.id, verdict).subscribe({
+      next: (v) => {
+        this.video.set(v);
+        this.loadImpact();
+        this.impactVersion.update((n) => n + 1);
+        this.toast.show(`Verdict set to ${VERDICT_META[verdict].label}.`);
+      },
+      error: (e) => {
+        this.toast.error(errorMessage(e));
+        this.video.update((v) => (v ? { ...v } : v)); // re-render the select with the old value
+      },
+    });
   }
 }

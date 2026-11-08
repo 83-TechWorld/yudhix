@@ -5,7 +5,7 @@ import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } fro
 import { filter, interval } from 'rxjs';
 import { ApiService, errorMessage } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
-import { AppNotification, Health, WorkspaceSummary } from '../core/models';
+import { AiStatus, AppNotification, Health, WorkspaceSummary } from '../core/models';
 import { ROLE_INFO, SessionService, initials, trialDaysLeft } from '../core/session.service';
 import { BotState, BotStatusComponent } from '../shared/bot-status.component';
 import { IconComponent } from '../shared/icon.component';
@@ -48,6 +48,8 @@ export class ShellComponent {
   protected readonly mobileNav = this.nav.filter((n) => n.mobile);
 
   protected readonly health = signal<Health | null>(null);
+  /** Which AI answers in this workspace: cloud provider, local model, or rules. */
+  protected readonly ai = signal<AiStatus | null>(null);
   protected readonly apiDown = signal(false);
   protected readonly inReview = signal(0);
   protected readonly title = signal('');
@@ -62,7 +64,15 @@ export class ShellComponent {
     if (this.apiDown()) return 'offline';
     const h = this.health();
     if (!h) return 'connecting';
+    const ai = this.ai();
+    if (ai) return ai.mode === 'RULES' ? 'asleep' : 'awake';
     return h.capabilities.llm ? 'awake' : 'asleep';
+  });
+  protected readonly botLabel = computed(() => {
+    const ai = this.ai();
+    if (this.apiDown() || !ai) return null;
+    return ai.mode === 'CLOUD' ? `AI: ${ai.label} · ${ai.model}` : ai.mode === 'LOCAL' ? `AI: local model ${ai.model}`
+      : 'No AI model: using fact retrieval and rules';
   });
   protected readonly themeIcon = computed(() => ({ system: 'monitor', light: 'sun', dark: 'moon' })[this.session.theme()]);
   protected readonly trialDays = computed(() => trialDaysLeft(this.session.workspace()));
@@ -109,6 +119,7 @@ export class ShellComponent {
       },
       error: () => this.apiDown.set(true),
     });
+    this.api.aiStatus().subscribe({ next: (a) => this.ai.set(a), error: () => this.ai.set(null) });
   }
 
   private refreshCounts(): void {

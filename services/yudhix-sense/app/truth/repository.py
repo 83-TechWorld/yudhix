@@ -1,10 +1,11 @@
 """Read models for the truth-first screens: videos, claims, audience impact, knowledge, outreach."""
 from typing import Dict, List, Optional
 
+from app.core import llm
 from app.core.database import append_audit, cursor, fetch_all, fetch_one
 from app.truth import outreach
 from app.truth.attribution import root_cause
-from app.truth.verifier import MISINFO_VERDICTS
+from app.truth.verifier import MISINFO_VERDICTS, VERDICTS
 
 
 def _iso(v):
@@ -66,6 +67,8 @@ def _claim(r: Dict) -> Dict:
         "confidence": float(r.get("confidence_score") or 0), "analysis": r["fact_check_analysis"],
         "citation": r.get("official_citation"), "linkedComments": r.get("incited_comments_count") or 0,
         "sentimentImpact": r.get("sentiment_impact"), "verificationMethod": r.get("verification_method"),
+        "sourceQuote": r.get("source_quote"), "needsReview": bool(r.get("needs_review")),
+        "reviewReason": r.get("review_reason"),
         "knowledge": {
             "id": str(r["knowledge_id"]), "title": r.get("document_title"), "clauseRef": r.get("clause_ref"),
             "statement": r.get("official_statement"), "source": r.get("citation_source"),
@@ -90,6 +93,27 @@ def get_video(tenant_id: str, video_id: str) -> Optional[Dict]:
     video = _video(r, _comment_stats(tenant_id, video_id).get(video_id))
     video["claims"] = get_claims(tenant_id, str(r["id"]))
     return video
+
+
+def override_claim(tenant_id: str, actor: str, claim_id: str, verdict: str, note: Optional[str]) -> Optional[Dict]:
+    """A person sets the verdict. Kept through re-checks; comments are re-linked by the caller."""
+    if verdict not in VERDICTS:
+        raise ValueError("Unknown verdict.")
+    with cursor(commit=True) as cur:
+        cur.execute(
+            """UPDATE video_claim SET verdict = %s, verification_method = 'HUMAN', needs_review = false,
+                      review_reason = NULL, confidence_score = 1.0, reviewed_by = %s, reviewed_at = now(),
+                      fact_check_analysis = COALESCE(NULLIF(%s, ''), fact_check_analysis)
+               WHERE tenant_id = %s AND id = %s
+               RETURNING video_analysis_id, verdict""", (verdict, actor, note or "", tenant_id, claim_id))
+        row = cur.fetchone()
+        if not row:
+            return None
+        cur.execute("SELECT video_id FROM video_truth_analysis WHERE id = %s", (row["video_analysis_id"],))
+        video_id = cur.fetchone()["video_id"]
+        append_audit(cur, tenant_id, actor, "USER", "CLAIM_VERDICT_OVERRIDDEN", "CLAIM", claim_id,
+                     {"verdict": verdict, "video_id": video_id})
+    return {"videoId": video_id, "verdict": verdict}
 
 
 def get_impact(tenant_id: str, video_id: str) -> Optional[Dict]:
@@ -235,12 +259,21 @@ def create_outreach(tenant_id: str, actor: str, video_id: str, claim_ids: Option
     claims = [c for c in video["claims"] if (c["id"] in claim_ids if claim_ids else c["isMisinformation"])]
     if not claims:
         raise ValueError("Pick at least one claim. This video has no misleading claims to clarify.")
-    note = outreach.creator_note(video["channel"], video["title"], [{
+    with llm.use_tenant(tenant_id):
+        note = _creator_note(video, claims, brand_name)
+    return _save_outreach(tenant_id, actor, video_id, video, claims, note)
+
+
+def _creator_note(video: Dict, claims: List[Dict], brand_name: str) -> Dict:
+    return outreach.creator_note(video["channel"], video["title"], [{
         "timestamp_start": c["timestamp"], "creator_quote": c["quote"],
         "official_statement": (c["knowledge"] or {}).get("statement"), "fact_check_analysis": c["analysis"],
         "document_title": (c["knowledge"] or {}).get("title"), "clause_ref": (c["knowledge"] or {}).get("clauseRef"),
         "official_citation": c["citation"],
     } for c in claims], brand_name)
+
+
+def _save_outreach(tenant_id: str, actor: str, video_id: str, video: Dict, claims: List[Dict], note: Dict) -> Dict:
     with cursor(commit=True) as cur:
         cur.execute(
             """INSERT INTO creator_outreach (tenant_id, video_id, channel_title, claim_ids, subject, body, created_by)

@@ -96,6 +96,32 @@ The **Product growth** tab is the positive side (`app/truth/growth.py`, `GET /ap
 
 The **Ideas** page is the product team's backlog: every idea with its supporting comments, videos and reach, a status (New → Reviewing → Planned → Shipped, or Declined) and a note. Keyword rules can spot a request when the AI is offline, but only the AI's reading names and groups it, so ideas fill in as the AI reads comments.
 
+### AI engines (Settings → AI)
+
+Every AI call goes through one layer (`app/core/llm.py`, providers in `app/core/providers.py`). Each workspace picks where AI runs:
+
+| Mode | What answers | When |
+|---|---|---|
+| **Cloud AI** | Claude, ChatGPT (OpenAI), Gemini, Mistral, Groq, DeepSeek, OpenRouter, or any OpenAI-compatible server (LM Studio, vLLM, …) with the workspace's own key | Only after the key passes two checks: listing the provider's models, then a test request on the chosen model |
+| **Local** | Ollama on the server (`OLLAMA_MODEL`) | Default |
+| **Retrieval and rules** | No model: keyword fact search, rule-based verdicts and comment reading | When neither is available |
+
+- **Automatic fallback:** cloud → local → rules, on every call. A key the provider rejects (401/403) switches the workspace back to local, marks the key invalid and notifies the admins.
+- **Keys:** encrypted at rest (Fernet, `AI_KEY_SECRET`), never sent back to the browser (only the last 4 characters).
+- **Data:** facts, comments, replies and ideas stay in your database. A cloud provider only receives what one request needs: a claim with its top 3 facts, a batch of PII-masked comments, or a fact's text to embed.
+- **Speed:** cloud providers read comments 4 batches at a time; the local model reads one at a time.
+- The robot in the top bar shows which engine is answering.
+
+### How fact-checking works (RAG) and the anti-hallucination guards
+
+1. **Hybrid search** (`app/truth/retrieval.py`): keyword ranking (BM25) plus meaning-based search (embedding cosine similarity), merged with Reciprocal Rank Fusion. Embeddings come from the cloud provider when it has an embeddings API (OpenAI, Gemini, Mistral), otherwise from a local model (`ollama pull nomic-embed-text`), otherwise search is keyword-only. Fact vectors are cached in `knowledge_embedding` and recomputed only when a fact changes.
+2. **No evidence, no AI:** if nothing in the knowledge base is close, the claim is *unverified* without asking the model.
+3. **Relation, not verdict:** the model says whether the source supports, contradicts, partly contradicts or doesn't address the claim, and code maps that to a verdict.
+4. **Quote check:** the model must copy the source sentence it relied on, and that sentence must really be in the official text. An invented quote means the AI verdict is dropped and the claim is flagged **Needs review**.
+5. **Number check:** figures are compared by code. "Supports" with different figures becomes *misleading* and is flagged.
+6. **Second opinion** (`SECOND_OPINION=cloud|always|off`): with cloud AI each claim is read twice with the sources reordered. Disagreement means **Needs review**.
+7. **Human verdict:** anyone who can edit content can set a claim's verdict. Re-checks keep it, and comments are re-linked.
+
 ### Knowledge base and re-checking claims
 
 Each workspace has its own **Knowledge base**: the official facts (specs, prices, policies, FAQs) that claims are checked against. A claim with no matching fact stays *unverified*, so a new workspace should add its facts first.
@@ -341,6 +367,9 @@ For local secrets, copy `services/yudhix-sense/.env.example` to `.env` in the sa
 | `MAX_COMMENTS_PER_VIDEO` | `100` | Comments kept per analysis. |
 | `COMMENT_SAMPLING` | `spread` | `spread`: 40% newest, 40% oldest, 20% random from the middle, so the charts show a cross-section over time; the video's other stored comments are archived (hidden, not deleted), except ones with a reply. `top`: the most relevant comments as YouTube ranks them. |
 | `COMMENT_POOL_MAX` | `2000` | `spread` reads up to this many comments, newest first, to find the oldest (1 YouTube quota unit per 100). |
+| `OLLAMA_EMBED_MODEL` | `nomic-embed-text` | Local embedding model for meaning-based fact search (used when the cloud provider has no embeddings). Optional. |
+| `AI_KEY_SECRET` | `AUTHOR_HMAC_KEY` | Encrypts workspace AI keys. Set a long random value in production; changing it makes saved keys unreadable. |
+| `SECOND_OPINION` | `cloud` | Read each claim twice and flag disagreements: `cloud` (only with cloud AI), `always`, `off`. |
 | `NEW_COMMENTS_MAX` | `100` | Most comments one "Fetch new comments" check adds. |
 | `SCHEDULER_ENABLED` | `true` | Background checks for new comments on this server. Workspaces set their own interval. |
 | `SCHEDULER_TICK_SECONDS` | `300` | How often the scheduler looks for videos that are due. |
@@ -386,7 +415,8 @@ yudhix/
 | Area | Tables |
 |---|---|
 | Workspaces & team | `tenant`, `tenant_user`, `workspace_invitation`, `country_config` |
-| Products & facts | `product`, `product_knowledge` |
+| Products & facts | `product`, `product_knowledge`, `knowledge_embedding` |
+| AI | `ai_setting` (provider, model, encrypted key per workspace) |
 | Videos & claims | `video_truth_analysis`, `video_claim`, `video_analysis_job`, `creator_outreach` |
 | Comments | `comment`, `comment_analysis`, `comment_claim_link`, `comment_watch` (schedule) |
 | Product ideas | `product_idea`, `product_idea_comment` |
@@ -474,7 +504,7 @@ Production checklist: strong `AUTHOR_HMAC_KEY` and database passwords, `DEMO_WOR
 | Payments | Plans, quotas and invoices work; no card is charged. | Stripe / Razorpay checkout and webhooks. |
 | Ingestion | On demand per video, plus scheduled checks for new comments on analyzed videos. | Channel watchers that pick up new uploads. |
 | Attribution | Keyword matching with evidence; weak on sarcasm and memes. | Embedding similarity (pgvector) with LLM re-ranking. |
-| Fact-checking | BM25 + local 8B model. | Document upload, vector search, human verdict override. |
+| Fact-checking | Hybrid search (BM25 + embeddings) and local or cloud AI with quote, number and second-opinion checks. | Document upload (PDF, Word) split into clauses; an evaluation set from human verdicts. |
 | Sentiment & topics | Local LLM for the most-liked comments, keyword rules for the rest. | Faster model or GPU so the AI reads every comment; agent corrections. |
 | Product impact & growth | Per video; product ideas across videos. | **Product health** across all videos of a product: trend, top issues, which creators drive negativity. |
 | Services | One Python API does everything. | Split into the planned Java services (`services/yudhix-*`) as load requires. |

@@ -48,6 +48,10 @@ export interface KnowledgeRef {
 }
 
 export interface Claim {
+  /** The sentence of the official source the verdict rests on (checked to really be in the source). */
+  sourceQuote?: string | null;
+  needsReview?: boolean;
+  reviewReason?: string | null;
   id: string;
   timestamp: string;
   timestampSeconds: number;
@@ -156,6 +160,24 @@ export interface Idea {
     id: string; text: string; likes: number; replies: number; sentiment: Sentiment | null;
     videoId: string | null; videoTitle: string | null; createdAt: string | null; active: boolean;
   }[];
+}
+
+/** Who answers AI requests in this workspace right now. */
+export interface AiStatus { mode: 'CLOUD' | 'LOCAL' | 'RULES'; provider: string | null; label: string; model: string | null; embeddings: boolean }
+export interface AiProvider { id: string; label: string; keyUrl: string; needsBaseUrl: boolean; embeddings: boolean }
+export interface AiSettings {
+  mode: 'LOCAL' | 'CLOUD';
+  provider: string | null;
+  model: string | null;
+  embedModel: string | null;
+  baseUrl: string | null;
+  keyHint: string | null;
+  hasKey: boolean;
+  status: 'UNTESTED' | 'VALID' | 'INVALID';
+  lastError: string | null;
+  validatedAt: string | null;
+  active: AiStatus;
+  local: { available: boolean; model: string; embedModel: string | null };
 }
 
 /** Workspace schedule for checking analyzed videos for new comments. */

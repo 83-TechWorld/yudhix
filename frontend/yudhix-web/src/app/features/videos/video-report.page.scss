@@ -73,3 +73,8 @@ a.ts:hover { background: var(--surface-3); text-decoration: none; }
   .grow { flex: 1 1 280px; } }
 .recheck-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap;
   margin-bottom: 8px; font-size: 13px; }
+
+.review { margin: 8px 0; }
+.evidence { font-style: italic; color: var(--text); y-icon { color: var(--ok); vertical-align: -2px; } }
+.override { display: inline-flex; align-items: center; gap: 6px; font-size: 13px;
+  select { height: 32px; padding: 0 10px; width: auto; font-size: 13px; } }

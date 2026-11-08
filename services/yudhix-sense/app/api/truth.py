@@ -181,6 +181,25 @@ def reattribute(video_id: str, tenant: str = Depends(tenant_id), _: Actor = Depe
         raise HTTPException(404, str(e))
 
 
+class ClaimOverride(BaseModel):
+    verdict: str = Field(..., pattern="^(FACTUALLY_CORRECT|MISLEADING|FALSE|UNVERIFIED_SPECULATION)$")
+    note: Optional[str] = Field(None, max_length=2000)
+
+
+@router.patch("/claims/{claim_id}")
+def override_claim(claim_id: str, body: ClaimOverride, tenant: str = Depends(tenant_id),
+                   member: Membership = Depends(require("content.write"))):
+    """Set a claim's verdict by hand (e.g. one flagged "Needs review"). Re-checks keep it."""
+    try:
+        found = repository.override_claim(tenant, member.user_id, claim_id, body.verdict, body.note)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if not found:
+        raise HTTPException(404, "Claim not found")
+    pipeline.attribute_video(tenant, found["videoId"])  # verdicts decide which negativity is misinformation
+    return repository.get_video(tenant, found["videoId"])
+
+
 @router.get("/claims/{claim_id}/comments")
 def claim_comments(claim_id: str, tenant: str = Depends(tenant_id), limit: int = 50):
     return {"comments": repository.claim_comments(tenant, claim_id, min(limit, 200))}

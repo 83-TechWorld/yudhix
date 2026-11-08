@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 export type BotState = 'awake' | 'asleep' | 'offline' | 'connecting';
 
 const LABELS: Record<BotState, string> = {
-  awake: 'AI is awake: claims are checked by the local AI model',
+  awake: 'AI is awake: claims are checked by the AI model',
   asleep: 'AI is asleep: using rule-based checks (no AI model available)',
   offline: "Can't reach the Yudhix API",
   connecting: 'Connecting…',
@@ -90,5 +90,7 @@ const LABELS: Record<BotState, string> = {
 export class BotStatusComponent {
   readonly state = input<BotState>('connecting');
   readonly size = input(22);
-  protected readonly label = computed(() => LABELS[this.state()]);
+  /** Overrides the default tooltip, e.g. "AI: Claude (Anthropic) · claude-sonnet-5-5". */
+  readonly text = input<string | null>(null);
+  protected readonly label = computed(() => this.text() || LABELS[this.state()]);
 }

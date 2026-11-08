@@ -132,6 +132,11 @@ def _update(job_id: str, stage: str, progress: int, message: str, status: str = 
 
 
 def run_job(job_id: str, tenant_id: str, manual_transcript: Optional[str] = None) -> None:
+    with llm.use_tenant(tenant_id):  # every AI call inside uses this workspace's provider
+        _run_job(job_id, tenant_id, manual_transcript)
+
+
+def _run_job(job_id: str, tenant_id: str, manual_transcript: Optional[str] = None) -> None:
     job = get_job(tenant_id, job_id)
     if not job:
         return
@@ -260,8 +265,11 @@ def recheck_claims(tenant_id: str, video_id: str, progress) -> Dict:
         raise PipelineError("This video hasn't been analyzed yet.")
     claims = fetch_all("SELECT * FROM video_claim WHERE tenant_id = %s AND video_analysis_id = %s "
                        "ORDER BY timestamp_seconds", (tenant_id, video["id"]))
-    index = KnowledgeIndex(fetch_all("SELECT * FROM product_knowledge WHERE tenant_id = %s", (tenant_id,)))
+    index = KnowledgeIndex.build(tenant_id, fetch_all("SELECT * FROM product_knowledge WHERE tenant_id = %s",
+                                                      (tenant_id,)))
     changed, checked = 0, []
+    human = [c for c in claims if c.get("verification_method") == "HUMAN"]  # a person's verdict is never overwritten
+    claims = [c for c in claims if c.get("verification_method") != "HUMAN"]
     for i, c in enumerate(claims, start=1):
         progress("FACT_CHECKING", 10 + int(75 * (i - 1) / max(1, len(claims))),
                  f"Checking claim {i} of {len(claims)} against your knowledge base")
@@ -274,14 +282,18 @@ def recheck_claims(tenant_id: str, video_id: str, progress) -> Dict:
             changed += v.verdict != c["verdict"]
             cur.execute(
                 """UPDATE video_claim SET verdict = %s, confidence_score = %s, rag_knowledge_id = %s,
-                          fact_check_analysis = %s, official_citation = %s, verification_method = %s
+                          fact_check_analysis = %s, official_citation = %s, verification_method = %s,
+                          source_quote = %s, needs_review = %s, review_reason = %s
                    WHERE id = %s""",
-                (v.verdict, round(v.confidence, 3), doc.get("id"), v.analysis, citation, v.method, c["id"]))
+                (v.verdict, round(v.confidence, 3), doc.get("id"), v.analysis, citation, v.method,
+                 v.source_quote, v.needs_review, v.review_reason, c["id"]))
         cur.execute("""UPDATE video_truth_analysis SET facts_stale = false, facts_checked_at = now()
                        WHERE id = %s""", (video["id"],))
     progress("ATTRIBUTING", 90, "Updating which reactions trace back to misinformation")
     stats = attribute_video(tenant_id, video_id)
-    return {"claims": len(claims), "changed": changed, "misleadingClaims": stats["misleadingClaims"],
+    return {"claims": len(claims) + len(human), "changed": changed, "keptHuman": len(human),
+            "needsReview": sum(1 for _, v in checked if v.needs_review),
+            "misleadingClaims": stats["misleadingClaims"],
             "videoTitle": video["video_title"]}
 
 
@@ -322,7 +334,7 @@ def analyze_video(tenant_id: str, video_id: str, video_url: str, product_id: Opt
         transcript = None
 
     knowledge = fetch_all("SELECT * FROM product_knowledge WHERE tenant_id = %s", (tenant_id,))
-    index = KnowledgeIndex(knowledge)
+    index = KnowledgeIndex.build(tenant_id, knowledge)
 
     if transcript:
         # 3. Claims
@@ -431,10 +443,11 @@ def _save_video_and_claims(tenant_id: str, meta: youtube.VideoMeta, video_url: s
             cur.execute(
                 """INSERT INTO video_claim (tenant_id, video_analysis_id, timestamp_start, timestamp_seconds,
                        creator_quote, topic, verdict, confidence_score, rag_knowledge_id, fact_check_analysis,
-                       official_citation, verification_method)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                       official_citation, verification_method, source_quote, needs_review, review_reason)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                 (tenant_id, analysis_id, format_timestamp(c.timestamp_seconds), c.timestamp_seconds, c.quote,
-                 c.topic, v.verdict, round(v.confidence, 3), doc.get("id"), v.analysis, citation, v.method))
+                 c.topic, v.verdict, round(v.confidence, 3), doc.get("id"), v.analysis, citation, v.method,
+                 v.source_quote, v.needs_review, v.review_reason))
     return analysis_id
 
 

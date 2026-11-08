@@ -3,6 +3,9 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, catchError, from, switchMap, throwError } from 'rxjs';
 import { environment } from '../../environments/environment';
 import {
+  AiProvider,
+  AiSettings,
+  AiStatus,
   Claim,
   ClaimComment,
   CommentSchedule,
@@ -32,6 +35,7 @@ import {
   Product,
   Summary,
   TrendPoint,
+  Verdict,
   Video,
   WorkspaceDetail,
   WorkspaceRole,
@@ -169,6 +173,31 @@ export class ApiService {
   }
   deleteKnowledge(id: string): Observable<void> {
     return this.http.delete<void>(`${this.v1}/truth/knowledge/${id}`);
+  }
+
+  // --- AI settings ---------------------------------------------------------------
+  aiStatus(): Observable<AiStatus> {
+    return this.http.get<AiStatus>(`${this.v1}/ai/status`);
+  }
+  aiProviders(): Observable<{ providers: AiProvider[] }> {
+    return this.http.get<{ providers: AiProvider[] }>(`${this.v1}/ai/providers`);
+  }
+  aiSettings(): Observable<AiSettings> {
+    return this.http.get<AiSettings>(`${this.v1}/ai/settings`);
+  }
+  /** Checks the key by listing the provider's models. */
+  aiModels(body: { provider: string; api_key?: string | null; base_url?: string | null }): Observable<{ models: string[]; suggested: string | null; embedModel: string | null }> {
+    return this.http.post<{ models: string[]; suggested: string | null; embedModel: string | null }>(`${this.v1}/ai/models`, body);
+  }
+  /** LOCAL switches right away; CLOUD runs a test request first and only switches if it passes. */
+  saveAiSettings(body: { mode: 'LOCAL' | 'CLOUD'; provider?: string | null; model?: string | null; api_key?: string | null; base_url?: string | null }): Observable<AiSettings> {
+    return this.http.put<AiSettings>(`${this.v1}/ai/settings`, body);
+  }
+  removeAiKey(): Observable<AiSettings> {
+    return this.http.delete<AiSettings>(`${this.v1}/ai/key`);
+  }
+  overrideClaim(claimId: string, verdict: Verdict, note?: string): Observable<Video & { claims: Claim[] }> {
+    return this.http.patch<Video & { claims: Claim[] }>(`${this.v1}/truth/claims/${claimId}`, { verdict, note: note || null });
   }
 
   // --- Respond ---------------------------------------------------------------

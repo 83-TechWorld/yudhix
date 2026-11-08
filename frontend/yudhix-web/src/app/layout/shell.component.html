@@ -80,7 +80,7 @@
 
       <button class="btn btn-ghost btn-icon bot-btn" type="button" (click)="refreshHealth()"
         [attr.aria-label]="botState() === 'offline' ? 'API offline. Retry' : 'AI status. Check again'">
-        <y-bot [state]="botState()" [size]="22" />
+        <y-bot [state]="botState()" [size]="22" [text]="botLabel()" />
       </button>
       <button class="btn btn-ghost btn-icon" type="button" (click)="session.cycleTheme()" [attr.aria-label]="'Theme: ' + session.theme()" [attr.title]="'Theme: ' + session.theme()">
         <y-icon [name]="themeIcon()" [size]="18" />

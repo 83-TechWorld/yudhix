@@ -47,6 +47,13 @@ YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "")
 AUTHOR_HMAC_KEY = os.getenv("AUTHOR_HMAC_KEY", "dev-only-change-me")
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:latest")
+# Local embedding model for meaning-based fact search (`ollama pull nomic-embed-text`). Optional:
+# without it, and without a cloud provider that has embeddings, fact search is keyword-only (BM25).
+OLLAMA_EMBED_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
+# Encrypts workspace AI keys at rest. Set a long random value in production; changing it makes stored keys unreadable.
+# Fact-check second opinion: "cloud" (only with a cloud provider: fast and cheap there), "always" or "off".
+SECOND_OPINION = os.getenv("SECOND_OPINION", "cloud").lower()
+AI_KEY_SECRET = os.getenv("AI_KEY_SECRET", "") or os.getenv("AUTHOR_HMAC_KEY", "dev-only-change-me")
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "small")
 LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "60"))
 # Time the AI may spend reading comments per analysis; the rest fall back to rules.

@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 from app.core import config
+from app.core import llm
 from app.core.database import append_audit, cursor, fetch_all, fetch_one
 from app.pipeline.classifier import FastSentimentClassifier
 from app.truth import outreach, youtube
@@ -175,11 +176,12 @@ def suggest_reply(tenant_id: str, comment_id: str, brand_name: str) -> Dict:
     claim = item.get("claim")
     stored = fetch_one("SELECT suggested_reply FROM comment_analysis WHERE tenant_id = %s AND comment_id = %s",
                        (tenant_id, comment_id))
-    text = outreach.reply_draft(
-        item["text"], item["sentiment"],
-        {"verdict": claim["verdict"], "official_statement": claim.get("officialStatement"),
-         "fact_check_analysis": claim.get("analysis"), "document_title": claim.get("source")} if claim else None,
-        brand_name, None)
+    with llm.use_tenant(tenant_id):
+        text = outreach.reply_draft(
+            item["text"], item["sentiment"],
+            {"verdict": claim["verdict"], "official_statement": claim.get("officialStatement"),
+             "fact_check_analysis": claim.get("analysis"), "document_title": claim.get("source")} if claim else None,
+            brand_name, None)
     cites_fact = bool(claim and claim["verdict"] in MISINFO_VERDICTS)
     if not cites_fact and stored and stored.get("suggested_reply") and item["sentiment"] == "NEGATIVE":
         text = stored["suggested_reply"]

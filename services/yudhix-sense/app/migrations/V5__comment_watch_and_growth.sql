@@ -51,3 +51,38 @@ CREATE INDEX IF NOT EXISTS idx_idea_comment_comment ON product_idea_comment (ten
 -- videos are flagged so the UI can offer "Re-check claims" (fact-check only, no new transcript).
 ALTER TABLE video_truth_analysis ADD COLUMN IF NOT EXISTS facts_stale BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE video_truth_analysis ADD COLUMN IF NOT EXISTS facts_checked_at TIMESTAMPTZ;
+
+-- AI provider per workspace (Settings > AI). The key is encrypted (Fernet); only its last 4 characters are shown.
+CREATE TABLE IF NOT EXISTS ai_setting (
+    tenant_id    UUID PRIMARY KEY,
+    mode         VARCHAR(10)  NOT NULL DEFAULT 'LOCAL',   -- LOCAL | CLOUD (CLOUD only with a VALID key)
+    provider     VARCHAR(30),
+    model        VARCHAR(200),
+    embed_model  VARCHAR(200),
+    base_url     VARCHAR(500),
+    api_key_enc  TEXT,
+    key_hint     VARCHAR(12),
+    status       VARCHAR(12)  NOT NULL DEFAULT 'UNTESTED', -- UNTESTED | VALID | INVALID
+    last_error   TEXT,
+    validated_at TIMESTAMPTZ,
+    updated_by   VARCHAR(100),
+    updated_at   TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+
+-- Anti-hallucination: what the model quoted, and claims a person should look at.
+ALTER TABLE video_claim ADD COLUMN IF NOT EXISTS source_quote  TEXT;
+ALTER TABLE video_claim ADD COLUMN IF NOT EXISTS needs_review  BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE video_claim ADD COLUMN IF NOT EXISTS review_reason TEXT;
+ALTER TABLE video_claim ADD COLUMN IF NOT EXISTS reviewed_by   VARCHAR(100);
+ALTER TABLE video_claim ADD COLUMN IF NOT EXISTS reviewed_at   TIMESTAMPTZ;
+
+-- Meaning-based fact search: one vector per fact and embedding model (plain arrays, no pgvector needed).
+CREATE TABLE IF NOT EXISTS knowledge_embedding (
+    knowledge_id UUID         NOT NULL REFERENCES product_knowledge(id) ON DELETE CASCADE,
+    model        VARCHAR(200) NOT NULL,
+    tenant_id    UUID         NOT NULL,
+    content_hash VARCHAR(64)  NOT NULL,
+    vector       REAL[]       NOT NULL,
+    created_at   TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    PRIMARY KEY (knowledge_id, model)
+);

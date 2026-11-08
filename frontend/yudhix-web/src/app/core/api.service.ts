@@ -6,6 +6,8 @@ import {
   AiProvider,
   AiSettings,
   AiStatus,
+  AiSync,
+  KnowledgeDocument,
   Claim,
   ClaimComment,
   CommentSchedule,
@@ -170,6 +172,21 @@ export class ApiService {
   }
   addKnowledge(body: { title: string; statement: string; category?: string; clauseRef?: string; source?: string }): Observable<Knowledge> {
     return this.http.post<Knowledge>(`${this.v1}/truth/knowledge`, body);
+  }
+  knowledgeDocuments(): Observable<{ documents: KnowledgeDocument[] }> {
+    return this.http.get<{ documents: KnowledgeDocument[] }>(`${this.v1}/truth/knowledge/documents`);
+  }
+  uploadDocument(body: { filename: string; content_base64: string; title?: string; category?: string }): Observable<KnowledgeDocument> {
+    return this.http.post<KnowledgeDocument>(`${this.v1}/truth/knowledge/documents`, body);
+  }
+  deleteDocument(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.v1}/truth/knowledge/documents/${id}`);
+  }
+  aiSync(): Observable<AiSync> {
+    return this.http.get<AiSync>(`${this.v1}/ai/sync`);
+  }
+  syncNow(): Observable<AiSync> {
+    return this.http.post<AiSync>(`${this.v1}/ai/sync`, {});
   }
   deleteKnowledge(id: string): Observable<void> {
     return this.http.delete<void>(`${this.v1}/truth/knowledge/${id}`);

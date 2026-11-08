@@ -194,6 +194,7 @@ def _knowledge(r: Dict) -> Dict:
             "productName": r.get("product_name"), "title": r["document_title"], "category": r["category"],
             "clauseRef": r.get("clause_ref"), "statement": r["official_statement"],
             "source": r.get("citation_source"), "verifiedAt": _iso(r.get("verified_at")),
+            "documentId": str(r["document_id"]) if r.get("document_id") else None,
             "usedByClaims": int(r.get("used_by") or 0)}
 
 

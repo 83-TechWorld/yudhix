@@ -86,3 +86,41 @@ CREATE TABLE IF NOT EXISTS knowledge_embedding (
     created_at   TIMESTAMPTZ  NOT NULL DEFAULT now(),
     PRIMARY KEY (knowledge_id, model)
 );
+
+-- Uploaded documents (PDF, Word, text, Markdown, CSV). Each is split into clause-sized facts in
+-- product_knowledge; deleting the document deletes its facts. The extracted text stays here, never only at a provider.
+CREATE TABLE IF NOT EXISTS knowledge_document (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id   UUID         NOT NULL,
+    filename    VARCHAR(255) NOT NULL,
+    title       VARCHAR(255) NOT NULL,
+    category    VARCHAR(100) NOT NULL DEFAULT 'General',
+    file_type   VARCHAR(10)  NOT NULL,
+    size_bytes  INTEGER      NOT NULL,
+    sha256      VARCHAR(64)  NOT NULL,
+    pages       INTEGER,
+    uploaded_by VARCHAR(100),
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id, sha256)
+);
+ALTER TABLE product_knowledge ADD COLUMN IF NOT EXISTS document_id UUID REFERENCES knowledge_document(id) ON DELETE CASCADE;
+ALTER TABLE product_knowledge ADD COLUMN IF NOT EXISTS chunk_index INTEGER;
+CREATE INDEX IF NOT EXISTS idx_knowledge_document ON product_knowledge (document_id);
+
+-- AI sync: each workspace keeps one fact index per AI connection (embedding model). Vectors live in
+-- knowledge_embedding; this records each sync run so the UI can show what is synced and what is pending.
+CREATE TABLE IF NOT EXISTS ai_sync_run (
+    id          BIGSERIAL PRIMARY KEY,
+    tenant_id   UUID         NOT NULL,
+    model       VARCHAR(200) NOT NULL,
+    trigger     VARCHAR(20)  NOT NULL,          -- CONNECT | UPLOAD | MANUAL | ANALYSIS
+    status      VARCHAR(12)  NOT NULL DEFAULT 'RUNNING',  -- RUNNING | DONE | FAILED
+    total       INTEGER      NOT NULL DEFAULT 0,
+    embedded    INTEGER      NOT NULL DEFAULT 0,
+    removed     INTEGER      NOT NULL DEFAULT 0,
+    error       TEXT,
+    started_by  VARCHAR(100),
+    started_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    finished_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_ai_sync_run ON ai_sync_run (tenant_id, started_at DESC);

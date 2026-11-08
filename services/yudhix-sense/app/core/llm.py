@@ -162,6 +162,12 @@ def embedder() -> Optional[Provider]:
     return loc if loc and loc.embed_model else None
 
 
+def embedder_name() -> Optional[str]:
+    """The name fact vectors are stored under for the current workspace's embedder."""
+    p = embedder()
+    return f"{p.info.id}/{p.embed_model}" if p else None
+
+
 def embed(texts: List[str]) -> Optional[tuple]:
     """(model name, vectors) or None. Vectors from different models are never mixed."""
     p = embedder()

@@ -1,13 +1,14 @@
 """Settings > AI: choose local or cloud AI, check a provider key, see what is answering right now."""
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.api.deps import membership, require
 from app.core import llm
 from app.platform import ai_settings
 from app.platform.auth import Membership
+from app.truth import ai_sync
 
 router = APIRouter(prefix="/api/v1/ai", tags=["ai"])
 
@@ -53,13 +54,32 @@ class SettingsRequest(BaseModel):
 
 
 @router.put("/settings")
-def save_settings(body: SettingsRequest, member: Membership = Depends(require("workspace.manage"))):
-    """Step 2: switch to local, or test the model with the key and switch to cloud only if it passes."""
+def save_settings(body: SettingsRequest, background: BackgroundTasks,
+                  member: Membership = Depends(require("workspace.manage"))):
+    """Step 2: switch to local, or test the model with the key and switch to cloud only if it passes.
+    Then the workspace's knowledge base is synced with the AI that is now active (only what's missing)."""
     try:
-        return ai_settings.save(member.tenant_id, member.user_id, body.mode, body.provider, body.model,
-                                body.api_key, body.base_url)
+        saved = ai_settings.save(member.tenant_id, member.user_id, body.mode, body.provider, body.model,
+                                 body.api_key, body.base_url)
     except ai_settings.AiSettingError as e:
         raise HTTPException(400, str(e))
+    background.add_task(ai_sync.run, member.tenant_id, member.user_id, "CONNECT")
+    return saved
+
+
+@router.get("/sync")
+def sync_status(member: Membership = Depends(membership)):
+    """How much of the knowledge base is synced with the active AI, and what is pending."""
+    return ai_sync.status(member.tenant_id)
+
+
+@router.post("/sync", status_code=202)
+def sync_now(background: BackgroundTasks, member: Membership = Depends(require("content.write"))):
+    current = ai_sync.status(member.tenant_id)
+    if not current["canSync"]:
+        raise HTTPException(400, current["reason"])
+    background.add_task(ai_sync.run, member.tenant_id, member.user_id, "MANUAL")
+    return {**current, "running": True}
 
 
 @router.delete("/key")

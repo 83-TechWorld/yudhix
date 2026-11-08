@@ -5,6 +5,7 @@ import { AiProvider, AiSettings } from '../../core/models';
 import { SessionService } from '../../core/session.service';
 import { IconComponent } from '../../shared/icon.component';
 import { AgoPipe, ToastService } from '../../shared/ui';
+import { AiSyncComponent } from '../../shared/ai-sync.component';
 
 /**
  * Settings > AI: local model or a cloud provider with the workspace's own key.
@@ -13,7 +14,7 @@ import { AgoPipe, ToastService } from '../../shared/ui';
  */
 @Component({
   selector: 'y-ai-settings',
-  imports: [FormsModule, IconComponent, AgoPipe],
+  imports: [FormsModule, IconComponent, AgoPipe, AiSyncComponent],
   template: `
     @if (!settings()) {
       <div class="skeleton" style="height: 320px"></div>
@@ -136,6 +137,9 @@ import { AgoPipe, ToastService } from '../../shared/ui';
           }
           @if (!canManage) { <p class="subtle">Only admins can change AI settings.</p> }
         </section>
+
+        <!-- Knowledge base sync with the active AI -->
+        <div class="enter" style="--i: 2"><y-ai-sync /></div>
 
         <!-- Privacy -->
         <section class="card card-pad stack enter" style="--i: 2">

@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from app.api.deps import actor, membership, require, tenant_id
 from app.platform import billing
 from app.platform.auth import Membership
-from app.truth import growth, pipeline, product_impact, repository, scheduler, youtube
+from app.truth import ai_sync, documents, growth, pipeline, product_impact, repository, scheduler, youtube
 from app.workflow.state import Actor
 
 router = APIRouter(prefix="/api/v1/truth", tags=["truth"])
@@ -261,15 +261,54 @@ class KnowledgeRequest(BaseModel):
     productId: Optional[str] = None
 
 
+def _knowledge_changed(tenant: str, user_id: str, background: BackgroundTasks) -> None:
+    """Claims checked before can be re-checked, and the AI index picks up the change (or marks it pending)."""
+    pipeline.mark_facts_stale(tenant)
+    background.add_task(ai_sync.run, tenant, user_id, "UPLOAD")
+
+
 @router.post("/knowledge", status_code=201)
-def knowledge_add(body: KnowledgeRequest, tenant: str = Depends(tenant_id), user: Actor = Depends(actor)):
+def knowledge_add(body: KnowledgeRequest, background: BackgroundTasks, tenant: str = Depends(tenant_id),
+                  user: Actor = Depends(actor)):
     added = repository.add_knowledge(tenant, user.id, body.model_dump())
-    pipeline.mark_facts_stale(tenant)  # claims checked before this fact existed can now be re-checked
+    _knowledge_changed(tenant, user.id, background)
     return added
+
+
+@router.get("/knowledge/documents")
+def knowledge_documents(tenant: str = Depends(tenant_id)):
+    return {"documents": documents.list_documents(tenant)}
+
+
+class DocumentUpload(BaseModel):
+    filename: str = Field(..., min_length=1, max_length=255)
+    content_base64: str = Field(..., min_length=4, max_length=14_000_000)  # ~10 MB file
+    title: Optional[str] = Field(None, max_length=200)
+    category: Optional[str] = Field(None, max_length=100)
+
+
+@router.post("/knowledge/documents", status_code=201)
+def knowledge_upload(body: DocumentUpload, background: BackgroundTasks, tenant: str = Depends(tenant_id),
+                     member: Membership = Depends(require("content.write"))):
+    """Upload a PDF, Word, text, Markdown or CSV file; it is split into clause-sized facts."""
+    try:
+        doc = documents.upload(tenant, member.user_id, body.filename, body.content_base64, body.title, body.category)
+    except documents.DocumentError as e:
+        raise HTTPException(400, str(e))
+    _knowledge_changed(tenant, member.user_id, background)
+    return doc
+
+
+@router.delete("/knowledge/documents/{document_id}", status_code=204)
+def knowledge_document_delete(document_id: str, background: BackgroundTasks, tenant: str = Depends(tenant_id),
+                              member: Membership = Depends(require("content.write"))):
+    if not documents.delete_document(tenant, member.user_id, document_id):
+        raise HTTPException(404, "Document not found")
+    pipeline.mark_facts_stale(tenant)
 
 
 @router.delete("/knowledge/{knowledge_id}", status_code=204)
 def knowledge_delete(knowledge_id: str, tenant: str = Depends(tenant_id), user: Actor = Depends(actor)):
     if not repository.delete_knowledge(tenant, user.id, knowledge_id):
-        raise HTTPException(404, "Document not found")
+        raise HTTPException(404, "Fact not found")
     pipeline.mark_facts_stale(tenant)

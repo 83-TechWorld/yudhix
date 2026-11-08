@@ -236,6 +236,35 @@ export interface Knowledge {
   source: string | null;
   verifiedAt: string | null;
   usedByClaims: number;
+  /** Set when the fact came from an uploaded document. */
+  documentId: string | null;
+}
+
+export interface KnowledgeDocument {
+  id: string;
+  filename: string;
+  title: string;
+  category: string;
+  fileType: 'pdf' | 'docx' | 'txt' | 'md' | 'csv';
+  sizeBytes: number;
+  pages: number | null;
+  facts: number;
+  createdAt: string;
+}
+
+/** How much of the knowledge base is synced with the workspace's active AI connection. */
+export interface AiSync {
+  engine: AiStatus;
+  model: string | null;
+  canSync: boolean;
+  reason: string | null;
+  total: number;
+  synced: number;
+  pending: number;
+  indexes: { model: string; facts: number; updatedAt: string | null; current: boolean }[];
+  running: boolean;
+  lastRun: { id: number; model: string; trigger: string; status: 'RUNNING' | 'DONE' | 'FAILED'; total: number; embedded: number;
+    error: string | null; startedAt: string; finishedAt: string | null } | null;
 }
 
 export interface OutreachNote {

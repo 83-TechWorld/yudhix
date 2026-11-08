@@ -1,14 +1,15 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, errorMessage } from '../../core/api.service';
-import { Knowledge } from '../../core/models';
+import { Knowledge, KnowledgeDocument } from '../../core/models';
+import { AiSyncComponent } from '../../shared/ai-sync.component';
 import { SessionService } from '../../core/session.service';
 import { IconComponent } from '../../shared/icon.component';
 import { AgoPipe, EmptyStateComponent, ToastService } from '../../shared/ui';
 
 @Component({
   selector: 'y-knowledge',
-  imports: [FormsModule, IconComponent, EmptyStateComponent, AgoPipe],
+  imports: [FormsModule, IconComponent, EmptyStateComponent, AgoPipe, AiSyncComponent],
   template: `
     <div class="page page-narrow">
       <header class="page-head">
@@ -17,9 +18,20 @@ import { AgoPipe, EmptyStateComponent, ToastService } from '../../shared/ui';
           <p>The official facts Yudhix checks creator claims against. Better sources mean better verdicts.</p>
         </div>
         @if (session.can('content.write')) {
-          <button class="btn btn-primary" type="button" (click)="openForm()"><y-icon name="plus" /> Add a fact</button>
+          <div class="row-wrap head-actions">
+            <input #file type="file" hidden accept=".pdf,.docx,.txt,.md,.csv" (change)="upload(file)" />
+            <button class="btn" type="button" (click)="file.click()" [disabled]="uploading()">
+              <y-icon [name]="uploading() ? 'loader' : 'download'" [size]="16" [class.spin]="uploading()" class="up" />
+              {{ uploading() ? 'Reading ' + uploading() + '…' : 'Upload document' }}
+            </button>
+            <button class="btn btn-primary" type="button" (click)="openForm()"><y-icon name="plus" /> Add a fact</button>
+          </div>
         }
       </header>
+      <p class="subtle formats">Upload PDF, Word (.docx), text, Markdown or CSV (columns: title, statement, category, clause), up to 10 MB.
+        Documents are split into clause-sized facts and stay in your database.</p>
+
+      <y-ai-sync [compact]="true" class="sync-card" />
 
       @if (staleVideos() > 0 && session.can('content.write')) {
         <div class="callout callout-info stale enter">
@@ -33,6 +45,34 @@ import { AgoPipe, EmptyStateComponent, ToastService } from '../../shared/ui';
             {{ rechecking() ? 'Starting…' : 'Re-check claims' }}
           </button>
         </div>
+      }
+
+      @if (docs().length) {
+        <section class="group enter">
+          <h2 class="eyebrow">Documents · {{ docs().length }}</h2>
+          <div class="card docs">
+            @for (d of docs(); track d.id) {
+              <div class="doc-row">
+                <button type="button" class="doc-main" (click)="toggleDoc(d.id)" [attr.aria-expanded]="openDoc() === d.id">
+                  <span class="chip chip-outline mono ftype">{{ d.fileType }}</span>
+                  <span class="doc-name"><strong>{{ d.title }}</strong>
+                    <span class="subtle">{{ d.facts }} facts · {{ d.category }}@if (d.pages) { · {{ d.pages }} pages } · {{ size(d.sizeBytes) }} · added {{ d.createdAt | ago }}</span></span>
+                  <y-icon [name]="openDoc() === d.id ? 'chevronDown' : 'chevronRight'" [size]="16" />
+                </button>
+                @if (session.can('content.write')) {
+                  <button class="btn btn-ghost btn-icon btn-sm" type="button" (click)="removeDoc(d)" [attr.aria-label]="'Delete ' + d.filename"><y-icon name="trash" [size]="16" /></button>
+                }
+              </div>
+              @if (openDoc() === d.id) {
+                <ol class="doc-facts">
+                  @for (k of docFacts(d.id); track k.id) {
+                    <li><span class="mono subtle">{{ k.clauseRef }}</span> {{ k.statement }}</li>
+                  }
+                </ol>
+              }
+            }
+          </div>
+        </section>
       }
 
       <div class="search toolbar">
@@ -124,6 +164,19 @@ import { AgoPipe, EmptyStateComponent, ToastService } from '../../shared/ui';
     }
   `,
   styles: `
+    .head-actions { gap: 8px; }
+    .formats { font-size: 12.5px; margin: -6px 0 14px; }
+    .sync-card { display: block; margin-bottom: 16px; }
+    .docs { padding: 4px 0; }
+    .doc-row { display: flex; align-items: center; gap: 6px; padding: 0 10px 0 0; border-top: 1px solid var(--border);
+      &:first-child { border-top: 0; } }
+    .doc-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 12px 16px; text-align: left;
+      background: none; border: 0; color: inherit; font: inherit; cursor: pointer; }
+    .doc-name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;
+      .subtle { font-size: 12.5px; } }
+    .ftype { text-transform: uppercase; font-size: 11px; }
+    .doc-facts { margin: 0; padding: 4px 20px 14px 52px; display: flex; flex-direction: column; gap: 8px; font-size: 13.5px;
+      color: var(--text-2); max-height: 360px; overflow-y: auto; .mono { margin-right: 6px; } }
     .stale { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; .grow { flex: 1 1 300px; } }
     .toolbar { margin-bottom: 20px; }
     .group { margin-bottom: 24px; }
@@ -147,10 +200,17 @@ export class KnowledgePage {
   protected readonly formError = signal('');
   protected form = { title: '', statement: '', category: '', clauseRef: '', source: '' };
 
+  protected readonly docs = signal<KnowledgeDocument[]>([]);
+  protected readonly openDoc = signal<string | null>(null);
+  protected readonly uploading = signal('');
+  private readonly syncCard = viewChild(AiSyncComponent);
+
+  /** Facts by category. Facts from documents appear under their document, and here only when searching. */
   protected readonly groups = computed(() => {
     const q = this.q().trim().toLowerCase();
     const map = new Map<string, Knowledge[]>();
     for (const k of this.items() ?? []) {
+      if (k.documentId && !q) continue;
       const hay = `${k.title} ${k.statement} ${k.clauseRef ?? ''} ${k.category}`.toLowerCase();
       if (q && !hay.includes(q)) continue;
       map.set(k.category, [...(map.get(k.category) ?? []), k]);
@@ -167,6 +227,7 @@ export class KnowledgePage {
   }
 
   private load(): void {
+    this.api.knowledgeDocuments().subscribe({ next: (r) => this.docs.set(r.documents), error: () => {} });
     this.api.knowledge().subscribe({
       next: (r) => {
         this.items.set(r.knowledge);
@@ -206,12 +267,71 @@ export class KnowledgePage {
           this.items.update((list) => [...(list ?? []), k]);
           this.toast.show('Fact added. New checks use it straight away; re-check existing videos above.');
           this.load();
+          this.syncCard()?.refresh(1000);
         },
         error: (e) => {
           this.saving.set(false);
           this.formError.set(errorMessage(e));
         },
       });
+  }
+
+  protected docFacts(id: string): Knowledge[] {
+    return (this.items() ?? []).filter((k) => k.documentId === id);
+  }
+
+  protected toggleDoc(id: string): void {
+    this.openDoc.update((o) => (o === id ? null : id));
+  }
+
+  protected size(bytes: number): string {
+    return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  }
+
+  /** Read the file in the browser, send it as base64; the server splits it into facts. */
+  protected upload(input: HTMLInputElement): void {
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      this.toast.error('Files up to 10 MB. Split larger documents.');
+      return;
+    }
+    this.uploading.set(file.name);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = String(reader.result).split(',', 2)[1] ?? '';
+      this.api.uploadDocument({ filename: file.name, content_base64: base64 }).subscribe({
+        next: (d) => {
+          this.uploading.set('');
+          this.toast.show(`Added ${d.facts} facts from ${d.filename}.`);
+          this.openDoc.set(d.id);
+          this.load();
+          this.syncCard()?.refresh(1000);
+        },
+        error: (e) => {
+          this.uploading.set('');
+          this.toast.error(errorMessage(e));
+        },
+      });
+    };
+    reader.onerror = () => {
+      this.uploading.set('');
+      this.toast.error("Couldn't read that file.");
+    };
+    reader.readAsDataURL(file);
+  }
+
+  protected removeDoc(d: KnowledgeDocument): void {
+    if (!confirm(`Delete "${d.filename}" and its ${d.facts} facts? Claims citing them lose their source until re-checked.`)) return;
+    this.api.deleteDocument(d.id).subscribe({
+      next: () => {
+        this.toast.show('Document deleted.');
+        this.load();
+        this.syncCard()?.refresh(500);
+      },
+      error: (e) => this.toast.error(errorMessage(e)),
+    });
   }
 
   protected recheckAll(): void {

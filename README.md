@@ -122,6 +122,20 @@ Every AI call goes through one layer (`app/core/llm.py`, providers in `app/core/
 6. **Second opinion** (`SECOND_OPINION=cloud|always|off`): with cloud AI each claim is read twice with the sources reordered. Disagreement means **Needs review**.
 7. **Human verdict:** anyone who can edit content can set a claim's verdict. Re-checks keep it, and comments are re-linked.
 
+### Uploading documents and syncing the knowledge base with AI
+
+**Upload document** on the Knowledge page takes PDF, Word (.docx), text, Markdown or CSV files up to 10 MB (`app/truth/documents.py`). Each document is split into clause-sized facts (a section's paragraphs, up to ~700 characters) titled with the document and section or page, so a verdict can cite and quote the exact clause. A CSV with the columns `title, statement` (optional `category, clause, source`) is read as ready-made facts. The same file can't be uploaded twice, and deleting a document deletes its facts.
+
+**AI sync** (`app/truth/ai_sync.py`): the knowledge base always stays in your database. Syncing builds the AI's index of it, with one vector per fact from the workspace's embedding model.
+
+- Every workspace has its own index per AI connection. Reconnecting the same provider and model reuses it, so only facts added or changed since are sent.
+- Facts added or uploaded while AI was off are shown as **pending** and are synced automatically when AI is turned on again (or with **Sync now**).
+- Switching provider builds a second index and keeps the first, so switching back is instant.
+- Sync runs automatically after connecting a key, switching mode, adding a fact or uploading a document. When it changes the index, analyzed videos are offered **Re-check claims**.
+- Claude, Groq and DeepSeek have no embeddings API, so their workspaces sync with the local embedding model (`ollama pull nomic-embed-text`); claims are still judged by the chosen cloud model.
+
+The sync status is shown on the Knowledge page and in Settings → AI.
+
 ### Knowledge base and re-checking claims
 
 Each workspace has its own **Knowledge base**: the official facts (specs, prices, policies, FAQs) that claims are checked against. A claim with no matching fact stays *unverified*, so a new workspace should add its facts first.
@@ -415,7 +429,7 @@ yudhix/
 | Area | Tables |
 |---|---|
 | Workspaces & team | `tenant`, `tenant_user`, `workspace_invitation`, `country_config` |
-| Products & facts | `product`, `product_knowledge`, `knowledge_embedding` |
+| Products & facts | `product`, `product_knowledge`, `knowledge_document`, `knowledge_embedding`, `ai_sync_run` |
 | AI | `ai_setting` (provider, model, encrypted key per workspace) |
 | Videos & claims | `video_truth_analysis`, `video_claim`, `video_analysis_job`, `creator_outreach` |
 | Comments | `comment`, `comment_analysis`, `comment_claim_link`, `comment_watch` (schedule) |
@@ -504,7 +518,7 @@ Production checklist: strong `AUTHOR_HMAC_KEY` and database passwords, `DEMO_WOR
 | Payments | Plans, quotas and invoices work; no card is charged. | Stripe / Razorpay checkout and webhooks. |
 | Ingestion | On demand per video, plus scheduled checks for new comments on analyzed videos. | Channel watchers that pick up new uploads. |
 | Attribution | Keyword matching with evidence; weak on sarcasm and memes. | Embedding similarity (pgvector) with LLM re-ranking. |
-| Fact-checking | Hybrid search (BM25 + embeddings) and local or cloud AI with quote, number and second-opinion checks. | Document upload (PDF, Word) split into clauses; an evaluation set from human verdicts. |
+| Fact-checking | Hybrid search (BM25 + embeddings) and local or cloud AI with quote, number and second-opinion checks. | Scanned PDFs (OCR); an evaluation set from human verdicts. |
 | Sentiment & topics | Local LLM for the most-liked comments, keyword rules for the rest. | Faster model or GPU so the AI reads every comment; agent corrections. |
 | Product impact & growth | Per video; product ideas across videos. | **Product health** across all videos of a product: trend, top issues, which creators drive negativity. |
 | Services | One Python API does everything. | Split into the planned Java services (`services/yudhix-*`) as load requires. |

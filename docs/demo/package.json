@@ -1,0 +1,7 @@
+{
+  "name": "yudhix-demo-kit",
+  "private": true,
+  "description": "Builds the Yudhix demo slide deck from scenes.py and the recorded screenshots",
+  "scripts": { "deck": "node build_deck.js" },
+  "dependencies": { "pptxgenjs": "3.12.0" }
+}

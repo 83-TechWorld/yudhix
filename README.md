@@ -467,6 +467,10 @@ The API creates every table on an empty database, then applies `app/migrations/V
 
 ---
 
+## Demo kit
+
+`docs/demo/` has everything for presenting Yudhix: a scene-by-scene script with narration (`DEMO_SCRIPT.md`), a slide deck with real screenshots (`Yudhix-Demo.pptx`), and a recorder that produces a narrated 1080p video from the running app. See `docs/demo/README.md`.
+
 ## 7. Tests
 
 ```bash

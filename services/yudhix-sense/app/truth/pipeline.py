@@ -11,12 +11,16 @@
 
 Runs in a worker thread (FastAPI BackgroundTasks) and writes progress to
 video_analysis_job, which the UI polls.
+
+A second, quicker job kind ("COMMENTS") only fetches comments posted since the last check,
+reads them with AI and re-links: the "Fetch new comments" button and the schedule use it.
 """
 import hashlib
 import hmac
+import json
 import logging
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 import httpx
@@ -47,14 +51,41 @@ class PipelineError(Exception):
 
 # ----------------------------------------------------------------------------- jobs
 
-def create_job(tenant_id: str, video_url: str, product_id: Optional[str], actor: str) -> Dict:
+STALE_JOB_MINUTES = 30  # a RUNNING job older than this was cut off by a restart
+
+
+def create_job(tenant_id: str, video_url: str, product_id: Optional[str], actor: str,
+               kind: str = "ANALYZE", trigger: str = "USER") -> Dict:
     video_id = youtube.parse_video_id(video_url)
     with cursor(commit=True) as cur:
         cur.execute(
-            """INSERT INTO video_analysis_job (tenant_id, video_url, video_id, product_id, created_by, message)
-               VALUES (%s, %s, %s, %s, %s, 'Waiting to start') RETURNING *""",
-            (tenant_id, video_url, video_id, product_id, actor))
+            """INSERT INTO video_analysis_job (tenant_id, video_url, video_id, product_id, created_by, message,
+                   kind, trigger)
+               VALUES (%s, %s, %s, %s, %s, 'Waiting to start', %s, %s) RETURNING *""",
+            (tenant_id, video_url, video_id, product_id, actor, kind, trigger))
         return _job_dict(cur.fetchone())
+
+
+def active_job(tenant_id: str, video_id: str) -> Optional[Dict]:
+    """A job for this video that is still queued or running, if any."""
+    row = fetch_one(
+        """SELECT * FROM video_analysis_job WHERE tenant_id = %s AND video_id = %s
+             AND status IN ('QUEUED', 'RUNNING') AND updated_at > now() - make_interval(mins => %s)
+           ORDER BY created_at DESC LIMIT 1""", (tenant_id, video_id, STALE_JOB_MINUTES))
+    return _job_dict(row) if row else None
+
+
+def start_comment_check(tenant_id: str, video_id: str, actor: str, trigger: str = "USER") -> Dict:
+    """Queue a "fetch new comments" job, or return the job already working on this video."""
+    running = active_job(tenant_id, video_id)
+    if running:
+        return running
+    video = fetch_one("SELECT video_url, product_id FROM video_truth_analysis WHERE tenant_id = %s AND video_id = %s",
+                      (tenant_id, video_id))
+    if not video:
+        raise PipelineError("This video hasn't been analyzed yet.")
+    return create_job(tenant_id, video["video_url"], str(video["product_id"]) if video.get("product_id") else None,
+                      actor, kind="COMMENTS", trigger=trigger)
 
 
 def get_job(tenant_id: str, job_id: str) -> Optional[Dict]:
@@ -63,8 +94,9 @@ def get_job(tenant_id: str, job_id: str) -> Optional[Dict]:
 
 
 def list_jobs(tenant_id: str, limit: int = 20) -> List[Dict]:
-    rows = fetch_all("SELECT * FROM video_analysis_job WHERE tenant_id = %s ORDER BY created_at DESC LIMIT %s",
-                     (tenant_id, limit))
+    # Scheduled checks run in the background; they'd crowd out the jobs people started.
+    rows = fetch_all("""SELECT * FROM video_analysis_job WHERE tenant_id = %s AND trigger = 'USER'
+                        ORDER BY created_at DESC LIMIT %s""", (tenant_id, limit))
     return [_job_dict(r) for r in rows]
 
 
@@ -74,20 +106,21 @@ def _job_dict(r: Dict) -> Dict:
         "productId": str(r["product_id"]) if r.get("product_id") else None,
         "status": r["status"], "stage": r["stage"], "progress": r["progress"],
         "message": r.get("message"), "error": r.get("error"),
+        "kind": r.get("kind") or "ANALYZE", "trigger": r.get("trigger") or "USER", "result": r.get("result"),
         "createdAt": r["created_at"].isoformat() if r.get("created_at") else None,
         "finishedAt": r["finished_at"].isoformat() if r.get("finished_at") else None,
     }
 
 
 def _update(job_id: str, stage: str, progress: int, message: str, status: str = "RUNNING",
-            error: Optional[str] = None) -> None:
+            error: Optional[str] = None, result: Optional[Dict] = None) -> None:
     with cursor(commit=True) as cur:
         cur.execute(
             """UPDATE video_analysis_job SET status = %s, stage = %s, progress = %s, message = %s, error = %s,
-                      updated_at = now(),
+                      updated_at = now(), result = COALESCE(%s::jsonb, result),
                       finished_at = CASE WHEN %s IN ('COMPLETED', 'FAILED') THEN now() ELSE finished_at END
                WHERE id = %s""",
-            (status, stage, progress, message, error, status, job_id))
+            (status, stage, progress, message, error, json.dumps(result) if result else None, status, job_id))
 
 
 def run_job(job_id: str, tenant_id: str, manual_transcript: Optional[str] = None) -> None:
@@ -95,6 +128,8 @@ def run_job(job_id: str, tenant_id: str, manual_transcript: Optional[str] = None
     if not job:
         return
     creator = (fetch_one("SELECT created_by FROM video_analysis_job WHERE id = %s", (job_id,)) or {}).get("created_by")
+    if job["kind"] == "COMMENTS":
+        return _run_comment_check(job_id, tenant_id, job, creator)
     try:
         result = analyze_video(tenant_id, job["videoId"], job["videoUrl"], job.get("productId"), manual_transcript,
                                progress=lambda stage, pct, msg: _update(job_id, stage, pct, msg))
@@ -112,6 +147,87 @@ def run_job(job_id: str, tenant_id: str, manual_transcript: Optional[str] = None
                 error=f"{type(e).__name__}: {e}")
         notify(tenant_id, "analysis", "Video analysis failed", "Something went wrong. Try again.", "/analyze",
                user_ids=[creator])
+
+
+def _run_comment_check(job_id: str, tenant_id: str, job: Dict, creator: Optional[str]) -> None:
+    scheduled = job["trigger"] == "SCHEDULE"
+    try:
+        r = check_new_comments(tenant_id, job["videoId"],
+                               progress=lambda stage, pct, msg: _update(job_id, stage, pct, msg))
+        n = r["newComments"]
+        message = (f"{n} new comment{'s' if n != 1 else ''}" if n else "No new comments since the last check")
+        _update(job_id, "COMPLETED", 100, message, status="COMPLETED", result=r)
+        if n:
+            billing.record(tenant_id, "COMMENT_INGESTED", n, key=f"job:{job_id}")
+        if n and (not scheduled or r["negative"] or r["ideas"]):
+            parts = [f"{r['negative']} negative"] if r["negative"] else []
+            if r["ideas"]:
+                parts.append(f"{r['ideas']} product idea{'s' if r['ideas'] != 1 else ''}")
+            body = f"{n} new on \"{r['videoTitle']}\"" + (f": {', '.join(parts)}." if parts else ".")
+            link = f"/inbox?video={job['videoId']}&fresh=1"
+            if scheduled:  # everyone who acts on comments
+                notify(tenant_id, "comments", "New comments", body, link, roles=["admin", "approver", "agent"])
+            else:
+                notify(tenant_id, "comments", "New comments", body, link, user_ids=[creator])
+    except (PipelineError, youtube.YouTubeError) as e:
+        _update(job_id, "FAILED", 100, str(e), status="FAILED", error=str(e))
+        _mark_checked(tenant_id, job["videoId"])  # don't retry a failing video on every scheduler round
+        if not scheduled:
+            notify(tenant_id, "comments", "Couldn't fetch new comments", str(e), f"/videos/{job['videoId']}",
+                   user_ids=[creator])
+    except Exception as e:
+        logger.exception("Comment check %s failed", job_id)
+        _update(job_id, "FAILED", 100, "Something went wrong while fetching new comments.", status="FAILED",
+                error=f"{type(e).__name__}: {e}")
+        _mark_checked(tenant_id, job["videoId"])
+
+
+def check_new_comments(tenant_id: str, video_id: str, progress) -> Dict:
+    """Fetch comments posted since the last check, read them with AI, re-link the video.
+    The transcript and fact-check are left as they are."""
+    video = fetch_one("SELECT * FROM video_truth_analysis WHERE tenant_id = %s AND video_id = %s",
+                      (tenant_id, video_id))
+    if not video:
+        raise PipelineError("This video hasn't been analyzed yet.")
+    if not youtube.has_api_key():
+        raise PipelineError("No YouTube API key on the server. Add YOUTUBE_API_KEY to services/yudhix-sense/.env "
+                            "and restart the API.")
+
+    progress("INGESTING_COMMENTS", 20, "Looking for comments posted since the last check")
+    known = {r["platform_comment_id"] for r in fetch_all(
+        """SELECT platform_comment_id FROM comment
+           WHERE tenant_id = %s AND platform = 'YOUTUBE' AND custom_attributes->>'video_id' = %s""",
+        (tenant_id, video_id))}
+    # Nothing stored yet (e.g. analyzed before a YouTube key was set): take the newest ones.
+    raw = youtube.fetch_new_comments(video_id, known, config.NEW_COMMENTS_MAX)
+    meta = youtube.VideoMeta(video_id=video_id, title=video["video_title"], channel_title=video["channel_title"])
+    product_id = str(video["product_id"]) if video.get("product_id") else None
+    stamp = datetime.now(timezone.utc).isoformat()
+    _persist(tenant_id, video_id, meta, product_id, raw, extra={"new_at": stamp})
+
+    result = {"newComments": len(raw), "negative": 0, "ideas": 0, "videoTitle": video["video_title"]}
+    if raw:
+        fresh = [c for c in _video_comments(tenant_id, video_id) if (c.get("new_at") or "") == stamp]
+        claims = fetch_all("SELECT * FROM video_claim WHERE tenant_id = %s AND video_analysis_id = %s "
+                           "ORDER BY timestamp_seconds", (tenant_id, video["id"]))
+        progress("UNDERSTANDING", 45, f"Reading {len(fresh)} new comments")
+        read = audience.understand(tenant_id, claims, fresh, lambda done, total: progress(
+            "UNDERSTANDING", 45 + int(40 * done / max(1, total)), f"Reading new comments with AI ({done}/{total} batches)"))
+        result["ideas"] = read.get("ideas", 0)
+        progress("ATTRIBUTING", 90, "Linking the new comments to claims")
+        attribute_video(tenant_id, video_id)
+        ids = [str(c["id"]) for c in fresh]
+        neg = fetch_one("""SELECT count(*) AS n FROM comment_analysis WHERE tenant_id = %s
+                           AND comment_id = ANY(%s::uuid[]) AND sentiment = 'NEGATIVE'""", (tenant_id, ids))
+        result["negative"] = int(neg["n"])
+    _mark_checked(tenant_id, video_id)
+    return result
+
+
+def _mark_checked(tenant_id: str, video_id: str) -> None:
+    with cursor(commit=True) as cur:
+        cur.execute("UPDATE video_truth_analysis SET comments_checked_at = now() WHERE tenant_id = %s AND video_id = %s",
+                    (tenant_id, video_id))
 
 
 # ----------------------------------------------------------------------------- pipeline
@@ -178,6 +294,7 @@ def analyze_video(tenant_id: str, video_id: str, video_url: str, product_id: Opt
     progress("ATTRIBUTING", 90, "Linking comments to the claims that triggered them")
     stats = attribute_video(tenant_id, video_id)
 
+    _mark_checked(tenant_id, video_id)
     with cursor(commit=True) as cur:
         append_audit(cur, tenant_id, "system-truth-pipeline", "SYSTEM", "VIDEO_ANALYZED", "VIDEO", video_id,
                      {"analysis_id": analysis_id, "comments_ingested": ingested, **stats})
@@ -265,6 +382,14 @@ def _ingest_comments(tenant_id: str, video_id: str, meta: youtube.VideoMeta, pro
         raw = youtube.sample_comments(video_id, config.MAX_COMMENTS_PER_VIDEO, config.COMMENT_POOL_MAX)
     else:
         raw = youtube.fetch_comments(video_id, config.MAX_COMMENTS_PER_VIDEO)
+    _persist(tenant_id, video_id, meta, product_id, raw)
+    if spread and raw:
+        _keep_only(tenant_id, video_id, [c["comment_id"] for c in raw])
+    return len(raw)
+
+
+def _persist(tenant_id: str, video_id: str, meta: youtube.VideoMeta, product_id: Optional[str], raw: List[Dict],
+             extra: Optional[Dict] = None) -> None:
     if raw and not product_id:  # attach to this workspace's own product, never another tenant's
         first = fetch_one("SELECT id FROM product WHERE tenant_id = %s AND active ORDER BY created_at LIMIT 1",
                           (tenant_id,))
@@ -283,10 +408,8 @@ def _ingest_comments(tenant_id: str, video_id: str, meta: youtube.VideoMeta, pro
             "video_url": f"https://www.youtube.com/watch?v={video_id}",
             "platform_created_at": c.get("published_at") or "now()",
             "source_id": DEFAULT_SOURCE_ID, "product_id": product_id or DEFAULT_PRODUCT_ID,
+            "custom_attributes": dict(extra or {}),
         })
-    if spread and raw:
-        _keep_only(tenant_id, video_id, [c["comment_id"] for c in raw])
-    return len(raw)
 
 
 def _keep_only(tenant_id: str, video_id: str, platform_ids: List[str]) -> None:
@@ -306,7 +429,7 @@ def _keep_only(tenant_id: str, video_id: str, platform_ids: List[str]) -> None:
 def _video_comments(tenant_id: str, video_id: str) -> List[Dict]:
     return fetch_all(
         """SELECT c.id, c.masked_text, c.like_count, c.reply_count, c.platform_created_at,
-                  c.custom_attributes->'ai' AS ai,
+                  c.custom_attributes->'ai' AS ai, c.custom_attributes->>'new_at' AS new_at,
                   ca.churn_risk, ca.toxic, ca.model_version, ca.sentiment, ca.sentiment_score
            FROM comment c LEFT JOIN comment_analysis ca ON ca.tenant_id = c.tenant_id AND ca.comment_id = c.id
            WHERE c.tenant_id = %s AND c.custom_attributes->>'video_id' = %s AND c.status = 'ACTIVE'""",

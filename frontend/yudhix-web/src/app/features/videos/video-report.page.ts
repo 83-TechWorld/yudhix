@@ -1,10 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { LowerCasePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiService, errorMessage } from '../../core/api.service';
 import { ProductImpactComponent } from './product-impact.component';
-import { Claim, ClaimComment, Health, Impact, OutreachNote, RootCause, Verdict, Video } from '../../core/models';
+import { ProductGrowthComponent } from './product-growth.component';
+import { Claim, ClaimComment, Health, Impact, Job, OutreachNote, RootCause, Verdict, Video } from '../../core/models';
 import { SessionService } from '../../core/session.service';
 import { IconComponent } from '../../shared/icon.component';
 import {
@@ -12,13 +13,13 @@ import {
   ToastService, VERDICT_META, VerdictBadgeComponent, youtubeAt,
 } from '../../shared/ui';
 
-type Tab = 'claims' | 'impact' | 'outreach';
+type Tab = 'claims' | 'impact' | 'growth' | 'outreach';
 type VerdictFilter = 'all' | 'disputed' | Verdict;
 
 @Component({
   selector: 'y-video-report',
   imports: [
-    ProductImpactComponent,
+    ProductImpactComponent, ProductGrowthComponent,
     FormsModule, RouterLink, IconComponent, RingComponent, VerdictBadgeComponent, SentimentBarComponent,
     CompactPipe, PctPipe, AgoPipe, LowerCasePipe,
   ],
@@ -32,7 +33,7 @@ export class VideoReportPage {
   protected session = inject(SessionService);
 
   readonly videoId = input.required<string>();
-  /** ?tab=claims|impact|outreach deep-links straight to a tab. */
+  /** ?tab=claims|impact|growth|outreach deep-links straight to a tab. */
   readonly initialTab = input<string | undefined>(undefined, { alias: 'tab' });
 
   protected readonly verdictMeta = VERDICT_META;
@@ -50,6 +51,9 @@ export class VideoReportPage {
   protected readonly recomputing = signal(false);
   /** Bumped after "Re-link" so the Product impact panel reloads. */
   protected readonly impactVersion = signal(0);
+  /** The running "Fetch new comments" job, polled until it finishes. */
+  protected readonly checkJob = signal<Job | null>(null);
+  private pollTimer: ReturnType<typeof setTimeout> | null = null;
   /** Server capabilities: tells us whether comments can be pulled from YouTube. */
   protected readonly health = signal<Health | null>(null);
 
@@ -98,8 +102,62 @@ export class VideoReportPage {
     });
     effect(() => {
       const t = this.initialTab();
-      if (t === 'claims' || t === 'impact' || t === 'outreach') untracked(() => this.setTab(t));
+      if (t === 'claims' || t === 'impact' || t === 'growth' || t === 'outreach') untracked(() => this.setTab(t));
     });
+    inject(DestroyRef).onDestroy(() => this.stopPolling());
+  }
+
+  /** Pull comments posted since the last check; the AI reads them and the report refreshes. */
+  protected checkComments(): void {
+    this.api.checkComments(this.videoId()).subscribe({
+      next: (job) => {
+        this.checkJob.set(job);
+        if (job.kind !== 'COMMENTS') this.toast.show('A full analysis of this video is already running.');
+        this.poll(job.id);
+      },
+      error: (e) => this.toast.error(errorMessage(e)),
+    });
+  }
+
+  private poll(jobId: string): void {
+    this.stopPolling();
+    this.pollTimer = setTimeout(() => {
+      this.api.job(jobId).subscribe({
+        next: (job) => {
+          this.checkJob.set(job);
+          if (job.status === 'COMPLETED' || job.status === 'FAILED') return this.checkDone(job);
+          this.poll(jobId);
+        },
+        error: () => this.poll(jobId),
+      });
+    }, 2000);
+  }
+
+  private checkDone(job: Job): void {
+    this.checkJob.set(null);
+    if (job.status === 'FAILED') {
+      this.toast.error(job.message || "Couldn't fetch new comments.");
+      return;
+    }
+    const r = job.result;
+    if (job.kind === 'COMMENTS' && r && !r.newComments) this.toast.show('No new comments since the last check.');
+    else if (r) {
+      const extra = [r.negative ? `${r.negative} negative` : '', r.ideas ? `${r.ideas} product idea${r.ideas === 1 ? '' : 's'}` : '']
+        .filter(Boolean).join(', ');
+      this.toast.show(`${r.newComments} new comment${r.newComments === 1 ? '' : 's'}${extra ? ': ' + extra : ''}.`);
+    } else this.toast.show('Analysis complete.');
+    this.refresh();
+  }
+
+  private stopPolling(): void {
+    if (this.pollTimer) clearTimeout(this.pollTimer);
+    this.pollTimer = null;
+  }
+
+  private refresh(): void {
+    this.loadImpact();
+    this.impactVersion.update((n) => n + 1);
+    this.api.video(this.videoId()).subscribe((v) => this.video.set(v));
   }
 
   protected setTab(tab: Tab): void {
@@ -121,9 +179,7 @@ export class VideoReportPage {
       next: () => {
         this.recomputing.set(false);
         this.toast.show('Reactions re-linked to claims.');
-        this.loadImpact();
-        this.impactVersion.update((n) => n + 1);
-        this.api.video(this.videoId()).subscribe((v) => this.video.set(v));
+        this.refresh();
       },
       error: (e) => {
         this.recomputing.set(false);

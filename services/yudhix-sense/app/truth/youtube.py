@@ -8,7 +8,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Set
 from urllib.parse import parse_qs, urlparse
 
 import httpx
@@ -132,8 +132,16 @@ def pick_spread(pool: List[Dict], limit: int, seed: Optional[str] = None) -> Lis
     return newest + picked + oldest
 
 
-def fetch_comments(video_id: str, limit: int, order: str = "relevance") -> List[Dict]:
-    """Top-level comments, most relevant (or newest, order="time") first. Returns [] without an API key."""
+def fetch_new_comments(video_id: str, known_ids: Set[str], limit: int) -> List[Dict]:
+    """Comments posted since the last fetch, newest first. Pages through newest-first and stops at the
+    first comment already stored, so a check costs one API unit per 100 comments."""
+    return fetch_comments(video_id, limit, order="time", stop=lambda c: c["comment_id"] in known_ids)
+
+
+def fetch_comments(video_id: str, limit: int, order: str = "relevance",
+                   stop: Optional[Callable[[Dict], bool]] = None) -> List[Dict]:
+    """Top-level comments, most relevant (or newest, order="time") first. Returns [] without an API key.
+    `stop(comment)` returning True ends the read before that comment."""
     if not has_api_key():
         return []
     out: List[Dict] = []
@@ -152,14 +160,17 @@ def fetch_comments(video_id: str, limit: int, order: str = "relevance") -> List[
         for item in body.get("items", []):
             top = item["snippet"]["topLevelComment"]
             sn = top["snippet"]
-            out.append({
+            comment = {
                 "comment_id": top["id"],
                 "author_channel_id": (sn.get("authorChannelId") or {}).get("value", sn.get("authorDisplayName", "")),
                 "text": sn.get("textOriginal") or sn.get("textDisplay", ""),
                 "likes": sn.get("likeCount", 0),
                 "replies": item["snippet"].get("totalReplyCount", 0),
                 "published_at": sn.get("publishedAt"),
-            })
+            }
+            if stop and stop(comment):
+                return out[:limit]
+            out.append(comment)
         page_token = body.get("nextPageToken")
         if not page_token:
             break

@@ -1,0 +1,190 @@
+@if (error()) {
+  <div class="callout callout-danger">{{ error() }}</div>
+} @else if (!data()) {
+  <div class="skeleton" style="height: 420px"></div>
+} @else {
+  @let d = data()!;
+  <section class="pi card card-pad enter" aria-label="Product growth">
+    @if (!d.totals.comments) {
+      <div class="row-wrap subtle"><y-icon name="info" [size]="16" /> Product growth appears once this video has comments.</div>
+    } @else {
+      <!-- Headline -->
+      <div class="pi-head">
+        <div class="pi-score" role="img" [attr.aria-label]="'Growth score ' + d.score + ' out of 100, ' + levelMeta[d.level].label">
+          <span class="eyebrow">Product growth</span>
+          <div class="pi-score-num">{{ d.score }}<span>/100</span></div>
+          <span class="chip {{ levelMeta[d.level].chip }}"><y-icon [name]="levelMeta[d.level].icon" [size]="13" /> {{ levelMeta[d.level].label }}</span>
+        </div>
+        <div class="pi-head-text">
+          <p class="pi-headline">{{ d.headline }}</p>
+          <div class="row-wrap subtle pi-meta">
+            <span>{{ d.totals.comments | compact }} comments</span>
+            <span>· {{ d.totals.reach | compact }} reach</span>
+            <span>· {{ pct(d.positiveShareOfReach) }} of the reach is positive</span>
+          </div>
+          @if (!d.coverage.aiComments) {
+            <div class="subtle pi-note"><y-icon name="sparkles" [size]="14" /> Read with keyword rules. Product ideas are grouped when the AI reads the comments.</div>
+          }
+          <details class="pi-how">
+            <summary>How is this calculated?</summary>
+            <p>
+              The <strong>growth score</strong> mirrors the impact score: the positive share of reach, scaled by audience size,
+              100 × (positive share)<sup>0.75</sup> × size. Strong is 60 or more, moderate 35 or more.
+              <strong>Reach</strong> is 1 + likes + 2 × replies. The AI tags what each commenter wants and names each feature request
+              in a few words. Similar requests, from this and other videos, are grouped into one <strong>product idea</strong>.
+            </p>
+          </details>
+        </div>
+      </div>
+
+      <div class="pi-grid">
+        <!-- What people want -->
+        <div class="pi-block">
+          <h3>What people want</h3>
+          <div class="g-bars">
+            @for (r of intentRows(); track r.intent) {
+              <a class="g-row" routerLink="/inbox" [queryParams]="{ video: videoId(), intent: r.intent }"
+                 (mouseenter)="showTip($event, r.label, [r.comments + ' comments (' + pct(r.share) + ')', r.reach + ' reach'])"
+                 (focus)="showTip($event, r.label, [r.comments + ' comments (' + pct(r.share) + ')', r.reach + ' reach'])"
+                 (mouseleave)="hideTip()" (blur)="hideTip()">
+                <span class="g-label">{{ r.label }}<span class="subtle g-hint">{{ intentHint[r.intent] }}</span></span>
+                <span class="g-track"><span class="g-fill want" [style.width.%]="r.width"></span></span>
+                <span class="g-num"><strong>{{ r.comments }}</strong></span>
+              </a>
+            }
+          </div>
+        </div>
+
+        <!-- What people love -->
+        <div class="pi-block">
+          <h3>What people love</h3>
+          @if (lovedRows().length) {
+            <div class="g-bars">
+              @for (t of lovedRows(); track t.topic) {
+                <div class="g-row" tabindex="0"
+                     (mouseenter)="showTip($event, t.label, [t.comments + ' positive comments', t.reach + ' positive reach'])"
+                     (focus)="showTip($event, t.label, [t.comments + ' positive comments', t.reach + ' positive reach'])"
+                     (mouseleave)="hideTip()" (blur)="hideTip()">
+                  <span class="g-label">{{ t.label }}</span>
+                  <span class="g-track"><span class="g-fill love" [style.width.%]="t.width"></span></span>
+                  <span class="g-num"><strong>{{ t.comments }}</strong></span>
+                </div>
+              }
+            </div>
+            <p class="subtle g-foot">Topics of positive comments · bar length = positive reach</p>
+          } @else {
+            <p class="subtle">No positive comments about a specific topic yet.</p>
+          }
+        </div>
+      </div>
+
+      <!-- Product ideas -->
+      <div class="pi-block">
+        <div class="row">
+          <h3>Product ideas from these comments</h3>
+          <span class="spacer"></span>
+          <a class="btn btn-sm btn-ghost" routerLink="/ideas"><y-icon name="layers" [size]="15" /> All ideas</a>
+        </div>
+        @if (d.ideas.length) {
+          <ul class="ideas">
+            @for (i of d.ideas; track i.id) {
+              <li class="idea">
+                <div class="row-wrap idea-top">
+                  <strong class="idea-title">{{ i.title }}</strong>
+                  <span class="chip {{ statusMeta[i.status].chip }}">{{ statusMeta[i.status].label }}</span>
+                  <span class="spacer"></span>
+                  <span class="subtle num">{{ i.comments }} comment{{ i.comments === 1 ? '' : 's' }} · {{ i.reach | compact }} reach</span>
+                  <a class="btn btn-sm" routerLink="/ideas" [queryParams]="{ idea: i.id }">Manage</a>
+                </div>
+                @for (c of i.examples; track c.id) {
+                  <p class="idea-quote clamp-2"><y-icon name="thumbsUp" [size]="12" /> {{ c.likes | compact }} · “{{ c.text }}”</p>
+                }
+              </li>
+            }
+          </ul>
+        } @else if (!d.ideaComments) {
+          <p class="subtle">Nobody asked for a change in these comments.</p>
+        }
+        @if (d.unthemedIdeas.length) {
+          <p class="subtle g-foot">
+            {{ unthemed() }} request{{ unthemed() === 1 ? '' : 's' }} not grouped yet
+            (spotted by keyword rules; the AI names and groups them when it reads them).
+            <a routerLink="/inbox" [queryParams]="{ video: videoId(), intent: 'IDEA' }">See them in the inbox</a>
+          </p>
+        }
+      </div>
+
+      <!-- Buying signals, praise, leaving -->
+      <div class="pi-grid">
+        <div class="pi-block">
+          <h3>Most-liked praise</h3>
+          @if (d.topPraise.length) {
+            <ul class="top">
+              @for (c of d.topPraise; track c.id) {
+                <li>
+                  <span class="likes"><y-icon name="thumbsUp" [size]="14" /> {{ c.likes | compact }}</span>
+                  <div class="pi-fill"><p class="clamp-2">{{ c.text }}</p></div>
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="subtle">No praise yet.</p>
+          }
+        </div>
+        <div class="pi-block">
+          <h3>Buying signals</h3>
+          @if (d.buyingSignals.length) {
+            <ul class="top">
+              @for (c of d.buyingSignals; track c.id) {
+                <li>
+                  <span class="likes"><y-icon name="thumbsUp" [size]="14" /> {{ c.likes | compact }}</span>
+                  <div class="pi-fill"><p class="clamp-2">{{ c.text }}</p></div>
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="subtle">Nobody said they bought it or plan to.</p>
+          }
+          @if (d.leaving.length) {
+            <h3 class="g-sub">At risk of leaving</h3>
+            <ul class="top">
+              @for (c of d.leaving; track c.id) {
+                <li>
+                  <span class="likes"><y-icon name="thumbsUp" [size]="14" /> {{ c.likes | compact }}</span>
+                  <div class="pi-fill"><p class="clamp-2">{{ c.text }}</p></div>
+                  <a class="btn btn-sm" routerLink="/inbox" [queryParams]="{ video: videoId(), comment: c.id }">Reply</a>
+                </li>
+              }
+            </ul>
+          }
+        </div>
+      </div>
+
+      <!-- Same data as tables -->
+      <details class="pi-tables">
+        <summary>View the data as tables</summary>
+        <table>
+          <caption>What people want</caption>
+          <thead><tr><th>Intent</th><th>Comments</th><th>Reach</th></tr></thead>
+          <tbody>
+            @for (i of d.intents; track i.intent) { <tr><td>{{ i.label }}</td><td>{{ i.comments }}</td><td>{{ i.reach }}</td></tr> }
+          </tbody>
+        </table>
+        <table>
+          <caption>What people love</caption>
+          <thead><tr><th>Topic</th><th>Positive comments</th><th>Positive reach</th></tr></thead>
+          <tbody>
+            @for (t of d.loved; track t.topic) { <tr><td>{{ t.label }}</td><td>{{ t.comments }}</td><td>{{ t.reach }}</td></tr> }
+          </tbody>
+        </table>
+      </details>
+
+      @if (tip(); as t) {
+        <div class="pi-tip" role="tooltip" [style.left.px]="t.x" [style.top.px]="t.y">
+          <strong>{{ t.title }}</strong>
+          @for (l of t.lines; track $index) { <span>{{ l }}</span> }
+        </div>
+      }
+    }
+  </section>
+}

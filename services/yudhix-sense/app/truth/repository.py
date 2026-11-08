@@ -29,6 +29,8 @@ def _video(r: Dict, comment_stats: Optional[Dict] = None) -> Dict:
         "analyzedAt": _iso(r.get("analyzed_at") or r.get("created_at")),
         "comments": int(s.get("total") or 0), "negativeComments": int(s.get("negative") or 0),
         "positiveComments": int(s.get("positive") or 0), "linkedComments": int(s.get("linked") or 0),
+        "newComments": int(s.get("fresh") or 0),
+        "commentsCheckedAt": _iso(r.get("comments_checked_at")),
     }
 
 
@@ -37,7 +39,8 @@ def _comment_stats(tenant_id: str, video_id: Optional[str] = None) -> Dict[str, 
         f"""SELECT c.custom_attributes->>'video_id' AS video_id, count(*) AS total,
                    count(*) FILTER (WHERE ca.sentiment = 'NEGATIVE') AS negative,
                    count(*) FILTER (WHERE ca.sentiment = 'POSITIVE') AS positive,
-                   count(l.comment_id) AS linked
+                   count(l.comment_id) AS linked,
+                   count(*) FILTER (WHERE c.custom_attributes ? 'new_at') AS fresh
             FROM comment c
             LEFT JOIN comment_analysis ca ON ca.tenant_id = c.tenant_id AND ca.comment_id = c.id
             LEFT JOIN comment_claim_link l ON l.tenant_id = c.tenant_id AND l.comment_id = c.id

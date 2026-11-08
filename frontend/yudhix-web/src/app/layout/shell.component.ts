@@ -37,12 +37,13 @@ export class ShellComponent {
     { path: '/inbox', label: 'Inbox', icon: 'inbox', mobile: true },
     { path: '/approvals', label: 'Approvals', icon: 'shield', mobile: true },
     { path: '/track', label: 'Track', icon: 'chart', mobile: true },
+    { path: '/ideas', label: 'Ideas', icon: 'layers', mobile: false },
     { path: '/knowledge', label: 'Knowledge', icon: 'book', mobile: false },
     { path: '/settings', label: 'Settings', icon: 'settings', mobile: false },
   ];
   protected readonly groups: NavGroup[] = [
-    { label: 'Workflow', items: this.nav.slice(0, 5) },
-    { label: 'Workspace', items: this.nav.slice(5) },
+    { label: 'Workflow', items: this.nav.slice(0, 6) },
+    { label: 'Workspace', items: this.nav.slice(6) },
   ];
   protected readonly mobileNav = this.nav.filter((n) => n.mobile);
 

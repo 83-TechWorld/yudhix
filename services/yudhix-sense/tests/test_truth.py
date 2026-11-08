@@ -192,13 +192,15 @@ class AudienceTest(unittest.TestCase):
         batch = [{"id": "x"}, {"id": "y"}, {"id": "z"}]
         claims = [{"id": "c1"}, {"id": "c2"}]
         out = _parse({"results": [
-            {"i": 1, "s": "NEG", "t": ["price", "BOGUS"], "c": 2, "w": "costs too much"},
-            {"i": 2, "s": "POS", "t": [], "c": 0, "w": "ignored"},
+            {"i": 1, "s": "NEG", "t": ["price", "BOGUS"], "c": 2, "w": "costs too much", "n": "complaint"},
+            {"i": 2, "s": "POS", "t": [], "c": 0, "w": "ignored", "n": "IDEA", "f": "more storage space please now ok"},
             {"i": 3, "s": "???"},               # unknown sentiment: left to rules
             {"i": 9, "s": "NEG"},               # out of range
         ]}, batch, claims)
-        self.assertEqual(out["x"], {"sentiment": "NEGATIVE", "topics": ["PRICE"], "claim": "c2", "why": "costs too much"})
+        self.assertEqual(out["x"], {"sentiment": "NEGATIVE", "topics": ["PRICE"], "claim": "c2",
+                                    "why": "costs too much", "intent": "COMPLAINT", "idea": ""})
         self.assertEqual(out["y"]["claim"], None)
+        self.assertEqual((out["y"]["intent"], out["y"]["idea"]), ("IDEA", "more storage space please now ok"))
         self.assertEqual(out["y"]["why"], "")
         self.assertNotIn("z", out)
 
@@ -247,3 +249,71 @@ class SamplingTest(unittest.TestCase):
     def test_small_videos_keep_everything(self):
         pool = [{"comment_id": str(i)} for i in range(30)]
         self.assertEqual(youtube.pick_spread(pool, 100), pool)
+
+
+class IntentRulesTest(unittest.TestCase):
+    def test_intents(self):
+        from app.truth.audience import rule_intent
+        self.assertEqual(rule_intent("Please add a sleep timer to the controller.", "NEUTRAL"), "IDEA")
+        self.assertEqual(rule_intent("I wish they made it with more storage", "NEGATIVE"), "IDEA")
+        self.assertEqual(rule_intent("They should be ashamed of this price", "NEGATIVE"), "COMPLAINT")
+        self.assertEqual(rule_intent("Just pre-ordered mine, can't wait!", "POSITIVE"), "BUY")
+        self.assertEqual(rule_intent("Returning it tomorrow, not worth it", "NEGATIVE"), "LEAVE")
+        self.assertEqual(rule_intent("Not buying this at $700", "NEGATIVE"), "LEAVE")
+        self.assertEqual(rule_intent("Does it come with a stand?", "NEUTRAL"), "QUESTION")
+        self.assertEqual(rule_intent("Best console ever", "POSITIVE"), "PRAISE")
+        self.assertEqual(rule_intent("This is overpriced garbage", "NEGATIVE"), "COMPLAINT")
+
+
+class IdeaGroupingTest(unittest.TestCase):
+    def test_similar_requests_share_an_idea(self):
+        from app.truth import growth
+        self.assertEqual(growth.theme_key("Add more storage"), growth.theme_key("more Storage please"))
+        self.assertEqual(growth.theme_words("cheaper digital games"), ["cheaper", "digital", "game"])
+        ideas = [{"id": "a", "theme_key": "storage"}, {"id": "b", "theme_key": "cheaper digital game"}]
+        self.assertEqual(growth.match_idea(growth.theme_words("bigger storage"), ideas)["id"], "a")  # half the words match
+        self.assertEqual(growth.match_idea(growth.theme_words("cheaper digital games price"), ideas)["id"], "b")
+        self.assertEqual(growth.match_idea(growth.theme_words("sleep timer"), ideas), None)
+
+
+class GrowthTest(unittest.TestCase):
+    def test_growth_view(self):
+        from app.truth import growth
+        rows = [
+            {"id": "1", "like_count": 900, "reply_count": 0, "sentiment": "POSITIVE", "intent": "PRAISE",
+             "topics": ["CONTENT"], "model_version": "llm/x"},
+            {"id": "2", "like_count": 40, "reply_count": 5, "sentiment": "NEUTRAL", "intent": "IDEA",
+             "topics": ["QUALITY"], "idea_id": "i1", "idea_title": "More storage", "idea_status": "NEW"},
+            {"id": "3", "like_count": 2, "reply_count": 0, "sentiment": "NEGATIVE", "intent": "IDEA",
+             "topics": [], "idea_id": "i1", "idea_title": "More storage", "idea_status": "NEW"},
+            {"id": "4", "like_count": 0, "reply_count": 0, "sentiment": "POSITIVE", "intent": "BUY", "topics": []},
+            {"id": "5", "like_count": 0, "reply_count": 0, "sentiment": "NEGATIVE", "intent": "GENERAL", "topics": []},
+        ]
+        r = growth.compute(rows)
+        self.assertEqual(r["level"], "STRONG")
+        self.assertEqual(r["loved"][0]["topic"], "CONTENT")
+        self.assertEqual(r["ideas"][0]["id"], "i1")
+        self.assertEqual((r["ideas"][0]["comments"], r["ideas"][0]["reach"]), (2, 54))
+        self.assertEqual(r["ideaComments"], 2)
+        self.assertEqual(r["buyingSignals"][0]["id"], "4")
+        intents = {i["intent"]: i["comments"] for i in r["intents"]}
+        self.assertEqual((intents["COMPLAINT"], intents["PRAISE"]), (1, 1))  # old GENERAL + negative -> complaint
+        self.assertIn("More storage", r["headline"])
+
+    def test_empty(self):
+        from app.truth import growth
+        r = growth.compute([])
+        self.assertEqual((r["score"], r["level"], r["headline"]), (0, "LOW", "No comments yet."))
+
+
+class NewCommentsTest(unittest.TestCase):
+    def test_stops_at_first_known_comment(self):
+        page = {"items": [{"snippet": {"totalReplyCount": 0, "topLevelComment": {"id": cid, "snippet": {
+            "textOriginal": cid, "likeCount": 0, "publishedAt": "2026-11-01T00:00:00Z"}}}} for cid in
+            ("n1", "n2", "old1", "old2")], "nextPageToken": "more"}
+        res = mock.Mock(status_code=200, json=lambda: page)
+        with mock.patch.object(youtube, "has_api_key", return_value=True), \
+                mock.patch.object(youtube.httpx, "get", return_value=res) as get:
+            out = youtube.fetch_new_comments("vid", {"old1", "old2"}, 100)
+        self.assertEqual([c["comment_id"] for c in out], ["n1", "n2"])
+        self.assertEqual(get.call_count, 1)  # never reads the next page

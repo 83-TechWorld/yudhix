@@ -5,6 +5,9 @@ comments with the most reach always get the AI's reading). Each batch returns, p
   sentiment  POSITIVE | NEUTRAL | NEGATIVE
   topics     0-2 codes from TOPICS (what the comment is about)
   claim      the number of the video claim it reacts to, or 0
+  intent     what the commenter wants: IDEA (feature request or suggestion), PRAISE, BUY (bought or
+             plans to), LEAVE (return, cancel or switch away), QUESTION, COMPLAINT, OTHER
+  idea       for IDEA, the request in 2-6 words ("more storage", "cheaper digital games")
 Batches run one at a time: a local Ollama serves one request at a time, so parallel
 requests only queue (and time out while queued). A time budget keeps an analysis bounded; whatever the AI doesn't reach falls back to rules
 (keyword sentiment, keyword topics, lexical claim matching in attribution.py).
@@ -12,7 +15,9 @@ requests only queue (and time out while queued). A time budget keeps an analysis
 Results are stored on the comment so "Re-link" can re-run attribution without the AI:
   comment_analysis.sentiment / sentiment_score / model_version ('llm/<model>' or rules)
   comment_aspect rows: one per topic
-  comment.custom_attributes.ai = {"claim": <claim id or null>, "why": "...", "v": 1}
+  comment_analysis.intent: one of INTENTS
+  comment.custom_attributes.ai = {"claim": <claim id or null>, "why": "...", "idea": "...", "v": 1}
+Feature requests are then grouped into product ideas (app/truth/growth.py).
 """
 import json
 import logging
@@ -66,6 +71,30 @@ _RULES: Dict[str, List[str]] = {
 _RULE_RE = {t: re.compile(r"(?<![a-z0-9])(" + "|".join(re.escape(w) for w in words) + r")(?![a-z0-9])")
             for t, words in _RULES.items()}
 
+# What the commenter wants, most specific first.
+INTENTS: Dict[str, str] = {
+    "IDEA": "Feature requests & ideas",
+    "PRAISE": "Praise",
+    "BUY": "Buying signals",
+    "QUESTION": "Questions",
+    "COMPLAINT": "Complaints",
+    "LEAVE": "Leaving / returning",
+    "OTHER": "Other",
+}
+_IDEA_RE = re.compile(
+    r"\b(?:i wish (?:it|they|sony|there|the)|(?:they|sony|playstation) (?:should|need to|needs to) "
+    r"(?:add|make|bring|include|allow|give|release|let|put|offer|lower|drop)|please (?:add|bring back|make|give us|let us"
+    r"|include|release)|would (?:be )?(?:nice|great|cool|awesome) if|would love (?:to see|it if|a)|bring back"
+    r"|give us (?:a|an|the|more|back)|add (?:support for|an option)|why not (?:add|make|have)|feature request"
+    r"|my suggestion|hope (?:they|sony) (?:add|make|bring))\b")
+_BUY_RE = re.compile(r"\b(pre-?order(?:ed|ing)?|ordered (?:one|mine|it)|(?:just )?bought (?:one|it|mine|a)|buying (?:one|it)"
+                     r"|getting one|day one|take my money|(?:will|gonna|going to) buy|picked (?:one|it) up|instant buy"
+                     r"|sold me|can'?t wait to (?:buy|get))\b")
+_LEAVE_RE = re.compile(r"\b(return(?:ing|ed)? (?:it|mine|my)|cancel(?:l)?(?:ed|ing)? my|refund|switch(?:ing|ed)? to"
+                       r"|going back to|sell(?:ing)? my|never buying|not buying|won'?t (?:buy|be buying)|unsubscrib"
+                       r"|done with (?:sony|playstation|this)|moving to|jump(?:ing)? ship)\b")
+_QUESTION_RE = re.compile(r"^(?:what|how|when|why|does|do|is|are|can|will|would|should|which|where|anyone)\b")
+
 _classifier = FastSentimentClassifier()
 RULES_VERSION = "rules/sentiment-v2"
 BATCH_SIZE = 10
@@ -89,6 +118,21 @@ def rule_topics(text: str, limit: int = 2) -> List[str]:
 
 def rule_sentiment(text: str) -> Tuple[str, float]:
     return _classifier.classify(text or "")
+
+
+def rule_intent(text: str, sentiment: str) -> str:
+    """Intent by phrase rules. Rules can spot a request but can't name it well, so only the AI's
+    reading turns a request into a product idea."""
+    lower = " ".join((text or "").lower().split())
+    if _IDEA_RE.search(lower):
+        return "IDEA"
+    if _LEAVE_RE.search(lower):
+        return "LEAVE"
+    if _BUY_RE.search(lower) and sentiment != "NEGATIVE":
+        return "BUY"
+    if sentiment != "NEGATIVE" and (lower.rstrip().endswith("?") or _QUESTION_RE.search(lower)):
+        return "QUESTION"
+    return {"POSITIVE": "PRAISE", "NEGATIVE": "COMPLAINT"}.get(sentiment, "OTHER")
 
 
 # ----------------------------------------------------------------------------- AI
@@ -115,11 +159,16 @@ For EACH comment return:
   comment clearly discusses that specific statement; sharing a common word is not enough. Most
   comments respond to no specific claim: use 0 then.
 - "w": for "c" > 0, up to 8 words from the comment that show the link; otherwise ""
+- "n": what the commenter wants: "IDEA" (asks for a feature, change or improvement, or suggests one),
+  "PRAISE", "BUY" (bought it or plans to), "LEAVE" (returning, cancelling or switching away),
+  "QUESTION", "COMPLAINT" or "OTHER". A complaint that also asks for a specific change is "IDEA".
+- "f": for "IDEA", the requested thing in 2-6 plain words, e.g. "more storage", "cheaper digital games";
+  otherwise ""
 
 Comments:
 {comment_lines}
 
-Return JSON: {{"results": [{{"i": 1, "s": "NEG", "t": ["PRICE"], "c": 0, "w": ""}}, ...]}}"""
+Return JSON: {{"results": [{{"i": 1, "s": "NEG", "t": ["PRICE"], "c": 0, "w": "", "n": "COMPLAINT", "f": ""}}, ...]}}"""
 
 
 _S = {"POS": "POSITIVE", "NEU": "NEUTRAL", "NEG": "NEGATIVE",
@@ -150,8 +199,11 @@ def _parse(raw, batch: List[Dict], claims: List[Dict]) -> Dict[str, Dict]:
             claim_no = 0
         claim_id = str(claims[claim_no - 1]["id"]) if 1 <= claim_no <= len(claims) else None
         why = str(item.get("w") or "")[:120] if claim_id else ""
+        intent = str(item.get("n") or "").upper()
+        intent = intent if intent in INTENTS else None
+        idea = " ".join(str(item.get("f") or "").split()[:8])[:80] if intent == "IDEA" else ""
         out[str(batch[idx]["id"])] = {"sentiment": sentiment, "topics": [t.upper() for t in topics][:2],
-                                      "claim": claim_id, "why": why}
+                                      "claim": claim_id, "why": why, "intent": intent, "idea": idea}
     return out
 
 
@@ -169,7 +221,7 @@ def classify_with_ai(claims: List[Dict], comments: List[Dict], budget_seconds: f
         if time.time() > deadline or failures >= MAX_FAILURES_IN_A_ROW:
             break
         raw = llm.generate_json(_prompt(claims, batch), timeout=BATCH_TIMEOUT_SECONDS,
-                                max_tokens=40 * len(batch) + 100)
+                                max_tokens=60 * len(batch) + 100)
         parsed = _parse(raw or {}, batch, claims)
         failures = 0 if parsed else failures + 1
         results.update(parsed)
@@ -184,8 +236,11 @@ def classify_with_ai(claims: List[Dict], comments: List[Dict], budget_seconds: f
 def understand(tenant_id: str, claims: List[Dict], comments: List[Dict],
                progress: Optional[Callable[[int, int], None]] = None) -> Dict:
     """Classify a video's comments (AI where possible, rules otherwise) and store the result."""
+    from app.truth import growth  # growth imports this module
+
     ai = classify_with_ai(claims, comments, config.LLM_COMMENT_BUDGET_SECONDS, progress)
     model = f"llm/{config.OLLAMA_MODEL}"
+    ideas = []
     with cursor(commit=True) as cur:
         for c in comments:
             cid = str(c["id"])
@@ -195,24 +250,28 @@ def understand(tenant_id: str, claims: List[Dict], comments: List[Dict],
                 sentiment, topics = reading["sentiment"], reading["topics"] or rule_topics(text)
                 score = {"POSITIVE": 0.8, "NEGATIVE": -0.8}.get(sentiment, 0.0)
                 version = model
-                ai_attr = {"claim": reading["claim"], "why": reading["why"], "v": 1}
+                intent = reading.get("intent") or rule_intent(text, sentiment)
+                idea = reading.get("idea") or ""
+                ai_attr = {"claim": reading["claim"], "why": reading["why"], "idea": idea, "v": 2}
             else:
                 sentiment, score = rule_sentiment(text)
                 topics, version, ai_attr = rule_topics(text), RULES_VERSION, None
+                intent, idea = rule_intent(text, sentiment), ""
             cur.execute(
                 """UPDATE comment_analysis SET sentiment = %s, sentiment_score = %s, model_version = %s,
                           intent = %s, churn_risk = %s
                    WHERE tenant_id = %s AND comment_id = %s""",
-                (sentiment, score, version,
-                 "COMPLAINT" if sentiment == "NEGATIVE" else "PRAISE" if sentiment == "POSITIVE" else "GENERAL",
-                 _churn(sentiment, text), tenant_id, cid))
+                (sentiment, score, version, intent, _churn(sentiment, text), tenant_id, cid))
             _store_topics(cur, tenant_id, cid, topics, sentiment)
+            if intent == "IDEA":
+                ideas.append((cid, idea, topics[0] if topics else "FEATURES"))
             cur.execute(
                 """UPDATE comment SET custom_attributes = CASE WHEN %s::jsonb IS NULL
                           THEN custom_attributes - 'ai' ELSE jsonb_set(custom_attributes, '{ai}', %s::jsonb) END
                    WHERE tenant_id = %s AND id = %s""",
                 (json.dumps(ai_attr) if ai_attr else None, json.dumps(ai_attr) if ai_attr else None, tenant_id, cid))
-    return {"aiClassified": len(ai), "ruleClassified": len(comments) - len(ai)}
+        growth.link_ideas(cur, tenant_id, [str(c["id"]) for c in comments], ideas)
+    return {"aiClassified": len(ai), "ruleClassified": len(comments) - len(ai), "ideas": len(ideas)}
 
 
 def store_rule_topics(cur, tenant_id: str, comment_id: str, text: str, sentiment: str) -> None:

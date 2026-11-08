@@ -36,6 +36,14 @@
         <button type="button" [class.active]="priorityFilter() === 'P2'" (click)="setFilter('priority', 'P2')">P2</button>
         <button type="button" [class.active]="priorityFilter() === 'P3'" (click)="setFilter('priority', 'P3')">P3</button>
       </div>
+      <select class="select intent-select" [ngModel]="intentFilter()" (ngModelChange)="setFilter('intent', $event)" aria-label="Filter by what the commenter wants">
+        <option value="">Any intent</option>
+        @for (i of intentOptions; track i) { <option [value]="i">{{ intentLabels[i] }}</option> }
+      </select>
+      <button type="button" class="btn btn-sm" [class.active]="freshFilter()" [attr.aria-pressed]="freshFilter()"
+              (click)="setFilter('fresh', freshFilter() ? '' : '1')" title="Comments added since the last full analysis">
+        New only
+      </button>
       <div class="segmented" aria-label="Status">
         <button type="button" [class.active]="statusFilter() === 'OPEN'" (click)="setFilter('status', 'OPEN')">Open</button>
         <button type="button" [class.active]="statusFilter() === 'REPLIED'" (click)="setFilter('status', 'REPLIED')">Replied</button>
@@ -62,6 +70,8 @@
                 <p class="clamp-2">{{ it.text }}</p>
                 <div class="row-wrap meta">
                   <span class="chip" [class]="causeMeta[it.rootCause].chip">{{ causeMeta[it.rootCause].short }}</span>
+                  @if (it.isNew) { <span class="chip chip-brand">New</span> }
+                  @if (it.intent === 'IDEA' || it.intent === 'BUY' || it.intent === 'LEAVE') { <span class="chip chip-outline">{{ intentLabels[it.intent] }}</span> }
                   @if (it.claim) { <span class="subtle truncate claim-ref">{{ it.claim.timestamp }} · {{ it.claim.topic }}</span> }
                   <span class="spacer"></span>
                   @if (it.replyStatus) { <span class="chip" [class]="statusLabel[it.replyStatus].chip">{{ statusLabel[it.replyStatus].label }}</span> }

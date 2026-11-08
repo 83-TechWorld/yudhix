@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, Injectable, Pipe, PipeTransform, computed, input, signal } from '@angular/core';
 import { IconComponent } from './icon.component';
-import { Priority, RootCause, Sentiment, Verdict } from '../core/models';
+import { IdeaStatus, Intent, Priority, RootCause, Sentiment, Verdict } from '../core/models';
 
 // ------------------------------------------------------------------ labels
 
@@ -29,6 +29,22 @@ export const CAUSE_META: Record<RootCause, { label: string; short: string; chip:
 export const SENTIMENT_CHIP: Record<Sentiment, string> = {
   POSITIVE: 'chip-ok', NEGATIVE: 'chip-danger', NEUTRAL: 'chip', MIXED: 'chip-warn',
 };
+
+/** What a commenter wants, as shown in filters and chips. */
+export const INTENT_LABEL: Record<Intent, string> = {
+  IDEA: 'Feature requests', PRAISE: 'Praise', BUY: 'Buying signals', QUESTION: 'Questions',
+  COMPLAINT: 'Complaints', LEAVE: 'Leaving', OTHER: 'Other',
+};
+
+/** Product idea lifecycle, in order. */
+export const IDEA_STATUS: Record<IdeaStatus, { label: string; chip: string; hint: string }> = {
+  NEW: { label: 'New', chip: 'chip-info', hint: 'Not looked at yet' },
+  REVIEWING: { label: 'Reviewing', chip: 'chip-warn', hint: 'The product team is assessing it' },
+  PLANNED: { label: 'Planned', chip: 'chip-brand', hint: 'On the roadmap' },
+  SHIPPED: { label: 'Shipped', chip: 'chip-ok', hint: 'Released: tell the people who asked' },
+  DECLINED: { label: 'Declined', chip: 'chip-outline', hint: 'Not doing it' },
+};
+export const IDEA_STATUSES = Object.keys(IDEA_STATUS) as IdeaStatus[];
 
 export const PRIORITY_CHIP: Record<Priority, string> = { P1: 'chip-danger', P2: 'chip-warn', P3: 'chip' };
 

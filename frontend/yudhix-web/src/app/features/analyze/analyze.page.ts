@@ -66,7 +66,7 @@ export class AnalyzePage {
     this.api.jobs().subscribe({
       next: (r) => {
         this.jobs.set(r.jobs);
-        const running = r.jobs.find((j) => j.status === 'RUNNING' || j.status === 'QUEUED');
+        const running = r.jobs.find((j) => j.kind !== 'COMMENTS' && (j.status === 'RUNNING' || j.status === 'QUEUED'));
         if (running) this.track(running);
       },
       error: () => {},

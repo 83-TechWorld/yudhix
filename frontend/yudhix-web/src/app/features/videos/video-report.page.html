@@ -23,11 +23,20 @@
           @if (v.publishedDate) { <span>· {{ v.publishedDate }}</span> }
           @if (v.viewCount) { <span>· {{ v.viewCount | compact }} views</span> }
           @if (v.analyzedAt) { <span>· analyzed {{ v.analyzedAt | ago }}</span> }
+          @if (v.commentsCheckedAt) { <span>· comments checked {{ v.commentsCheckedAt | ago }}</span> }
         </div>
         @if (v.summary) { <p class="summary">{{ v.summary }}</p> }
         <div class="row-wrap">
           <a class="btn btn-sm" [href]="v.url" target="_blank" rel="noopener"><y-icon name="external" [size]="15" /> YouTube</a>
           <a class="btn btn-sm" routerLink="/inbox" [queryParams]="{ video: v.videoId }"><y-icon name="inbox" [size]="15" /> Respond to comments</a>
+          <button type="button" class="btn btn-sm" (click)="checkComments()" [disabled]="!!checkJob()"
+                  title="Fetch comments posted since the last check. The transcript and fact-check stay as they are.">
+            <y-icon name="refresh" [size]="15" [class.spin]="!!checkJob()" />
+            @if (checkJob(); as j) { {{ j.message || 'Checking…' }} } @else { Fetch new comments }
+          </button>
+          @if (v.newComments) {
+            <a class="chip chip-brand" routerLink="/inbox" [queryParams]="{ video: v.videoId, fresh: 1 }" title="Added since the last full analysis">{{ v.newComments }} new</a>
+          }
         </div>
       </div>
     </header>
@@ -81,6 +90,9 @@
       </button>
       <button type="button" role="tab" [class.active]="tab() === 'impact'" (click)="setTab('impact')">
         <y-icon name="target" [size]="16" /> Audience impact
+      </button>
+      <button type="button" role="tab" [class.active]="tab() === 'growth'" (click)="setTab('growth')">
+        <y-icon name="sparkles" [size]="16" /> Product growth
       </button>
       <button type="button" role="tab" [class.active]="tab() === 'outreach'" (click)="setTab('outreach')">
         <y-icon name="mail" [size]="16" /> Creator note
@@ -205,6 +217,11 @@
           </section>
         </div>
       }
+    }
+
+    <!-- ============ PRODUCT GROWTH ============ -->
+    @if (tab() === 'growth') {
+      <y-product-growth [videoId]="v.videoId" [version]="impactVersion()" />
     }
 
     <!-- ============ CREATOR NOTE ============ -->

@@ -26,7 +26,7 @@ from app.db import (
 from app.api import platform as platform_api, truth as truth_api, workflow as workflow_api
 from app.core import config, llm
 from app.core.database import run_migrations
-from app.truth import youtube
+from app.truth import scheduler, youtube
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("yudhix-sense")
@@ -71,6 +71,7 @@ def apply_migrations():
         run_migrations()
     except Exception as e:  # keep serving read-only endpoints even if the DB is briefly unavailable
         logger.error("Migrations failed: %s", e)
+    scheduler.start()  # checks analyzed videos for new comments in the background
 
 masker = PiiMasker()
 classifier = FastSentimentClassifier()

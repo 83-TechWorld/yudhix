@@ -4,10 +4,10 @@ from typing import List, Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from app.api.deps import actor, membership, tenant_id
+from app.api.deps import actor, membership, require, tenant_id
 from app.platform import billing
 from app.platform.auth import Membership
-from app.truth import pipeline, product_impact, repository, youtube
+from app.truth import growth, pipeline, product_impact, repository, scheduler, youtube
 from app.workflow.state import Actor
 
 router = APIRouter(prefix="/api/v1/truth", tags=["truth"])
@@ -76,6 +76,78 @@ def product_impact_view(video_id: str, tenant: str = Depends(tenant_id)):
     if not repository.get_video(tenant, video_id):
         raise HTTPException(404, "Video not found")
     return product_impact.load(tenant, video_id)
+
+
+@router.post("/videos/{video_id}/check-comments", status_code=202)
+def check_comments(video_id: str, background: BackgroundTasks, tenant: str = Depends(tenant_id),
+                   user: Actor = Depends(actor)):
+    """Fetch comments posted since the last check (no new transcript or fact-check). Returns the job to poll."""
+    try:
+        job = pipeline.start_comment_check(tenant, video_id, user.id)
+    except pipeline.PipelineError as e:
+        raise HTTPException(404, str(e))
+    if job["kind"] == "COMMENTS" and job["status"] == "QUEUED":
+        background.add_task(pipeline.run_job, job["id"], tenant)
+    return job
+
+
+@router.get("/videos/{video_id}/growth")
+def growth_view(video_id: str, tenant: str = Depends(tenant_id)):
+    if not repository.get_video(tenant, video_id):
+        raise HTTPException(404, "Video not found")
+    return growth.load(tenant, video_id)
+
+
+class WatchSetting(BaseModel):
+    enabled: Optional[bool] = None
+    interval_hours: Optional[int] = None
+
+
+@router.get("/comment-schedule")
+def comment_schedule(tenant: str = Depends(tenant_id)):
+    return scheduler.get_setting(tenant)
+
+
+@router.put("/comment-schedule")
+def save_comment_schedule(body: WatchSetting, tenant: str = Depends(tenant_id),
+                          member: Membership = Depends(require("workspace.manage"))):
+    try:
+        return scheduler.save_setting(tenant, member.user_id, body.enabled, body.interval_hours)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+# ----------------------------------------------------------------------------- product ideas
+
+@router.get("/ideas")
+def ideas(tenant: str = Depends(tenant_id), status: Optional[str] = None, video_id: Optional[str] = None):
+    return {"ideas": growth.list_ideas(tenant, status=status, video_id=video_id)}
+
+
+@router.get("/ideas/{idea_id}")
+def idea(idea_id: str, tenant: str = Depends(tenant_id)):
+    found = growth.get_idea(tenant, idea_id)
+    if not found:
+        raise HTTPException(404, "Idea not found")
+    return found
+
+
+class IdeaUpdate(BaseModel):
+    status: Optional[str] = None
+    note: Optional[str] = Field(None, max_length=4000)
+    title: Optional[str] = Field(None, min_length=3, max_length=200)
+
+
+@router.patch("/ideas/{idea_id}")
+def update_idea(idea_id: str, body: IdeaUpdate, tenant: str = Depends(tenant_id),
+                member: Membership = Depends(require("content.write"))):
+    try:
+        found = growth.update_idea(tenant, member.user_id, idea_id, body.model_dump(exclude_none=True))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if not found:
+        raise HTTPException(404, "Idea not found")
+    return found
 
 
 @router.post("/videos/{video_id}/reattribute")

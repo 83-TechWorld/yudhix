@@ -23,6 +23,7 @@ export const routes: Routes = [
       { path: 'inbox', title: 'Inbox · Yudhix', loadComponent: () => import('./features/inbox/inbox.page').then((m) => m.InboxPage) },
       { path: 'approvals', title: 'Approvals · Yudhix', loadComponent: () => import('./features/approvals/approvals.page').then((m) => m.ApprovalsPage) },
       { path: 'track', title: 'Track · Yudhix', loadComponent: () => import('./features/track/track.page').then((m) => m.TrackPage) },
+      { path: 'ideas', title: 'Product ideas · Yudhix', loadComponent: () => import('./features/ideas/ideas.page').then((m) => m.IdeasPage) },
       { path: 'knowledge', title: 'Knowledge · Yudhix', loadComponent: () => import('./features/knowledge/knowledge.page').then((m) => m.KnowledgePage) },
       { path: 'settings', loadChildren: () => import('./features/settings/settings.routes').then((m) => m.SETTINGS_ROUTES) },
     ],

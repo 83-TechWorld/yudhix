@@ -32,6 +32,10 @@ export interface Job {
   error: string | null;
   createdAt: string;
   finishedAt: string | null;
+  /** ANALYZE = full analysis, COMMENTS = "fetch new comments" only. */
+  kind: 'ANALYZE' | 'COMMENTS';
+  trigger: 'USER' | 'SCHEDULE';
+  result: { newComments: number; negative: number; ideas: number; videoTitle: string } | null;
 }
 
 export interface KnowledgeRef {
@@ -82,6 +86,9 @@ export interface Video {
   negativeComments: number;
   positiveComments: number;
   linkedComments: number;
+  /** Comments added by "Fetch new comments" or the schedule since the last full analysis. */
+  newComments: number;
+  commentsCheckedAt: string | null;
   claims?: Claim[];
 }
 
@@ -101,6 +108,61 @@ export interface Impact {
 export type ImpactLevel = 'HIGH' | 'MEDIUM' | 'LOW';
 export type ImpactTrend = 'RISING' | 'STEADY' | 'FADING' | 'QUIET';
 export interface SentimentSplit { positive: number; neutral: number; negative: number }
+
+/** What a commenter wants (set by the AI, or keyword rules when the AI is offline). */
+export type Intent = 'IDEA' | 'PRAISE' | 'BUY' | 'QUESTION' | 'COMPLAINT' | 'LEAVE' | 'OTHER';
+export type GrowthLevel = 'STRONG' | 'MODERATE' | 'LOW';
+export type IdeaStatus = 'NEW' | 'REVIEWING' | 'PLANNED' | 'SHIPPED' | 'DECLINED';
+
+export interface GrowthComment { id: string; text: string; likes: number; replies: number; reach: number; sentiment: Sentiment | null }
+
+/** GET /truth/videos/:id/growth: the positive side of a video's comments, and the ideas in them. */
+export interface Growth {
+  score: number;
+  level: GrowthLevel;
+  headline: string;
+  totals: { comments: number; reach: number };
+  positiveShareOfReach: number;
+  intents: { intent: Intent; label: string; comments: number; reach: number }[];
+  loved: { topic: string; label: string; comments: number; reach: number }[];
+  ideas: { id: string; title: string; status: IdeaStatus; comments: number; reach: number; examples: GrowthComment[] }[];
+  ideaComments: number;
+  unthemedIdeas: GrowthComment[];
+  topPraise: GrowthComment[];
+  buyingSignals: GrowthComment[];
+  leaving: GrowthComment[];
+  coverage: { aiComments: number };
+}
+
+/** A product idea: similar feature requests from comments, grouped by theme, across videos. */
+export interface Idea {
+  id: string;
+  title: string;
+  topic: string | null;
+  topicLabel: string | null;
+  status: IdeaStatus;
+  note: string | null;
+  comments: number;
+  reach: number;
+  videos: number;
+  lastCommentAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  commentList?: {
+    id: string; text: string; likes: number; replies: number; sentiment: Sentiment | null;
+    videoId: string | null; videoTitle: string | null; createdAt: string | null; active: boolean;
+  }[];
+}
+
+/** Workspace schedule for checking analyzed videos for new comments. */
+export interface CommentSchedule {
+  enabled: boolean;
+  intervalHours: number;
+  intervals: number[];
+  serverEnabled: boolean;
+  youtubeConnected: boolean;
+  lastRunAt: string | null;
+}
 
 /** GET /truth/videos/:id/product-impact: how the comments affect the product. */
 export interface ProductImpact {
@@ -188,6 +250,8 @@ export interface InboxItem {
     source?: string | null;
   } | null;
   replyId: string | null;
+  intent: Intent | null;
+  isNew: boolean;
   replyStatus: ReplyStatus | null;
   churnRisk?: number;
   replyHistory?: Reply[];

@@ -179,7 +179,7 @@
                 <div class="grow">
                   @if (j.status === 'COMPLETED') { <a class="truncate" [routerLink]="['/videos', j.videoId]">{{ j.videoId }}</a> }
                   @else { <span class="truncate">{{ j.videoId }}</span> }
-                  <small>{{ j.status === 'FAILED' ? 'Failed' : j.status === 'COMPLETED' ? 'Completed' : 'Running' }} · {{ j.createdAt | ago }}</small>
+                  <small>@if (j.kind === 'COMMENTS') { New comments: {{ j.result ? j.result.newComments : '…' }} · } {{ j.status === 'FAILED' ? 'Failed' : j.status === 'COMPLETED' ? 'Completed' : 'Running' }} · {{ j.createdAt | ago }}</small>
                 </div>
               </li>
             }

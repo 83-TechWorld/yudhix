@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService, errorMessage } from '../../core/api.service';
 import { AuthService } from '../../core/auth.service';
-import { Country, WorkspaceDetail } from '../../core/models';
+import { CommentSchedule, Country, WorkspaceDetail } from '../../core/models';
 import { SessionService } from '../../core/session.service';
 import { IconComponent } from '../../shared/icon.component';
 import { AgoPipe, ToastService } from '../../shared/ui';
@@ -50,7 +50,39 @@ import { AgoPipe, ToastService } from '../../shared/ui';
           </form>
         </section>
 
-        <section class="card card-pad stack enter" style="--i: 1">
+        @if (schedule(); as sc) {
+          <section class="card card-pad stack enter" style="--i: 1">
+            <h2>Check for new comments</h2>
+            <p class="muted">Yudhix checks every analyzed video for comments posted since the last check, lets the AI read them,
+              and notifies admins, approvers and agents when new negative comments or product ideas come in.
+              Anyone can also press <strong>Fetch new comments</strong> on a video.</p>
+            @if (!sc.serverEnabled) {
+              <div class="callout callout-warn"><y-icon name="info" [size]="15" /> The schedule is turned off on this server (SCHEDULER_ENABLED=false).</div>
+            } @else if (!sc.youtubeConnected) {
+              <div class="callout callout-warn"><y-icon name="info" [size]="15" /> No YouTube API key on the server, so nothing can be checked yet.</div>
+            }
+            <div class="row-wrap">
+              <label class="switch-row">
+                <input type="checkbox" [ngModel]="sc.enabled" (ngModelChange)="saveSchedule({ enabled: $event })"
+                       [disabled]="!canManage || !sc.serverEnabled" />
+                <span>Check automatically</span>
+              </label>
+              <div class="field inline">
+                <label for="every">Every</label>
+                <select id="every" class="select input" [ngModel]="sc.intervalHours" (ngModelChange)="saveSchedule({ interval_hours: +$event })"
+                        [disabled]="!canManage || !sc.enabled">
+                  @for (h of sc.intervals; track h) { <option [value]="h">{{ hoursLabel(h) }}</option> }
+                </select>
+              </div>
+            </div>
+            <p class="subtle">
+              @if (sc.lastRunAt) { Last automatic check {{ sc.lastRunAt | ago }}. } @else { No automatic check has run yet. }
+              Each check costs about 1 of the 10,000 free YouTube API units per day per video.
+            </p>
+          </section>
+        }
+
+        <section class="card card-pad stack enter" style="--i: 2">
           <h2>Your account</h2>
           <p class="muted">Signed in as <strong>{{ session.user()?.email }}</strong>. Password, two-factor authentication and active sessions are managed in your account.</p>
           <div class="row-wrap">
@@ -59,7 +91,7 @@ import { AgoPipe, ToastService } from '../../shared/ui';
           </div>
         </section>
 
-        <section class="card card-pad stack danger enter" style="--i: 2">
+        <section class="card card-pad stack danger enter" style="--i: 3">
           <h2>Danger zone</h2>
           <div class="danger-row">
             <div><strong>Leave workspace</strong><p class="subtle">You'll lose access until someone invites you again.</p></div>
@@ -88,6 +120,9 @@ import { AgoPipe, ToastService } from '../../shared/ui';
     .danger-row { display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
     .grow { flex: 1 1 220px; }
     select.input { padding: 0 12px; }
+    .switch-row { display: inline-flex; align-items: center; gap: 8px; font-weight: 500; margin-right: 16px; cursor: pointer;
+      input { width: 18px; height: 18px; accent-color: var(--brand); } }
+    .field.inline { flex-direction: row; align-items: center; gap: 8px; margin: 0; select { width: auto; min-width: 140px; } }
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -104,8 +139,10 @@ export class WorkspaceSettingsPage {
   protected readonly canManage = this.session.can('workspace.manage');
   protected form = { name: '', country: '', industry: '' };
   protected confirmName = '';
+  protected readonly schedule = signal<CommentSchedule | null>(null);
 
   constructor() {
+    this.api.commentSchedule().subscribe({ next: (s) => this.schedule.set(s), error: () => {} });
     this.api.countries().subscribe({ next: (r) => this.countries.set(r.countries), error: () => {} });
     this.api.workspace().subscribe({
       next: (w) => {
@@ -114,6 +151,20 @@ export class WorkspaceSettingsPage {
       },
       error: (e) => this.toast.error(errorMessage(e)),
     });
+  }
+
+  protected saveSchedule(change: { enabled?: boolean; interval_hours?: number }): void {
+    this.api.saveCommentSchedule(change).subscribe({
+      next: (s) => {
+        this.schedule.set(s);
+        this.toast.show(s.enabled ? `Comments are checked every ${this.hoursLabel(s.intervalHours).toLowerCase()}.` : 'Automatic checks are off.');
+      },
+      error: (e) => this.toast.error(errorMessage(e)),
+    });
+  }
+
+  protected hoursLabel(h: number): string {
+    return h === 1 ? 'Hour' : h === 24 ? 'Day' : h === 168 ? 'Week' : h % 24 === 0 ? `${h / 24} days` : `${h} hours`;
   }
 
   protected save(): void {

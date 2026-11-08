@@ -61,6 +61,14 @@ MAX_COMMENTS_PER_VIDEO = int(os.getenv("MAX_COMMENTS_PER_VIDEO", "100"))
 COMMENT_SAMPLING = os.getenv("COMMENT_SAMPLING", "spread").lower()
 # spread mode reads at most this many of the newest comments to find the oldest ones (100 per API call).
 COMMENT_POOL_MAX = int(os.getenv("COMMENT_POOL_MAX", "2000"))
+# "Fetch new comments" (button and schedule) adds at most this many per check, newest first.
+NEW_COMMENTS_MAX = int(os.getenv("NEW_COMMENTS_MAX", "100"))
+
+# Background schedule that checks analyzed videos for new comments. Each workspace sets its own
+# interval (Settings > Workspace); this switch turns the whole schedule off for this server.
+SCHEDULER_ENABLED = os.getenv("SCHEDULER_ENABLED", "true").lower() == "true"
+SCHEDULER_TICK_SECONDS = int(os.getenv("SCHEDULER_TICK_SECONDS", "300"))  # how often it looks for due videos
+SCHEDULER_DEFAULT_HOURS = int(os.getenv("SCHEDULER_DEFAULT_HOURS", "6"))
 
 # SLA per priority band, in hours.
 SLA_HOURS = {"P1": 2, "P2": 24, "P3": 72}

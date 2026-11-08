@@ -4,10 +4,11 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { Subject, Subscription, debounceTime } from 'rxjs';
 import { ApiService, errorMessage } from '../../core/api.service';
-import { InboxItem, Priority, RootCause, Video } from '../../core/models';
+import { InboxItem, Intent, Priority, RootCause, Video } from '../../core/models';
 import { SessionService } from '../../core/session.service';
 import { IconComponent } from '../../shared/icon.component';
 import {
+  INTENT_LABEL,
   AgoPipe, CAUSE_META, CompactPipe, EmptyStateComponent, PRIORITY_CHIP, SENTIMENT_CHIP, STATUS_LABEL, ToastService,
   VERDICT_META, VerdictBadgeComponent,
 } from '../../shared/ui';
@@ -30,6 +31,9 @@ export class InboxPage {
   /** Query params (bound by the router): ?video=…&cause=… */
   readonly video = input<string | undefined>();
   readonly cause = input<string | undefined>();
+  /** ?intent=IDEA|PRAISE|BUY|… and ?fresh=1 (only comments added since the last full analysis). */
+  readonly intent = input<string | undefined>();
+  readonly fresh = input<string | undefined>();
   /** ?comment=<id> opens that comment (used by "Reply" on the Product impact panel). */
   readonly comment = input<string | undefined>();
   private deepLinkId: string | null = null;
@@ -43,6 +47,10 @@ export class InboxPage {
   protected readonly videos = signal<Video[]>([]);
   protected readonly videoFilter = signal<string>('');
   protected readonly causeFilter = signal<RootCause | ''>('');
+  protected readonly intentFilter = signal<Intent | ''>('');
+  protected readonly freshFilter = signal(false);
+  protected readonly intentLabels = INTENT_LABEL;
+  protected readonly intentOptions = Object.keys(INTENT_LABEL) as Intent[];
   protected readonly priorityFilter = signal<Priority | ''>('');
   protected readonly statusFilter = signal<'OPEN' | 'REPLIED'>('OPEN');
   protected readonly q = signal('');
@@ -77,10 +85,14 @@ export class InboxPage {
       const video = this.video() ?? '';
       const cause = (this.cause() ?? '') as RootCause | '';
       const comment = this.comment() ?? null;
+      const intent = (this.intent() ?? '') as Intent | '';
+      const fresh = this.fresh() === '1' || this.fresh() === 'true';
       untracked(() => {
         this.deepLinkId = comment;
         this.videoFilter.set(video);
         this.causeFilter.set(cause);
+        this.intentFilter.set(intent in INTENT_LABEL ? intent : '');
+        this.freshFilter.set(fresh);
         this.load();
       });
     });
@@ -99,6 +111,8 @@ export class InboxPage {
     return {
       video_id: this.videoFilter() || null,
       cause: this.causeFilter() || null,
+      intent: this.intentFilter() || null,
+      fresh: this.freshFilter() ? 1 : null,
       priority: this.priorityFilter() || null,
       status: this.statusFilter(),
       q: this.q() || null,
@@ -148,7 +162,7 @@ export class InboxPage {
   }
 
   /** Filter changes are mirrored into the URL so links and the back button work. */
-  protected setFilter(kind: 'video' | 'cause' | 'priority' | 'status', value: string): void {
+  protected setFilter(kind: 'video' | 'cause' | 'priority' | 'status' | 'intent' | 'fresh', value: string): void {
     if (kind === 'priority') {
       this.priorityFilter.set(value as Priority | '');
       this.load();

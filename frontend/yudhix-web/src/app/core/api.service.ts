@@ -5,6 +5,10 @@ import { environment } from '../../environments/environment';
 import {
   Claim,
   ClaimComment,
+  CommentSchedule,
+  Growth,
+  Idea,
+  IdeaStatus,
   Health,
   Impact,
   ProductImpact,
@@ -112,6 +116,28 @@ export class ApiService {
   productImpact(videoId: string): Observable<ProductImpact> {
     return this.http.get<ProductImpact>(`${this.v1}/truth/videos/${videoId}/product-impact`);
   }
+  /** Fetch comments posted since the last check. Returns the job to poll. */
+  checkComments(videoId: string): Observable<Job> {
+    return this.http.post<Job>(`${this.v1}/truth/videos/${videoId}/check-comments`, {});
+  }
+  growth(videoId: string): Observable<Growth> {
+    return this.http.get<Growth>(`${this.v1}/truth/videos/${videoId}/growth`);
+  }
+  ideas(filters: { status?: string | null; video_id?: string | null } = {}): Observable<{ ideas: Idea[] }> {
+    return this.http.get<{ ideas: Idea[] }>(`${this.v1}/truth/ideas`, { params: params(filters) });
+  }
+  idea(id: string): Observable<Idea> {
+    return this.http.get<Idea>(`${this.v1}/truth/ideas/${id}`);
+  }
+  updateIdea(id: string, body: { status?: IdeaStatus; note?: string; title?: string }): Observable<Idea> {
+    return this.http.patch<Idea>(`${this.v1}/truth/ideas/${id}`, body);
+  }
+  commentSchedule(): Observable<CommentSchedule> {
+    return this.http.get<CommentSchedule>(`${this.v1}/truth/comment-schedule`);
+  }
+  saveCommentSchedule(body: { enabled?: boolean; interval_hours?: number }): Observable<CommentSchedule> {
+    return this.http.put<CommentSchedule>(`${this.v1}/truth/comment-schedule`, body);
+  }
   reattribute(videoId: string): Observable<unknown> {
     return this.http.post(`${this.v1}/truth/videos/${videoId}/reattribute`, {});
   }
@@ -145,6 +171,8 @@ export class ApiService {
     cause?: string | null;
     status?: string | null;
     q?: string | null;
+    intent?: string | null;
+    fresh?: number | null;
     limit?: number;
     offset?: number;
   }): Observable<InboxPage> {

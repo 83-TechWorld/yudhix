@@ -82,6 +82,26 @@ Truth report → **Audience impact** tab (or **View impact** in the Inbox once a
 
 Charts use their own colour tokens (`--chart-*` in `styles.scss`), checked for colour-blind separation in light and dark mode, and every chart has hover details and a table view.
 
+### Product growth and ideas
+
+The **Product growth** tab is the positive side (`app/truth/growth.py`, `GET /api/v1/truth/videos/{id}/growth`):
+
+| Part | What it shows |
+|---|---|
+| Growth score | Mirror of the impact score: `100 × (positive share of reach)^0.75 × size`. Strong ≥ 60, moderate ≥ 35. |
+| What people want | Comments by intent: feature requests, praise, buying signals, questions, complaints, leaving. Each bar opens those comments in the inbox. |
+| What people love | Topics of positive comments, by positive reach. |
+| Product ideas | Feature requests named by the AI in a few words ("more storage") and grouped with similar requests from **all** videos. |
+| Praise, buying signals, at risk of leaving | The most-liked comments of each. |
+
+The **Ideas** page is the product team's backlog: every idea with its supporting comments, videos and reach, a status (New → Reviewing → Planned → Shipped, or Declined) and a note. Keyword rules can spot a request when the AI is offline, but only the AI's reading names and groups it, so ideas fill in as the AI reads comments.
+
+### New comments after the first analysis
+
+- **Fetch new comments** on a video pulls only comments posted since the last check (newest first, stopping at the first one already stored), lets the AI read them and re-links the video. The transcript and fact-check stay as they are. It takes seconds to a minute.
+- **The schedule** does the same for every analyzed video. Each workspace picks the interval in **Settings → Workspace** (default every 6 hours, or off). Admins, approvers and agents get a notification when new negative comments or product ideas arrive. With several API copies running, a database lock lets only one of them run each round.
+- New comments are marked **New** in the inbox (filter: **New only**) until the next full analysis.
+
 Every verdict shows how it was made (`LLM`, `HEURISTIC` or `SEEDED`). The app works without the AI model; it switches to rules, and the robot in the top bar goes to sleep.
 
 ### Reply workflow
@@ -311,6 +331,10 @@ For local secrets, copy `services/yudhix-sense/.env.example` to `.env` in the sa
 | `MAX_COMMENTS_PER_VIDEO` | `100` | Comments kept per analysis. |
 | `COMMENT_SAMPLING` | `spread` | `spread`: 40% newest, 40% oldest, 20% random from the middle, so the charts show a cross-section over time; the video's other stored comments are archived (hidden, not deleted), except ones with a reply. `top`: the most relevant comments as YouTube ranks them. |
 | `COMMENT_POOL_MAX` | `2000` | `spread` reads up to this many comments, newest first, to find the oldest (1 YouTube quota unit per 100). |
+| `NEW_COMMENTS_MAX` | `100` | Most comments one "Fetch new comments" check adds. |
+| `SCHEDULER_ENABLED` | `true` | Background checks for new comments on this server. Workspaces set their own interval. |
+| `SCHEDULER_TICK_SECONDS` | `300` | How often the scheduler looks for videos that are due. |
+| `SCHEDULER_DEFAULT_HOURS` | `6` | Interval for workspaces that haven't chosen one. |
 | `LLM_COMMENT_BUDGET_SECONDS` | `240` | Time the AI may spend reading comments per analysis (most-liked first); the rest use keyword rules. About 20 comments per 50 s on an M-series Mac with `llama3.1`. |
 | `INTERNAL_API_KEY` | empty (disabled) | Unlocks the old internal endpoints (`/api/v1/comments`, `/analyze`, `/scheduler/…`). |
 
@@ -354,7 +378,8 @@ yudhix/
 | Workspaces & team | `tenant`, `tenant_user`, `workspace_invitation`, `country_config` |
 | Products & facts | `product`, `product_knowledge` |
 | Videos & claims | `video_truth_analysis`, `video_claim`, `video_analysis_job`, `creator_outreach` |
-| Comments | `comment`, `comment_analysis`, `comment_claim_link` |
+| Comments | `comment`, `comment_analysis`, `comment_claim_link`, `comment_watch` (schedule) |
+| Product ideas | `product_idea`, `product_idea_comment` |
 | Replies | `reply`, `approval_step`, `reply_outcome` |
 | Billing | `plan`, `plan_price`, `subscription`, `usage_event`, `invoice`, `invoice_line` |
 | Other | `app_notification`, `audit_event` |
@@ -437,11 +462,11 @@ Production checklist: strong `AUTHOR_HMAC_KEY` and database passwords, `DEMO_WOR
 |---|---|---|
 | Posting replies | Approved replies are recorded as `SIMULATED`; nothing is sent to YouTube. | YouTube OAuth connector, live posting, automatic +24h / +72h / +7d outcome checks. |
 | Payments | Plans, quotas and invoices work; no card is charged. | Stripe / Razorpay checkout and webhooks. |
-| Ingestion | One video at a time, on demand. | Channel watchers and scheduled re-scans (the Airflow DAGs in `airflow/`). |
+| Ingestion | On demand per video, plus scheduled checks for new comments on analyzed videos. | Channel watchers that pick up new uploads. |
 | Attribution | Keyword matching with evidence; weak on sarcasm and memes. | Embedding similarity (pgvector) with LLM re-ranking. |
 | Fact-checking | BM25 + local 8B model. | Document upload, vector search, human verdict override. |
 | Sentiment & topics | Local LLM for the most-liked comments, keyword rules for the rest. | Faster model or GPU so the AI reads every comment; agent corrections. |
-| Product impact | Per video. | **Product health** across all videos of a product: trend, top issues, which creators drive negativity. |
+| Product impact & growth | Per video; product ideas across videos. | **Product health** across all videos of a product: trend, top issues, which creators drive negativity. |
 | Services | One Python API does everything. | Split into the planned Java services (`services/yudhix-*`) as load requires. |
 | Mobile | Capacitor configured. | Generate native projects, icons, store listings, push alerts. |
 

@@ -6,7 +6,7 @@ Everything for presenting Yudhix, built from one scene list (`scenes.py`) so the
 |---|---|
 | `DEMO_SCRIPT.md` | The demo, scene by scene: timeline, what to click, key points and the narration word for word. Also a ready-made prompt for AI video tools (Synthesia, HeyGen, Descript, ElevenLabs). |
 | `Yudhix-Demo.pptx` | 16-slide deck with real screenshots. The narration is in the speaker notes. |
-| `out/yudhix-demo.mp4` | The narrated video (about 3 minutes, 1080p) with a subtitle track; `out/yudhix-demo.srt` has the subtitles. Not committed; rebuild it below. |
+| `Yudhix-Demo.mp4` | The narrated video (about 3 minutes, 1080p) with a subtitle track; `Yudhix-Demo.srt` has the subtitles. |
 | `scenes.py` | The single source: scene titles, captions, key points, narration and the clicks the recorder performs. |
 
 ## Rebuild after changing the app or the narration
@@ -20,6 +20,7 @@ npm install                                                              # once 
 
 ../../services/yudhix-sense/.venv/bin/python prepare_demo.py   # reset demo data: sample document, replies awaiting approval
 .venv/bin/python record_demo.py                                # voice + screen recording -> out/yudhix-demo.mp4 (+ screenshots)
+cp out/yudhix-demo.mp4 Yudhix-Demo.mp4 && cp out/yudhix-demo.srt Yudhix-Demo.srt   # publish the new video
 python3 make_script.py --measured                              # DEMO_SCRIPT.md with the real timings
 node build_deck.js                                             # Yudhix-Demo.pptx from the new screenshots
 ```

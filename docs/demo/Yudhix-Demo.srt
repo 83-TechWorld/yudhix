@@ -1,0 +1,147 @@
+1
+00:00:00,350 --> 00:00:03,219
+This is Yudhix, truth-first social intelligence.
+
+2
+00:00:03,219 --> 00:00:08,657
+When a creator says something wrong about your product, thousands of angry comments follow.
+
+3
+00:00:08,657 --> 00:00:14,036
+Yudhix finds which claims are false, which reactions they caused, and what to do about it.
+
+4
+00:00:15,016 --> 00:00:16,406
+It works in five steps.
+
+5
+00:00:16,406 --> 00:00:17,372
+Analyze a video.
+
+6
+00:00:17,372 --> 00:00:20,694
+Fact-check every claim against your own knowledge base.
+
+7
+00:00:20,694 --> 00:00:22,265
+Read the comments with AI.
+
+8
+00:00:22,265 --> 00:00:25,104
+Link each reaction to the claim that caused it.
+
+9
+00:00:25,104 --> 00:00:27,157
+And reply with the official facts.
+
+10
+00:00:28,116 --> 00:00:29,464
+Everything starts here.
+
+11
+00:00:29,464 --> 00:00:37,784
+Paste a YouTube link, and Yudhix pulls the transcript, the video details and a sample of comments, then runs the full check in the background.
+
+12
+00:00:38,749 --> 00:00:45,874
+Every analyzed video lands in this library, with its factual accuracy, disputed claims and comment volume at a glance.
+
+13
+00:00:46,849 --> 00:00:49,042
+Open a video to see its truth report.
+
+14
+00:00:49,042 --> 00:00:51,768
+Each claim is time-stamped and gets a verdict:
+
+15
+00:00:51,768 --> 00:00:54,316
+accurate, misleading, false, or unverified.
+
+16
+00:00:54,316 --> 00:01:02,376
+The verdict quotes the exact sentence from your official source, and anything the AI isn't sure about is flagged for a person to review.
+
+17
+00:01:03,328 --> 00:01:07,293
+The audience impact tab shows what the comments mean for the product:
+
+18
+00:01:07,293 --> 00:01:17,351
+sentiment by comments and by reach, how much of the anger comes from misinformation versus real product concerns, which topics people talk about, and how it changes over time.
+
+19
+00:01:20,094 --> 00:01:22,792
+The product growth tab shows the positive side:
+
+20
+00:01:22,792 --> 00:01:29,394
+what people love, who is ready to buy, and the feature requests hidden in the comments, grouped into product ideas.
+
+21
+00:01:31,227 --> 00:01:33,370
+The inbox ranks comments by impact.
+
+22
+00:01:33,370 --> 00:01:40,716
+Each one shows whether it reacts to misinformation or to a real product issue, so the team replies with the right facts.
+
+23
+00:01:40,716 --> 00:01:44,206
+Replies can be drafted by AI, citing the official source.
+
+24
+00:01:45,160 --> 00:01:50,625
+Every reply goes through an approval step before it is posted, with an audit trail of who approved what.
+
+25
+00:01:52,494 --> 00:01:56,184
+Feature requests from all videos come together on the ideas page.
+
+26
+00:01:56,184 --> 00:02:03,339
+The product team moves each idea from new, to reviewing, planned and shipped, with the original comments attached as evidence.
+
+27
+00:02:04,294 --> 00:02:07,003
+The knowledge base holds your official facts.
+
+28
+00:02:07,003 --> 00:02:12,061
+Upload a PDF, Word or text document, and Yudhix splits it into clauses it can quote.
+
+29
+00:02:12,061 --> 00:02:19,167
+Your documents stay in your own database, and sync with your AI connection, including anything added while AI was off.
+
+30
+00:02:20,127 --> 00:02:22,441
+Each workspace chooses where AI runs:
+
+31
+00:02:22,441 --> 00:02:28,946
+locally on your own server, or with a cloud provider like Claude, ChatGPT or Gemini, using your own key.
+
+32
+00:02:28,946 --> 00:02:36,889
+The key is checked before anything switches over, and if a provider fails, Yudhix falls back to the local model, then to rules.
+
+33
+00:02:37,860 --> 00:02:39,546
+And new comments keep coming.
+
+34
+00:02:39,546 --> 00:02:47,864
+Yudhix checks every analyzed video on a schedule, reads only the new comments, and notifies the team when negativity rises or new ideas appear.
+
+35
+00:02:50,193 --> 00:02:50,619
+Yudhix.
+
+36
+00:02:50,619 --> 00:02:56,167
+Know which claims hurt your product, answer with facts, and learn what your customers want.
+
+37
+00:02:56,167 --> 00:02:57,569
+Thank you for watching.

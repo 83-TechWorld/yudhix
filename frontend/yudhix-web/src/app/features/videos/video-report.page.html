@@ -31,8 +31,8 @@
           <a class="btn btn-sm" routerLink="/inbox" [queryParams]="{ video: v.videoId }"><y-icon name="inbox" [size]="15" /> Respond to comments</a>
           <button type="button" class="btn btn-sm" (click)="checkComments()" [disabled]="!!checkJob()"
                   title="Fetch comments posted since the last check. The transcript and fact-check stay as they are.">
-            <y-icon name="refresh" [size]="15" [class.spin]="!!checkJob()" />
-            @if (checkJob(); as j) { {{ j.message || 'Checking…' }} } @else { Fetch new comments }
+            <y-icon name="refresh" [size]="15" [class.spin]="checkJob()?.kind === 'COMMENTS'" />
+            @if (checkJob()?.kind === 'COMMENTS') { {{ checkJob()!.message || 'Checking…' }} } @else { Fetch new comments }
           </button>
           @if (v.newComments) {
             <a class="chip chip-brand" routerLink="/inbox" [queryParams]="{ video: v.videoId, fresh: 1 }" title="Added since the last full analysis">{{ v.newComments }} new</a>
@@ -101,6 +101,26 @@
 
     <!-- ============ CLAIMS ============ -->
     @if (tab() === 'claims') {
+      @if (v.factsStale || checkJob()?.kind === 'FACTS') {
+        <div class="callout callout-info facts-stale">
+          <y-icon name="book" [size]="16" />
+          <span class="grow">Your knowledge base changed after these claims were checked. Re-check them against the current facts:
+            only the fact-check runs again, the transcript and comments stay.</span>
+          <button type="button" class="btn btn-sm btn-primary" (click)="recheckFacts()" [disabled]="!!checkJob()">
+            <y-icon name="refresh" [size]="15" [class.spin]="checkJob()?.kind === 'FACTS'" />
+            @if (checkJob()?.kind === 'FACTS') { {{ checkJob()!.message || 'Re-checking…' }} } @else { Re-check claims }
+          </button>
+        </div>
+      }
+      @if (!v.factsStale && checkJob()?.kind !== 'FACTS') {
+        <div class="recheck-row">
+          <span class="subtle">Checked against your knowledge base{{ v.factsCheckedAt ? ' ' : '' }}{{ v.factsCheckedAt ? (v.factsCheckedAt | ago) : '' }}.</span>
+          <button type="button" class="btn btn-sm btn-ghost" (click)="recheckFacts()" [disabled]="!!checkJob()"
+                  title="Fact-check the claims again against the current knowledge base">
+            <y-icon name="refresh" [size]="15" /> Re-check claims
+          </button>
+        </div>
+      }
       <div class="segmented filter">
         <button type="button" [class.active]="verdictFilter() === 'all'" (click)="verdictFilter.set('all')">All <span class="count">{{ claims().length }}</span></button>
         <button type="button" [class.active]="verdictFilter() === 'disputed'" (click)="verdictFilter.set('disputed')">Disputed <span class="count">{{ v.misleadingClaims }}</span></button>

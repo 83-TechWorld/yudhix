@@ -46,3 +46,8 @@ CREATE TABLE IF NOT EXISTS product_idea_comment (
     PRIMARY KEY (idea_id, comment_id)
 );
 CREATE INDEX IF NOT EXISTS idx_idea_comment_comment ON product_idea_comment (tenant_id, comment_id);
+
+-- Claims are checked against the knowledge base at analysis time. When facts are added or removed,
+-- videos are flagged so the UI can offer "Re-check claims" (fact-check only, no new transcript).
+ALTER TABLE video_truth_analysis ADD COLUMN IF NOT EXISTS facts_stale BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE video_truth_analysis ADD COLUMN IF NOT EXISTS facts_checked_at TIMESTAMPTZ;

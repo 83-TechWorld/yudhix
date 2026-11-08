@@ -33,9 +33,10 @@ export interface Job {
   createdAt: string;
   finishedAt: string | null;
   /** ANALYZE = full analysis, COMMENTS = "fetch new comments" only. */
-  kind: 'ANALYZE' | 'COMMENTS';
+  kind: 'ANALYZE' | 'COMMENTS' | 'FACTS';
   trigger: 'USER' | 'SCHEDULE';
-  result: { newComments: number; negative: number; ideas: number; videoTitle: string } | null;
+  /** COMMENTS: newComments / negative / ideas. FACTS: claims / changed. */
+  result: { videoTitle: string; newComments?: number; negative?: number; ideas?: number; claims?: number; changed?: number } | null;
 }
 
 export interface KnowledgeRef {
@@ -89,6 +90,9 @@ export interface Video {
   /** Comments added by "Fetch new comments" or the schedule since the last full analysis. */
   newComments: number;
   commentsCheckedAt: string | null;
+  /** The knowledge base changed after these claims were checked. */
+  factsStale: boolean;
+  factsCheckedAt: string | null;
   claims?: Claim[];
 }
 

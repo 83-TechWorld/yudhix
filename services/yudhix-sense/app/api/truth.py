@@ -91,6 +91,29 @@ def check_comments(video_id: str, background: BackgroundTasks, tenant: str = Dep
     return job
 
 
+@router.post("/videos/{video_id}/recheck-facts", status_code=202)
+def recheck_facts(video_id: str, background: BackgroundTasks, tenant: str = Depends(tenant_id),
+                  user: Actor = Depends(actor)):
+    """Fact-check this video's claims again against the current knowledge base. Returns the job to poll."""
+    try:
+        job = pipeline.start_video_job(tenant, video_id, user.id, "FACTS")
+    except pipeline.PipelineError as e:
+        raise HTTPException(404, str(e))
+    if job["kind"] == "FACTS" and job["status"] == "QUEUED":
+        background.add_task(pipeline.run_job, job["id"], tenant)
+    return job
+
+
+@router.post("/knowledge/recheck", status_code=202)
+def recheck_all(background: BackgroundTasks, tenant: str = Depends(tenant_id), user: Actor = Depends(actor)):
+    """Re-check every video checked against older facts, one after another in the background."""
+    jobs = [pipeline.start_video_job(tenant, v, user.id, "FACTS") for v in repository.stale_videos(tenant)]
+    queued = [j["id"] for j in jobs if j["kind"] == "FACTS" and j["status"] == "QUEUED"]
+    if queued:
+        background.add_task(pipeline.run_jobs, queued, tenant)
+    return {"queued": len(queued), "jobs": jobs}
+
+
 @router.get("/videos/{video_id}/growth")
 def growth_view(video_id: str, tenant: str = Depends(tenant_id)):
     if not repository.get_video(tenant, video_id):
@@ -206,7 +229,8 @@ def outreach_update(outreach_id: str, body: OutreachUpdate, tenant: str = Depend
 @router.get("/knowledge")
 def knowledge(tenant: str = Depends(tenant_id)):
     items = repository.list_knowledge(tenant)
-    return {"knowledge": items, "count": len(items)}
+    stale = repository.stale_videos(tenant)
+    return {"knowledge": items, "count": len(items), "staleVideos": len(stale)}
 
 
 class KnowledgeRequest(BaseModel):
@@ -220,10 +244,13 @@ class KnowledgeRequest(BaseModel):
 
 @router.post("/knowledge", status_code=201)
 def knowledge_add(body: KnowledgeRequest, tenant: str = Depends(tenant_id), user: Actor = Depends(actor)):
-    return repository.add_knowledge(tenant, user.id, body.model_dump())
+    added = repository.add_knowledge(tenant, user.id, body.model_dump())
+    pipeline.mark_facts_stale(tenant)  # claims checked before this fact existed can now be re-checked
+    return added
 
 
 @router.delete("/knowledge/{knowledge_id}", status_code=204)
 def knowledge_delete(knowledge_id: str, tenant: str = Depends(tenant_id), user: Actor = Depends(actor)):
     if not repository.delete_knowledge(tenant, user.id, knowledge_id):
         raise HTTPException(404, "Document not found")
+    pipeline.mark_facts_stale(tenant)

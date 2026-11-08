@@ -120,6 +120,14 @@ export class ApiService {
   checkComments(videoId: string): Observable<Job> {
     return this.http.post<Job>(`${this.v1}/truth/videos/${videoId}/check-comments`, {});
   }
+  /** Fact-check the stored claims again against the current knowledge base. Returns the job to poll. */
+  recheckFacts(videoId: string): Observable<Job> {
+    return this.http.post<Job>(`${this.v1}/truth/videos/${videoId}/recheck-facts`, {});
+  }
+  /** Re-check every video that was checked against older facts. */
+  recheckAll(): Observable<{ queued: number; jobs: Job[] }> {
+    return this.http.post<{ queued: number; jobs: Job[] }>(`${this.v1}/truth/knowledge/recheck`, {});
+  }
   growth(videoId: string): Observable<Growth> {
     return this.http.get<Growth>(`${this.v1}/truth/videos/${videoId}/growth`);
   }
@@ -153,8 +161,8 @@ export class ApiService {
   updateOutreach(id: string, body: Partial<Pick<OutreachNote, 'subject' | 'body' | 'status'>>): Observable<OutreachNote> {
     return this.http.patch<OutreachNote>(`${this.v1}/truth/outreach/${id}`, body);
   }
-  knowledge(): Observable<{ knowledge: Knowledge[] }> {
-    return this.http.get<{ knowledge: Knowledge[] }>(`${this.v1}/truth/knowledge`);
+  knowledge(): Observable<{ knowledge: Knowledge[]; staleVideos: number }> {
+    return this.http.get<{ knowledge: Knowledge[]; staleVideos: number }>(`${this.v1}/truth/knowledge`);
   }
   addKnowledge(body: { title: string; statement: string; category?: string; clauseRef?: string; source?: string }): Observable<Knowledge> {
     return this.http.post<Knowledge>(`${this.v1}/truth/knowledge`, body);

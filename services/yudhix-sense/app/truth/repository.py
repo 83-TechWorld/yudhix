@@ -31,6 +31,7 @@ def _video(r: Dict, comment_stats: Optional[Dict] = None) -> Dict:
         "positiveComments": int(s.get("positive") or 0), "linkedComments": int(s.get("linked") or 0),
         "newComments": int(s.get("fresh") or 0),
         "commentsCheckedAt": _iso(r.get("comments_checked_at")),
+        "factsStale": bool(r.get("facts_stale")), "factsCheckedAt": _iso(r.get("facts_checked_at")),
     }
 
 
@@ -170,6 +171,13 @@ def _knowledge(r: Dict) -> Dict:
             "clauseRef": r.get("clause_ref"), "statement": r["official_statement"],
             "source": r.get("citation_source"), "verifiedAt": _iso(r.get("verified_at")),
             "usedByClaims": int(r.get("used_by") or 0)}
+
+
+def stale_videos(tenant_id: str) -> List[str]:
+    """Videos whose claims were checked before the knowledge base last changed."""
+    return [r["video_id"] for r in fetch_all(
+        "SELECT video_id FROM video_truth_analysis WHERE tenant_id = %s AND facts_stale ORDER BY analyzed_at DESC",
+        (tenant_id,))]
 
 
 def list_knowledge(tenant_id: str) -> List[Dict]:

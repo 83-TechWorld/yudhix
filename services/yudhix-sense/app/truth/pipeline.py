@@ -12,6 +12,9 @@
 Runs in a worker thread (FastAPI BackgroundTasks) and writes progress to
 video_analysis_job, which the UI polls.
 
+A "FACTS" job re-runs only step 4 on the stored claims against the current knowledge base
+(after facts are added or removed), then re-links.
+
 A second, quicker job kind ("COMMENTS") only fetches comments posted since the last check,
 reads them with AI and re-links: the "Fetch new comments" button and the schedule use it.
 """
@@ -77,6 +80,11 @@ def active_job(tenant_id: str, video_id: str) -> Optional[Dict]:
 
 def start_comment_check(tenant_id: str, video_id: str, actor: str, trigger: str = "USER") -> Dict:
     """Queue a "fetch new comments" job, or return the job already working on this video."""
+    return start_video_job(tenant_id, video_id, actor, "COMMENTS", trigger)
+
+
+def start_video_job(tenant_id: str, video_id: str, actor: str, kind: str, trigger: str = "USER") -> Dict:
+    """Queue a COMMENTS or FACTS job for an analyzed video, or return the job already working on it."""
     running = active_job(tenant_id, video_id)
     if running:
         return running
@@ -85,7 +93,7 @@ def start_comment_check(tenant_id: str, video_id: str, actor: str, trigger: str 
     if not video:
         raise PipelineError("This video hasn't been analyzed yet.")
     return create_job(tenant_id, video["video_url"], str(video["product_id"]) if video.get("product_id") else None,
-                      actor, kind="COMMENTS", trigger=trigger)
+                      actor, kind=kind, trigger=trigger)
 
 
 def get_job(tenant_id: str, job_id: str) -> Optional[Dict]:
@@ -130,6 +138,8 @@ def run_job(job_id: str, tenant_id: str, manual_transcript: Optional[str] = None
     creator = (fetch_one("SELECT created_by FROM video_analysis_job WHERE id = %s", (job_id,)) or {}).get("created_by")
     if job["kind"] == "COMMENTS":
         return _run_comment_check(job_id, tenant_id, job, creator)
+    if job["kind"] == "FACTS":
+        return _run_fact_check(job_id, tenant_id, job, creator)
     try:
         result = analyze_video(tenant_id, job["videoId"], job["videoUrl"], job.get("productId"), manual_transcript,
                                progress=lambda stage, pct, msg: _update(job_id, stage, pct, msg))
@@ -224,6 +234,70 @@ def check_new_comments(tenant_id: str, video_id: str, progress) -> Dict:
     return result
 
 
+def _run_fact_check(job_id: str, tenant_id: str, job: Dict, creator: Optional[str]) -> None:
+    try:
+        r = recheck_claims(tenant_id, job["videoId"], progress=lambda stage, pct, msg: _update(job_id, stage, pct, msg))
+        n = r["changed"]
+        message = f"{n} of {r['claims']} verdicts changed" if n else f"All {r['claims']} verdicts unchanged"
+        _update(job_id, "COMPLETED", 100, message, status="COMPLETED", result=r)
+        if job["trigger"] == "USER":
+            notify(tenant_id, "analysis", "Claims re-checked", f"\"{r['videoTitle']}\": {message.lower()}.",
+                   f"/videos/{job['videoId']}", user_ids=[creator])
+    except PipelineError as e:
+        _update(job_id, "FAILED", 100, str(e), status="FAILED", error=str(e))
+    except Exception as e:
+        logger.exception("Fact re-check %s failed", job_id)
+        _update(job_id, "FAILED", 100, "Something went wrong while re-checking the claims.", status="FAILED",
+                error=f"{type(e).__name__}: {e}")
+
+
+def recheck_claims(tenant_id: str, video_id: str, progress) -> Dict:
+    """Fact-check the stored claims again against the knowledge base as it is now. The index is built
+    from the database on every check, so newly added facts count straight away."""
+    video = fetch_one("SELECT * FROM video_truth_analysis WHERE tenant_id = %s AND video_id = %s",
+                      (tenant_id, video_id))
+    if not video:
+        raise PipelineError("This video hasn't been analyzed yet.")
+    claims = fetch_all("SELECT * FROM video_claim WHERE tenant_id = %s AND video_analysis_id = %s "
+                       "ORDER BY timestamp_seconds", (tenant_id, video["id"]))
+    index = KnowledgeIndex(fetch_all("SELECT * FROM product_knowledge WHERE tenant_id = %s", (tenant_id,)))
+    changed, checked = 0, []
+    for i, c in enumerate(claims, start=1):
+        progress("FACT_CHECKING", 10 + int(75 * (i - 1) / max(1, len(claims))),
+                 f"Checking claim {i} of {len(claims)} against your knowledge base")
+        checked.append((c, verify(c["creator_quote"], index.search(f"{c['topic']} {c['creator_quote']}", k=3))))
+    with cursor(commit=True) as cur:
+        for c, v in checked:
+            doc = v.knowledge or {}
+            citation = (f"{doc.get('document_title')} {('§' + doc['clause_ref']) if doc.get('clause_ref') else ''}".strip()
+                        if doc else None)
+            changed += v.verdict != c["verdict"]
+            cur.execute(
+                """UPDATE video_claim SET verdict = %s, confidence_score = %s, rag_knowledge_id = %s,
+                          fact_check_analysis = %s, official_citation = %s, verification_method = %s
+                   WHERE id = %s""",
+                (v.verdict, round(v.confidence, 3), doc.get("id"), v.analysis, citation, v.method, c["id"]))
+        cur.execute("""UPDATE video_truth_analysis SET facts_stale = false, facts_checked_at = now()
+                       WHERE id = %s""", (video["id"],))
+    progress("ATTRIBUTING", 90, "Updating which reactions trace back to misinformation")
+    stats = attribute_video(tenant_id, video_id)
+    return {"claims": len(claims), "changed": changed, "misleadingClaims": stats["misleadingClaims"],
+            "videoTitle": video["video_title"]}
+
+
+def mark_facts_stale(tenant_id: str) -> int:
+    """The knowledge base changed: every analyzed video in the workspace was checked against older facts."""
+    with cursor(commit=True) as cur:
+        cur.execute("UPDATE video_truth_analysis SET facts_stale = true WHERE tenant_id = %s", (tenant_id,))
+        return cur.rowcount
+
+
+def run_jobs(job_ids: List[str], tenant_id: str) -> None:
+    """Run queued jobs one after another (one background task, so the AI model isn't flooded)."""
+    for job_id in job_ids:
+        run_job(job_id, tenant_id)
+
+
 def _mark_checked(tenant_id: str, video_id: str) -> None:
     with cursor(commit=True) as cur:
         cur.execute("UPDATE video_truth_analysis SET comments_checked_at = now() WHERE tenant_id = %s AND video_id = %s",
@@ -296,6 +370,8 @@ def analyze_video(tenant_id: str, video_id: str, video_url: str, product_id: Opt
 
     _mark_checked(tenant_id, video_id)
     with cursor(commit=True) as cur:
+        cur.execute("""UPDATE video_truth_analysis SET facts_stale = false, facts_checked_at = now()
+                       WHERE tenant_id = %s AND video_id = %s""", (tenant_id, video_id))
         append_audit(cur, tenant_id, "system-truth-pipeline", "SYSTEM", "VIDEO_ANALYZED", "VIDEO", video_id,
                      {"analysis_id": analysis_id, "comments_ingested": ingested, **stats})
     return {"analysisId": analysis_id, "commentsIngested": ingested, **stats}

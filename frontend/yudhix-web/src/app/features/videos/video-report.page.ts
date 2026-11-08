@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, injec
 import { LowerCasePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { Observable } from 'rxjs';
 import { ApiService, errorMessage } from '../../core/api.service';
 import { ProductImpactComponent } from './product-impact.component';
 import { ProductGrowthComponent } from './product-growth.component';
@@ -109,10 +110,19 @@ export class VideoReportPage {
 
   /** Pull comments posted since the last check; the AI reads them and the report refreshes. */
   protected checkComments(): void {
-    this.api.checkComments(this.videoId()).subscribe({
+    this.startJob(this.api.checkComments(this.videoId()), 'COMMENTS');
+  }
+
+  /** Fact-check the claims again against the knowledge base as it is now (after facts were added). */
+  protected recheckFacts(): void {
+    this.startJob(this.api.recheckFacts(this.videoId()), 'FACTS');
+  }
+
+  private startJob(request: Observable<Job>, kind: Job['kind']): void {
+    request.subscribe({
       next: (job) => {
         this.checkJob.set(job);
-        if (job.kind !== 'COMMENTS') this.toast.show('A full analysis of this video is already running.');
+        if (job.kind !== kind) this.toast.show('Another job is already working on this video. Showing its progress.');
         this.poll(job.id);
       },
       error: (e) => this.toast.error(errorMessage(e)),
@@ -140,8 +150,9 @@ export class VideoReportPage {
       return;
     }
     const r = job.result;
-    if (job.kind === 'COMMENTS' && r && !r.newComments) this.toast.show('No new comments since the last check.');
-    else if (r) {
+    if (job.kind === 'FACTS') this.toast.show(job.message ? job.message + '.' : 'Claims re-checked.');
+    else if (job.kind === 'COMMENTS' && r && !r.newComments) this.toast.show('No new comments since the last check.');
+    else if (r && r.newComments !== undefined) {
       const extra = [r.negative ? `${r.negative} negative` : '', r.ideas ? `${r.ideas} product idea${r.ideas === 1 ? '' : 's'}` : '']
         .filter(Boolean).join(', ');
       this.toast.show(`${r.newComments} new comment${r.newComments === 1 ? '' : 's'}${extra ? ': ' + extra : ''}.`);

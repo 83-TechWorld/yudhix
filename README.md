@@ -96,6 +96,16 @@ The **Product growth** tab is the positive side (`app/truth/growth.py`, `GET /ap
 
 The **Ideas** page is the product team's backlog: every idea with its supporting comments, videos and reach, a status (New → Reviewing → Planned → Shipped, or Declined) and a note. Keyword rules can spot a request when the AI is offline, but only the AI's reading names and groups it, so ideas fill in as the AI reads comments.
 
+### Knowledge base and re-checking claims
+
+Each workspace has its own **Knowledge base**: the official facts (specs, prices, policies, FAQs) that claims are checked against. A claim with no matching fact stays *unverified*, so a new workspace should add its facts first.
+
+There is no separate index to build: the search index (BM25 over title, category, clause and statement in `app/truth/retrieval.py`) is rebuilt from the database on every check, so a new fact is used straight away. Videos analyzed earlier keep their verdicts until they are re-checked:
+
+- Adding or deleting a fact flags every analyzed video in the workspace. The **Knowledge** page then offers **Re-check claims** for all of them (one at a time in the background, with a notification each).
+- A flagged video shows a banner on its Claims tab; any video can be re-checked from there.
+- A re-check runs only the fact-check on the stored claims and then re-links comments, because verdicts decide which negativity counts as misinformation. No new transcript, no new comments.
+
 ### New comments after the first analysis
 
 - **Fetch new comments** on a video pulls only comments posted since the last check (newest first, stopping at the first one already stored), lets the AI read them and re-links the video. The transcript and fact-check stay as they are. It takes seconds to a minute.

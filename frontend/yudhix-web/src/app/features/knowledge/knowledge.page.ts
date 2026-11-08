@@ -21,6 +21,20 @@ import { AgoPipe, EmptyStateComponent, ToastService } from '../../shared/ui';
         }
       </header>
 
+      @if (staleVideos() > 0 && session.can('content.write')) {
+        <div class="callout callout-info stale enter">
+          <y-icon name="refresh" [size]="16" />
+          <span class="grow">
+            <strong>{{ staleVideos() }} video{{ staleVideos() === 1 ? ' was' : 's were' }} checked against older facts.</strong>
+            Re-check their claims against the knowledge base as it is now. Only the fact-check runs again, one video at a time
+            in the background; you'll get a notification for each.
+          </span>
+          <button class="btn btn-sm btn-primary" type="button" (click)="recheckAll()" [disabled]="rechecking()">
+            {{ rechecking() ? 'Starting…' : 'Re-check claims' }}
+          </button>
+        </div>
+      }
+
       <div class="search toolbar">
         <y-icon name="search" />
         <input class="input" [ngModel]="q()" (ngModelChange)="q.set($event)" placeholder="Search policies, specs, clauses" aria-label="Search knowledge" />
@@ -30,7 +44,8 @@ import { AgoPipe, EmptyStateComponent, ToastService } from '../../shared/ui';
         <div class="stack">@for (i of [1, 2, 3]; track i) { <div class="skeleton" style="height: 120px"></div> }</div>
       } @else if (!groups().length) {
         <div class="card">
-          <y-empty icon="book" title="No facts yet" text="Add your product specs, policies and FAQs so claims can be checked.">
+          <y-empty icon="book" title="No facts yet"
+                   text="Each workspace has its own facts. Add your product specs, prices, policies and FAQs: claims are checked against them, and a claim with no matching fact stays unverified.">
             @if (session.can('content.write')) {
               <button class="btn btn-primary" type="button" (click)="openForm()">Add the first fact</button>
             }
@@ -109,6 +124,7 @@ import { AgoPipe, EmptyStateComponent, ToastService } from '../../shared/ui';
     }
   `,
   styles: `
+    .stale { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; .grow { flex: 1 1 300px; } }
     .toolbar { margin-bottom: 20px; }
     .group { margin-bottom: 24px; }
     .group h2 { margin-bottom: 10px; }
@@ -142,13 +158,20 @@ export class KnowledgePage {
     return [...map.entries()].map(([category, items]) => ({ category, items }));
   });
 
+  /** Videos whose claims were checked before the facts last changed. */
+  protected readonly staleVideos = signal(0);
+  protected readonly rechecking = signal(false);
+
   constructor() {
     this.load();
   }
 
   private load(): void {
     this.api.knowledge().subscribe({
-      next: (r) => this.items.set(r.knowledge),
+      next: (r) => {
+        this.items.set(r.knowledge);
+        this.staleVideos.set(r.staleVideos ?? 0);
+      },
       error: (e) => {
         this.items.set([]);
         this.toast.error(errorMessage(e));
@@ -181,13 +204,29 @@ export class KnowledgePage {
           this.saving.set(false);
           this.formOpen.set(false);
           this.items.update((list) => [...(list ?? []), k]);
-          this.toast.show('Fact added. Re-analyze a video to use it.');
+          this.toast.show('Fact added. New checks use it straight away; re-check existing videos above.');
+          this.load();
         },
         error: (e) => {
           this.saving.set(false);
           this.formError.set(errorMessage(e));
         },
       });
+  }
+
+  protected recheckAll(): void {
+    this.rechecking.set(true);
+    this.api.recheckAll().subscribe({
+      next: (r) => {
+        this.rechecking.set(false);
+        this.staleVideos.set(0);
+        this.toast.show(r.queued ? `Re-checking ${r.queued} video${r.queued === 1 ? '' : 's'} in the background.` : 'Already re-checking.');
+      },
+      error: (e) => {
+        this.rechecking.set(false);
+        this.toast.error(errorMessage(e));
+      },
+    });
   }
 
   protected remove(k: Knowledge): void {
@@ -197,6 +236,7 @@ export class KnowledgePage {
       next: () => {
         this.items.update((list) => (list ?? []).filter((x) => x.id !== k.id));
         this.toast.show('Deleted.');
+        this.load();
       },
       error: (e) => this.toast.error(errorMessage(e)),
     });

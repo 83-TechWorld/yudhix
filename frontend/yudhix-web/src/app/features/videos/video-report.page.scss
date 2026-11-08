@@ -68,3 +68,8 @@ a.ts:hover { background: var(--surface-3); text-decoration: none; }
 .linked { padding: 12px 0; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
 .linked p { white-space: pre-line; }
 .why { font-style: italic; }
+
+.facts-stale { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px;
+  .grow { flex: 1 1 280px; } }
+.recheck-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  margin-bottom: 8px; font-size: 13px; }

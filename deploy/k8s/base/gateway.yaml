@@ -1,0 +1,51 @@
+# Gateway: the single entry point (/ -> web, /api + /health -> api, /auth -> keycloak).
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: gateway, labels: { app: gateway } }
+spec:
+  replicas: 2
+  strategy: { rollingUpdate: { maxUnavailable: 0, maxSurge: 1 } }
+  selector: { matchLabels: { app: gateway } }
+  template:
+    metadata: { labels: { app: gateway } }
+    spec:
+      securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+      topologySpreadConstraints:
+        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: ScheduleAnyway, labelSelector: { matchLabels: { app: gateway } } }
+      containers:
+        - name: gateway
+          image: yudhix/gateway:local
+          ports: [{ name: http, containerPort: 8080 }]
+          env:
+            - { name: WEB_UPSTREAM, value: "http://web:8080" }
+            - { name: API_UPSTREAM, value: "http://api:8000" }
+            - { name: KEYCLOAK_UPSTREAM, value: "http://keycloak:8080" }
+            - name: KEYCLOAK_ADMIN_PUBLIC
+              valueFrom: { configMapKeyRef: { name: yudhix-config, key: KEYCLOAK_ADMIN_PUBLIC } }
+          readinessProbe: { httpGet: { path: /gateway/healthz, port: http }, periodSeconds: 5 }
+          livenessProbe: { httpGet: { path: /gateway/healthz, port: http }, periodSeconds: 15 }
+          resources:
+            requests: { cpu: 50m, memory: 32Mi }
+            limits: { cpu: 500m, memory: 128Mi }
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: gateway, labels: { app: gateway } }
+spec:
+  selector: { app: gateway }
+  ports: [{ name: http, port: 8080, targetPort: http }]
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: { name: gateway }
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: gateway }
+  minReplicas: 2
+  maxReplicas: 10
+  metrics: [{ type: Resource, resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } } }]
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: gateway }
+spec: { minAvailable: 1, selector: { matchLabels: { app: gateway } } }

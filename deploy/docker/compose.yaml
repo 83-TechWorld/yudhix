@@ -1,0 +1,130 @@
+# =============================================================================
+# Yudhix full stack in Docker: every component in a container, behind the gateway.
+#
+#   ./deploy/scripts/docker-up.sh            (or: docker compose -f deploy/docker/compose.yaml up -d --build)
+#   open http://localhost:8080               app            · http://localhost:8080/auth  Keycloak
+#        http://localhost:8026               Mailpit (sign-up verification + invite emails)
+#
+# Separate from the root docker-compose.yml (dev infra for `ng serve` + `uvicorn --reload`):
+# own project name, own volumes, no clashing host ports except the gateway (8080) and mailpit UI (8026).
+# The AI model (Ollama) runs on the host: Docker reaches it at host.docker.internal:11434.
+# =============================================================================
+name: yudhix-stack-full
+
+x-api-env: &api-env
+  PG_HOST: postgres
+  PG_PORT: "5432"
+  PG_DB: yudhix
+  PG_USER: yudhix
+  PG_PASSWORD: ${POSTGRES_PASSWORD:-yudhix_local_pw}
+  KEYCLOAK_ISSUER: ${PUBLIC_URL:-http://localhost:8080}/auth/realms/yudhix
+  KEYCLOAK_JWKS_URL: http://keycloak:8080/auth/realms/yudhix/protocol/openid-connect/certs
+  APP_URL: ${PUBLIC_URL:-http://localhost:8080}
+  CORS_ORIGINS: ${PUBLIC_URL:-http://localhost:8080}
+  SMTP_HOST: mailpit
+  SMTP_PORT: "1025"
+  OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+  OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:latest}
+  AUTHOR_HMAC_KEY: ${AUTHOR_HMAC_KEY:-local-only-change-me}
+  DEMO_WORKSPACE_JOIN: "true"
+  WEB_CONCURRENCY: "2"
+  # YOUTUBE_API_KEY comes from services/yudhix-sense/.env (env_file below), the same file dev mode uses.
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: yudhix
+      POSTGRES_USER: yudhix
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-yudhix_local_pw}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres-init.sql:/docker-entrypoint-initdb.d/01-databases.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U yudhix -d yudhix"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports: ["8026:8025"]
+    restart: unless-stopped
+
+  keycloak:
+    build: { context: ../.., dockerfile: deploy/keycloak/Dockerfile }
+    image: yudhix/keycloak:local
+    environment:
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: yudhix
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-yudhix_local_pw}
+      KC_HOSTNAME: ${PUBLIC_URL:-http://localhost:8080}/auth
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin_local_pw}
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      # Keycloak's image has no curl/wget: probe the management port with bash's /dev/tcp
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /auth/health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+
+  # One-off: applies sign-up / PKCE / SMTP / origin settings to the realm (idempotent)
+  keycloak-setup:
+    image: yudhix/api:local
+    pull_policy: never            # built by the `api` service
+    command: ["python", "tools/configure_realm.py"]
+    environment:
+      KC_URL: http://keycloak:8080/auth
+      KC_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin_local_pw}
+      APP_ORIGINS: ${PUBLIC_URL:-http://localhost:8080},http://localhost:4200,capacitor://localhost,http://localhost
+      KC_SMTP_HOST: mailpit
+      KC_SMTP_PORT: "1025"
+      KC_WAIT_SECONDS: "180"
+    depends_on:
+      keycloak: { condition: service_healthy }
+      api: { condition: service_started }
+    restart: "no"
+
+  api:
+    build: { context: ../.., dockerfile: services/yudhix-sense/Dockerfile }
+    image: yudhix/api:local
+    env_file:
+      - path: ../../services/yudhix-sense/.env   # local secrets (git-ignored); optional
+        required: false
+    environment: *api-env
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    deploy:
+      replicas: ${API_REPLICAS:-2}    # scale out: API_REPLICAS=4 ./deploy/scripts/docker-up.sh
+    restart: unless-stopped
+
+  web:
+    build: { context: ../../frontend/yudhix-web }
+    image: yudhix/web:local
+    environment:
+      SALES_EMAIL: ${SALES_EMAIL:-sales@example.com}
+    restart: unless-stopped
+
+  gateway:
+    build: { context: ../gateway }
+    image: yudhix/gateway:local
+    ports: ["${GATEWAY_PORT:-8080}:8080"]
+    environment:
+      WEB_UPSTREAM: http://web:8080
+      API_UPSTREAM: http://api:8000
+      KEYCLOAK_UPSTREAM: http://keycloak:8080
+      KEYCLOAK_ADMIN_PUBLIC: "true"     # local only: Keycloak admin console at /auth/admin
+    depends_on:
+      web: { condition: service_started }
+      api: { condition: service_started }
+      keycloak: { condition: service_started }
+    restart: unless-stopped
+
+volumes:
+  pgdata:

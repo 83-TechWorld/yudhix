@@ -1,5 +1,8 @@
 from typing import Optional
-from fastapi import FastAPI, HTTPException, Body
+import hmac
+
+from fastapi import FastAPI, HTTPException, Body, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 
@@ -18,9 +21,12 @@ from app.db import (
     get_source_watermarks,
     get_products_summary,
     tag_comment_product,
-    get_product_knowledge,
     get_video_truth_analysis
 )
+from app.api import ai as ai_api, catalog as catalog_api, platform as platform_api, truth as truth_api, workflow as workflow_api
+from app.core import config, llm
+from app.core.database import run_migrations
+from app.truth import scheduler, youtube
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("yudhix-sense")
@@ -33,20 +39,87 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=config.CORS_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Tenant-Id"],
 )
+app.include_router(platform_api.router)
+app.include_router(ai_api.router)
+app.include_router(catalog_api.router)
+app.include_router(truth_api.router)
+app.include_router(workflow_api.router)
+
+
+# Pre-SaaS endpoints below take tenant_id as a query parameter and have no user context.
+# They stay available for internal jobs (Airflow) only, behind INTERNAL_API_KEY.
+LEGACY_PREFIXES = ("/api/v1/products", "/api/v1/comments", "/api/v1/watermark", "/api/v1/mask",
+                   "/api/v1/analyze", "/api/v1/scheduler")
+
+
+@app.middleware("http")
+async def guard_legacy_endpoints(request: Request, call_next):
+    path = request.url.path
+    if request.method != "OPTIONS" and any(path == p or path.startswith(p + "/") for p in LEGACY_PREFIXES):
+        key = request.headers.get("x-internal-key", "")
+        if not config.INTERNAL_API_KEY or not hmac.compare_digest(key, config.INTERNAL_API_KEY):
+            return JSONResponse({"detail": "Internal endpoint. Use the workspace API instead."}, status_code=401)
+    return await call_next(request)
+
+
+@app.on_event("startup")
+def apply_migrations():
+    try:
+        run_migrations()
+    except Exception as e:  # keep serving read-only endpoints even if the DB is briefly unavailable
+        logger.error("Migrations failed: %s", e)
+    scheduler.start()  # checks analyzed videos for new comments in the background
 
 masker = PiiMasker()
 classifier = FastSentimentClassifier()
 enricher = OllamaLlmEnricher()
 
 
+@app.get("/healthz", include_in_schema=False)
+def liveness():
+    """Kubernetes liveness probe: the process is up. No dependencies, always fast."""
+    return {"status": "ok"}
+
+
+@app.get("/readyz", include_in_schema=False)
+def readiness():
+    """Kubernetes readiness probe: the database answers. Pods failing this get no traffic."""
+    from app.core.database import fetch_one
+    try:
+        fetch_one("SELECT 1 AS ok")
+        return {"status": "ready"}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"database unavailable: {type(e).__name__}")
+
+
 @app.get("/health")
 def health_check():
-    return {"status": "UP", "service": "yudhix-sense"}
+    """Also reports which optional capabilities are active, so the UI can explain fallbacks."""
+    whisper = False
+    try:
+        import faster_whisper  # noqa: F401
+        import shutil
+        whisper = shutil.which("yt-dlp") is not None
+    except ImportError:
+        pass
+    try:
+        import youtube_transcript_api  # noqa: F401
+        captions = True
+    except ImportError:
+        captions = False
+    return {
+        "status": "UP", "service": "yudhix-sense",
+        "capabilities": {
+            "llm": llm.is_available(), "llmModel": config.OLLAMA_MODEL,
+            "youtubeApi": youtube.has_api_key(), "captions": captions, "whisper": whisper,
+            "livePosting": False,
+        },
+    }
 
 
 @app.get("/api/v1/products")
@@ -76,24 +149,6 @@ def tag_product(
         raise HTTPException(status_code=400, detail="product_id is required")
     success = tag_comment_product(comment_id=comment_id, product_id=product_id, tenant_id=tenant_id)
     return {"success": success, "commentId": comment_id, "productId": product_id}
-
-
-@app.get("/api/v1/truth/knowledge")
-def list_knowledge(tenant_id: str = "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d", product_id: Optional[str] = None):
-    """
-    Fetch authoritative brand ground truth specifications and policies for RAG verification.
-    """
-    records = get_product_knowledge(tenant_id=tenant_id, product_id=product_id)
-    return {"knowledge": records, "count": len(records)}
-
-
-@app.get("/api/v1/truth/videos")
-def list_video_truth(tenant_id: str = "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d", video_id: Optional[str] = None):
-    """
-    Fetch decoded videos, extracted atomic claims, and RAG fact-check cross-references.
-    """
-    videos = get_video_truth_analysis(tenant_id=tenant_id, video_id=video_id)
-    return {"videos": videos, "count": len(videos)}
 
 
 @app.get("/api/v1/comments")

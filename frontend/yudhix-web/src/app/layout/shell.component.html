@@ -1,0 +1,211 @@
+<div class="shell">
+  @if (menu()) { <div class="menu-scrim" (click)="menu.set(null)"></div> }
+
+  <!-- ===================== Sidebar (desktop) / rail (tablet) ===================== -->
+  <aside class="sidebar hide-mobile" aria-label="Main">
+    <a class="product" routerLink="/analyze" aria-label="Yudhix home">
+      <span class="product-mark" aria-hidden="true">Y</span>
+      <span class="product-name nav-label">Yudhix</span>
+    </a>
+
+    <div class="ws-anchor">
+      <button class="ws-btn" type="button" (click)="toggle('workspace')" [attr.aria-expanded]="menu() === 'workspace'" aria-haspopup="menu" [attr.title]="session.workspace()?.name">
+        <span class="ws-logo" aria-hidden="true">{{ initials(session.workspace()?.name ?? 'Y') }}</span>
+        <span class="ws-text nav-label">
+          <strong>{{ session.workspace()?.name ?? 'Workspace' }}</strong>
+          <small>{{ session.workspace()?.plan ?? '' }}@if (session.workspace()?.isDemo) { · Demo }</small>
+        </span>
+        <y-icon name="chevronsUpDown" [size]="15" class="nav-label chev" />
+      </button>
+      @if (menu() === 'workspace' && menuAt() === 'side') { <ng-container *ngTemplateOutlet="wsMenu" /> }
+    </div>
+
+    <nav class="nav" aria-label="Sections">
+      @for (group of groups; track group.label) {
+        <div class="nav-group">
+          <span class="nav-heading nav-label">{{ group.label }}</span>
+          @for (item of group.items; track item.path) {
+            <a [routerLink]="item.path" routerLinkActive="active" class="nav-item" [attr.title]="item.label">
+              <y-icon [name]="item.icon" [size]="18" />
+              <span class="nav-label">{{ item.label }}</span>
+              @if (item.path === '/approvals' && inReview()) { <span class="count-badge">{{ inReview() }}</span> }
+            </a>
+          }
+        </div>
+      }
+    </nav>
+
+    <div class="sidebar-foot">
+      @if (trialDays() !== null) {
+        <div class="trial-card nav-label">
+          <div class="row"><strong>{{ session.workspace()?.plan }} trial</strong><span class="spacer"></span><span class="subtle">{{ trialDays() }}d left</span></div>
+          <div class="bar"><span class="bar-brand" [style.width.%]="trialProgress()"></span></div>
+          @if (session.can('billing.manage')) { <a class="btn btn-sm btn-block" routerLink="/settings/billing">Choose a plan</a> }
+        </div>
+      }
+      <div class="anchor">
+        <button class="me" type="button" (click)="toggle('user')" [attr.aria-expanded]="menu() === 'user'" aria-haspopup="menu">
+          <span class="avatar">{{ session.initials() }}</span>
+          <span class="nav-label me-text">
+            <strong>{{ session.user()?.name }}</strong>
+            <small>{{ roleInfo[session.role()].label }}</small>
+          </span>
+          <y-icon name="moreHorizontal" [size]="16" class="nav-label chev" />
+        </button>
+        @if (menu() === 'user' && menuAt() === 'side') { <ng-container *ngTemplateOutlet="userMenu" /> }
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===================== Main ===================== -->
+  <div class="main">
+    <header class="appbar">
+      <!-- Mobile: workspace switcher -->
+      <div class="ws-anchor grow show-mobile">
+        <button class="ws-btn compact" type="button" (click)="toggle('workspace', 'top')" aria-haspopup="menu">
+          <span class="ws-logo" aria-hidden="true">{{ initials(session.workspace()?.name ?? 'Y') }}</span>
+          <strong class="truncate">{{ session.workspace()?.name ?? 'Yudhix' }}</strong>
+          <y-icon name="chevronsUpDown" [size]="14" />
+        </button>
+        @if (menu() === 'workspace' && menuAt() === 'top') { <ng-container *ngTemplateOutlet="wsMenu" /> }
+      </div>
+
+      <!-- Desktop: breadcrumb -->
+      <nav class="crumbs hide-mobile" aria-label="Breadcrumb">
+        <span class="crumb-ws truncate">{{ session.workspace()?.name }}</span>
+        <y-icon name="chevronRight" [size]="14" />
+        <span class="crumb-page">{{ title() }}</span>
+      </nav>
+      <span class="spacer hide-mobile"></span>
+
+      <button class="btn btn-ghost btn-icon bot-btn" type="button" (click)="refreshHealth()"
+        [attr.aria-label]="botState() === 'offline' ? 'API offline. Retry' : 'AI status. Check again'">
+        <y-bot [state]="botState()" [size]="22" [text]="botLabel()" />
+      </button>
+      <button class="btn btn-ghost btn-icon" type="button" (click)="session.cycleTheme()" [attr.aria-label]="'Theme: ' + session.theme()" [attr.title]="'Theme: ' + session.theme()">
+        <y-icon [name]="themeIcon()" [size]="18" />
+      </button>
+      <div class="anchor">
+        <button class="btn btn-ghost btn-icon" type="button" (click)="toggle('notifications', 'top')" aria-label="Notifications" [attr.aria-expanded]="menu() === 'notifications'">
+          <span class="bell"><y-icon name="bell" [size]="18" />@if (unread()) { <span class="dot-badge">{{ unread() > 9 ? '9+' : unread() }}</span> }</span>
+        </button>
+        @if (menu() === 'notifications') { <ng-container *ngTemplateOutlet="notesMenu" /> }
+      </div>
+      <div class="anchor show-mobile">
+        <button class="avatar-btn" type="button" (click)="toggle('user', 'top')" aria-label="Account menu">
+          <span class="avatar">{{ session.initials() }}</span>
+        </button>
+        @if (menu() === 'user' && menuAt() === 'top') { <ng-container *ngTemplateOutlet="userMenu" /> }
+      </div>
+    </header>
+
+    @if (apiDown()) {
+      <div class="banner banner-danger">
+        <y-icon name="alert" [size]="16" />
+        <span>Can't reach the Yudhix API. Start it with <span class="kbd">./yudhix.sh start</span>, then retry.</span>
+        <span class="spacer"></span>
+        <button class="btn btn-sm" type="button" (click)="refreshHealth()">Retry</button>
+      </div>
+    }
+    @if (status() === 'TRIAL_EXPIRED') {
+      <div class="banner banner-danger">
+        <y-icon name="clock" [size]="16" />
+        <span><strong>Your free trial has ended.</strong> Reports stay readable; new analyses and posting are paused.</span>
+        <span class="spacer"></span>
+        @if (session.can('billing.manage')) { <a class="btn btn-sm" routerLink="/settings/billing">Choose a plan</a> }
+        @else { <span>Ask a workspace admin to choose a plan.</span> }
+      </div>
+    } @else if (trialDays() !== null) {
+      <div class="banner banner-info show-mobile">
+        <y-icon name="sparkles" [size]="15" />
+        <span><strong>{{ trialDays() }} days left</strong> in your trial</span>
+        <span class="spacer"></span>
+        @if (session.can('billing.manage')) { <a class="btn btn-sm" routerLink="/settings/billing">Plans</a> }
+      </div>
+    }
+
+    <main class="content">
+      @for (k of outletKeys(); track k) { <router-outlet /> }
+    </main>
+  </div>
+
+  <!-- ===================== Bottom tabs (mobile) ===================== -->
+  <nav class="tabbar show-mobile" aria-label="Main">
+    @for (item of mobileNav; track item.path) {
+      <a [routerLink]="item.path" routerLinkActive="active" class="tab">
+        <span class="tab-icon">
+          <y-icon [name]="item.icon" [size]="21" />
+          @if (item.path === '/approvals' && inReview()) { <span class="badge">{{ inReview() }}</span> }
+        </span>
+        <span>{{ item.label }}</span>
+      </a>
+    }
+  </nav>
+
+  <div class="toasts" aria-live="polite">
+    @for (t of toasts.toasts(); track t.id) {
+      <div class="toast" [class.toast-error]="t.kind === 'error'" (click)="toasts.dismiss(t.id)">{{ t.text }}</div>
+    }
+  </div>
+</div>
+
+<!-- ===================== Menus ===================== -->
+<ng-template #wsMenu>
+  <div class="menu ws-menu" role="menu">
+    <div class="menu-label">Workspaces</div>
+    @for (w of session.workspaces(); track w.id) {
+      <button class="menu-item" type="button" role="menuitemradio" [attr.aria-checked]="w.id === session.workspaceId()" (click)="switchTo(w)">
+        <span class="ws-logo sm" aria-hidden="true">{{ initials(w.name) }}</span>
+        <span class="menu-text">
+          <span class="truncate">{{ w.name }}</span>
+          <small>{{ roleInfo[w.role].label }}@if (w.isDemo) { · demo }@if (w.subscriptionStatus === 'TRIALING') { · trial }</small>
+        </span>
+        @if (w.id === session.workspaceId()) { <y-icon name="check" [size]="15" class="check" /> }
+      </button>
+    }
+    <div class="menu-sep"></div>
+    <a class="menu-item" routerLink="/onboarding" [queryParams]="{ new: 1 }" (click)="menu.set(null)"><y-icon name="plus" [size]="15" /> Create workspace</a>
+    @if (session.me()?.demoAvailable && !hasDemo()) {
+      <button class="menu-item" type="button" (click)="joinDemo()"><y-icon name="play" [size]="15" /> Explore the demo workspace</button>
+    }
+  </div>
+</ng-template>
+
+<ng-template #notesMenu>
+  <div class="menu notes-menu" role="dialog" aria-label="Notifications">
+    <div class="menu-head">
+      <strong>Notifications</strong>
+      @if (unread()) { <button class="btn btn-ghost btn-sm" type="button" (click)="markAllRead()">Mark all read</button> }
+    </div>
+    <div class="notes-list">
+      @for (n of notes(); track n.id) {
+        <button class="note" type="button" [class.unread]="!n.read" (click)="openNotification(n)">
+          <span class="note-dot" aria-hidden="true"></span>
+          <span class="note-text">
+            <strong>{{ n.title }}</strong>
+            @if (n.body) { <span class="clamp-2">{{ n.body }}</span> }
+            <small>{{ n.createdAt | ago }}</small>
+          </span>
+        </button>
+      } @empty {
+        <div class="empty small"><y-icon name="bell" [size]="18" /><span>You're all caught up.</span></div>
+      }
+    </div>
+  </div>
+</ng-template>
+
+<ng-template #userMenu>
+  <div class="menu user-menu" role="menu">
+    <div class="menu-user">
+      <strong class="truncate">{{ session.user()?.name }}</strong>
+      <small class="truncate">{{ session.user()?.email }}</small>
+    </div>
+    <div class="menu-sep"></div>
+    <a class="menu-item" routerLink="/settings/workspace" (click)="menu.set(null)"><y-icon name="settings" [size]="15" /> Workspace settings</a>
+    <a class="menu-item" routerLink="/settings/team" (click)="menu.set(null)"><y-icon name="users" [size]="15" /> Team</a>
+    <a class="menu-item" routerLink="/settings/billing" (click)="menu.set(null)"><y-icon name="card" [size]="15" /> Plan & billing</a>
+    <a class="menu-item" [href]="auth.accountUrl()"><y-icon name="lock" [size]="15" /> Account & security</a>
+    <div class="menu-sep"></div>
+    <button class="menu-item danger" type="button" (click)="signOut()"><y-icon name="logout" [size]="15" /> Sign out</button>
+  </div>
+</ng-template>

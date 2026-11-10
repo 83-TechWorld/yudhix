@@ -1,0 +1,34 @@
+.lanes { margin-bottom: 16px; }
+.role-chip { height: 30px; padding: 0 12px; }
+.hint-box { margin-bottom: 16px; }
+.reply { overflow: hidden; }
+.card-lift { transition: transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out), border-color var(--dur-2) ease; }
+@media (hover: hover) { .card-lift:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); } }
+.bubble { animation: rise var(--dur-3) var(--ease-out) backwards; }
+.us { animation-delay: 90ms; }
+.reply.breached { border-color: var(--danger); }
+.reply-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 14px 18px 0; }
+.overdue { color: var(--danger-text); font-weight: 600; }
+.reply-head .subtle { display: inline-flex; align-items: center; gap: 4px; }
+.reply-body { padding: 14px 18px; display: flex; flex-direction: column; gap: 12px; }
+.convo { display: flex; flex-direction: column; gap: 8px; }
+.bubble { border-radius: 14px; padding: 10px 14px; max-width: 92%; display: flex; flex-direction: column; gap: 2px; }
+.bubble p { white-space: pre-line; }
+.bubble .who { font-size: 12px; font-weight: 600; }
+.them { background: var(--surface-2); align-self: flex-start; border-bottom-left-radius: 4px; }
+.us { background: var(--brand-soft); align-self: flex-end; border-bottom-right-radius: 4px; width: 92%; }
+.video { display: inline-flex; align-items: center; gap: 4px; }
+.posted { display: flex; flex-direction: column; gap: 8px; }
+.outcome { padding: 8px 12px; border-radius: 10px; font-size: 14px; }
+.outcome-IMPROVED { background: var(--ok-soft); color: var(--ok-text); }
+.outcome-NEUTRAL { background: var(--muted-soft); color: var(--muted-text); }
+.outcome-WORSENED { background: var(--danger-soft); color: var(--danger-text); }
+.reply-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; align-items: center; padding: 12px 18px; border-top: 1px solid var(--border); background: var(--surface-2); }
+.reply-actions:empty { display: none; }
+.inline-form { display: flex; gap: 8px; flex: 1; flex-wrap: wrap; }
+.inline-form .input { flex: 1 1 220px; height: 40px; }
+.grow { flex: 1; }
+@media (max-width: 639px) {
+  .reply-actions .btn { flex: 1; }
+  .bubble, .us { max-width: 100%; width: 100%; }
+}

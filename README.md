@@ -1,769 +1,551 @@
-# Yudhix — Enterprise Social Comment Intelligence Platform
+# Yudhix
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](#)
-[![Java](https://img.shields.io/badge/Java-21-orange.svg)](#)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3.4-brightgreen.svg)](#)
-[![Spring Cloud](https://img.shields.io/badge/Spring%20Cloud-2023.0.3-blue.svg)](#)
-[![Python](https://img.shields.io/badge/Python-3.11-yellow.svg)](#)
-[![Angular](https://img.shields.io/badge/Angular-18+-red.svg)](#)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16%20%2B%20pgvector-blue.svg)](#)
-[![Keycloak](https://img.shields.io/badge/Keycloak-25+-blueviolet.svg)](#)
-[![License](https://img.shields.io/badge/license-Proprietary-lightgrey.svg)](#)
+**Truth-first social comment intelligence for brands.**
+
+When a creator's video about your product goes viral and the comments turn angry, Yudhix answers one question before anyone replies: **is the anger caused by a real product problem, or by something the creator got wrong?** It checks the video's claims against your official facts, links each comment to the claim that triggered it, and runs a reviewed reply workflow.
+
+Built as a multi-tenant SaaS: companies sign up, create a workspace per brand, invite their team and pick a plan. Works on desktop, tablet and phone, and is ready to ship to the App Store and Play Store.
 
 ---
 
-## 1. Executive Overview & Guiding Principles
+## Contents
 
-**Yudhix** is a multi-tenant, privacy-first, enterprise social comment intelligence and brand turnaround platform. It continuously harvests public comments about products from social platforms (YouTube, LinkedIn, Reddit, X), executes PII masking, extracts aspects and sentiment using local AI models (Ollama Qwen3 / XLM-RoBERTa), computes real-time impact scores, surfaces actionable insights, and orchestrates a compliant, human-in-the-loop reply turnaround workflow.
-
-### Core Principles
-- **Privacy by Design**: Store insights, not identities. Social author IDs are immediately hashed using keyed HMAC-SHA256 (`author_hash`). Personal PII is masked before model inference or long-term persistence.
-- **Human-in-the-Loop**: No automated replies are ever posted without human approval (configurable 1- or 2-level approval with separation of duties).
-- **Tenant Isolation**: Strict logical multi-tenancy backed by `tenant_id` on every row, Keycloak organization tokens, and PostgreSQL Row-Level Security (RLS).
-- **Ground Truth Triangulation (Video RAG)**: Unlike basic keyword scrapers, Yudhix decodes the **creator's video context** (Whisper transcripts + atomic claims), cross-checks them against **authoritative brand knowledge (RAG)**, and determines whether audience outrage was caused by **actual product defects** or **creator misinformation / rage-bait**.
-- **Config over Code**: Discovery rules, SLA timers, impact weighting, and compliance policy packs (India DPDP 2023/2025, US CCPA/CPRA) are fully configuration-driven.
+1. [How it works](#1-how-it-works)
+2. [Architecture](#2-architecture) (with the tech used in each part)
+3. [Run it locally](#3-run-it-locally)
+4. [Configuration](#4-configuration)
+5. [Project structure](#5-project-structure)
+6. [Workspaces, roles and plans](#6-workspaces-roles-and-plans)
+7. [Tests](#7-tests)
+8. [Mobile apps](#8-mobile-apps)
+9. [Deployment](#9-deployment)
+10. [Status and roadmap](#10-status-and-roadmap)
 
 ---
 
-## 2. High-Level Architecture Diagram
+## 1. How it works
+
+The product follows five steps, each with its own screen:
+
+| Step | Screen | What happens |
+|---|---|---|
+| **1. Analyze** | `/analyze` | Paste a YouTube link (or a transcript). Yudhix reads the transcript and pulls out timestamped claims. |
+| **2. Truth report** | `/videos/:id` → Claims | Each claim is checked against the brand's official facts: **Accurate**, **Misleading**, **False** or **Unverified**, with the cited source. |
+| **3. Audience impact** | `/videos/:id` → Audience impact | Each comment is linked to the claim that triggered it and gets a root cause: **misinformation**, **valid concern** or **unlinked**. |
+| **4. Respond** | `/inbox`, `/approvals` | Agents draft replies (AI drafts cite the official fact), an approver signs off (nobody approves their own reply), and the team can send the creator a polite clarification note. |
+| **5. Track** | `/track` | Turnaround rate, reply pipeline, SLA breaches, misinformation share and sentiment over time. |
+
+### What happens when you analyze a video
+
+"Analyze" starts a background job. The UI polls it and shows each stage live.
+
+```mermaid
+flowchart LR
+    A[YouTube link<br/>or transcript] --> B[1. Fetch video<br/>title, channel, views]
+    B --> C[2. Transcribe<br/>captions / Whisper / pasted]
+    C --> D[3. Extract claims<br/>up to 8, timestamped]
+    D --> E[4. Fact-check<br/>search official facts → verdict]
+    E --> F[5. Ingest comments<br/>mask PII, hash authors]
+    F --> U[6. Read comments<br/>AI: sentiment, topics, claim]
+    U --> G[7. Attribute<br/>comment → claim, root cause, priority]
+    G --> H[Truth report, product impact<br/>+ prioritized inbox]
+```
+
+| Stage | Code (`services/yudhix-sense/app/truth/`) | How | Fallback when an optional piece is missing |
+|---|---|---|---|
+| Fetch video | `youtube.py` | YouTube Data API | YouTube oEmbed (no key needed) |
+| Transcribe | `youtube.py` | YouTube captions, else Whisper (`faster-whisper` + `yt-dlp`) | Pasted transcript (`[mm:ss] text` lines) |
+| Extract claims | `claims.py` | Local LLM (Ollama, `llama3.1`) | Rules: sentences with numbers, prices, absolutes, policy verbs |
+| Fact-check | `retrieval.py`, `verifier.py` | BM25 search over `product_knowledge`, then the LLM says whether the source *supports* or *contradicts* the claim; code maps that to a verdict | Rules: matching figures, absolutes the source negates, predictions → Unverified |
+| Ingest comments | `pipeline.py` | YouTube Data API (needs `YOUTUBE_API_KEY`), regex PII masking, keyed HMAC-SHA256 author hash | Uses comments already stored for the video |
+| Read comments | `audience.py` | Local LLM reads comments in batches of 20, **most-liked first**, within a time budget (`LLM_COMMENT_BUDGET_SECONDS`, default 240 s): sentiment, up to 2 topics, and which claim (if any) the comment responds to | Keyword sentiment and keyword topics |
+| Attribute | `attribution.py`, `scoring.py` | Uses the AI's claim decision where it read the comment; otherwise needs two specific words shared with the claim (or one plus a related concept or a timestamp pointing at it). Stores "why linked" evidence | – |
+
+**Root cause:** `MISINFORMATION` (reacts to a misleading, false or unverified claim), `VALID_CONCERN` (reacts to an accurate claim), or `UNLINKED`.
+
+**Priority:** impact score 0–100 = `100 × severity^0.8 × engagement × recency`, +10% for misinformation. **P1** ≥ 80, **P2** ≥ 50, else **P3**.
+
+**Topics:** Price & value, Quality & hardware, Performance, Features & software, Games & content, Online & subscriptions, Support & warranty, Trust in the company, Competitors & switching.
+
+### Product impact
+
+Truth report → **Audience impact** tab (or **View impact** in the Inbox once a video is picked) shows how the comments affect the product (`app/truth/product_impact.py`, `GET /api/v1/truth/videos/{id}/product-impact`):
+
+| Part | What it shows |
+|---|---|
+| Impact score | 0–100 and High / Medium / Low, with the trend of negative comments (rising, steady, fading). Score = `100 × (negative share of reach)^0.75 × size`, where size grows with total reach (max at ~10,000). |
+| Sentiment | Negative / neutral / positive **by comments** and **by reach**. Reach weights each comment by `1 + likes + 2 × replies`, so one comment with 2,500 likes counts more than fifty with none. |
+| What can fix it | Negative reach split into disputed claims (creator note and replies), real product concerns (product team) and general negativity, with links to the inbox. |
+| Topics | What people talk about, split by sentiment, ordered by negative reach. |
+| Over time | Comments per day (per week for long spans). |
+| Most-liked negative comments | The five with the most reach, with **Reply** opening them in the inbox. |
+
+Charts use their own colour tokens (`--chart-*` in `styles.scss`), checked for colour-blind separation in light and dark mode, and every chart has hover details and a table view.
+
+### Product growth and ideas
+
+The **Product growth** tab is the positive side (`app/truth/growth.py`, `GET /api/v1/truth/videos/{id}/growth`):
+
+| Part | What it shows |
+|---|---|
+| Growth score | Mirror of the impact score: `100 × (positive share of reach)^0.75 × size`. Strong ≥ 60, moderate ≥ 35. |
+| What people want | Comments by intent: feature requests, praise, buying signals, questions, complaints, leaving. Each bar opens those comments in the inbox. |
+| What people love | Topics of positive comments, by positive reach. |
+| Product ideas | Feature requests named by the AI in a few words ("more storage") and grouped with similar requests from **all** videos. |
+| Praise, buying signals, at risk of leaving | The most-liked comments of each. |
+
+The **Ideas** page is the product team's backlog: every idea with its supporting comments, videos and reach, a status (New → Reviewing → Planned → Shipped, or Declined) and a note. Keyword rules can spot a request when the AI is offline, but only the AI's reading names and groups it, so ideas fill in as the AI reads comments.
+
+### AI engines (Settings → AI)
+
+Every AI call goes through one layer (`app/core/llm.py`, providers in `app/core/providers.py`). Each workspace picks where AI runs:
+
+| Mode | What answers | When |
+|---|---|---|
+| **Cloud AI** | Claude, ChatGPT (OpenAI), Gemini, Mistral, Groq, DeepSeek, OpenRouter, or any OpenAI-compatible server (LM Studio, vLLM, …) with the workspace's own key | Only after the key passes two checks: listing the provider's models, then a test request on the chosen model |
+| **Local** | Ollama on the server (`OLLAMA_MODEL`) | Default |
+| **Retrieval and rules** | No model: keyword fact search, rule-based verdicts and comment reading | When neither is available |
+
+- **Automatic fallback:** cloud → local → rules, on every call. A key the provider rejects (401/403) switches the workspace back to local, marks the key invalid and notifies the admins.
+- **Keys:** encrypted at rest (Fernet, `AI_KEY_SECRET`), never sent back to the browser (only the last 4 characters).
+- **Data:** facts, comments, replies and ideas stay in your database. A cloud provider only receives what one request needs: a claim with its top 3 facts, a batch of PII-masked comments, or a fact's text to embed.
+- **Speed:** cloud providers read comments 4 batches at a time; the local model reads one at a time.
+- The robot in the top bar shows which engine is answering.
+
+### How fact-checking works (RAG) and the anti-hallucination guards
+
+1. **Hybrid search** (`app/truth/retrieval.py`): keyword ranking (BM25) plus meaning-based search (embedding cosine similarity), merged with Reciprocal Rank Fusion. Embeddings come from the cloud provider when it has an embeddings API (OpenAI, Gemini, Mistral), otherwise from a local model (`ollama pull nomic-embed-text`), otherwise search is keyword-only. Fact vectors are cached in `knowledge_embedding` and recomputed only when a fact changes.
+2. **No evidence, no AI:** if nothing in the knowledge base is close, the claim is *unverified* without asking the model.
+3. **Relation, not verdict:** the model says whether the source supports, contradicts, partly contradicts or doesn't address the claim, and code maps that to a verdict.
+4. **Quote check:** the model must copy the source sentence it relied on, and that sentence must really be in the official text. An invented quote means the AI verdict is dropped and the claim is flagged **Needs review**.
+5. **Number check:** figures are compared by code. "Supports" with different figures becomes *misleading* and is flagged.
+6. **Second opinion** (`SECOND_OPINION=cloud|always|off`): with cloud AI each claim is read twice with the sources reordered. Disagreement means **Needs review**.
+7. **Human verdict:** anyone who can edit content can set a claim's verdict. Re-checks keep it, and comments are re-linked.
+
+### Amazon reviews and the product view
+
+**Analyze → Amazon reviews:** pick the product, paste its Amazon link (any marketplace: amazon.com, .in, .co.uk, …; short `amzn.to` links work too). Yudhix tracks that listing and collects its reviews (`app/truth/amazon.py`, `app/truth/listings.py`):
+
+| Mode | What it reads | When |
+|---|---|---|
+| **Direct** (default) | The public product page: listing title, average stars, rating count and the reviews shown on it (about 8–13 per check) | No setup. One ordinary page request per check; no proxies or CAPTCHA solving. If Amazon shows a robot check, the check stops, the listing is marked *blocked*, and the next scheduled check tries again. |
+| **Provider** | All reviews, newest first, through a review-data API (Rainforest API) | Set `AMAZON_REVIEWS_API_KEY`. Use this for complete collection in production. |
+
+Amazon's Conditions of Use restrict automated access; the provider route is the one meant for production use.
+
+- Reviews are stored as comments with platform `AMAZON` (PII masked, author pseudonymized). The AI reads them like YouTube comments (topics, intent, feature requests), and **sentiment follows the stars**: 4–5 positive, 3 neutral, 1–2 negative. Helpful votes count as reach.
+- The scheduler re-checks every listing on the workspace's interval, so new reviews keep arriving, and notifies the team about new negative reviews.
+- **Products** page: every product with its sentiment split by channel. A product's page shows sentiment by channel (by count or reach), what each channel talks about, the **positive and negative voices** filtered by channel (YouTube / Amazon, with stars and "verified purchase" for reviews), and its sources: videos and Amazon listings with **Check now**.
+- The Inbox has a channel filter (All / YouTube / Amazon).
+
+### Uploading documents and syncing the knowledge base with AI
+
+**Upload document** on the Knowledge page takes PDF, Word (.docx), text, Markdown or CSV files up to 10 MB (`app/truth/documents.py`). Each document is split into clause-sized facts (a section's paragraphs, up to ~700 characters) titled with the document and section or page, so a verdict can cite and quote the exact clause. A CSV with the columns `title, statement` (optional `category, clause, source`) is read as ready-made facts. The same file can't be uploaded twice, and deleting a document deletes its facts.
+
+**AI sync** (`app/truth/ai_sync.py`): the knowledge base always stays in your database. Syncing builds the AI's index of it, with one vector per fact from the workspace's embedding model.
+
+- Every workspace has its own index per AI connection. Reconnecting the same provider and model reuses it, so only facts added or changed since are sent.
+- Facts added or uploaded while AI was off are shown as **pending** and are synced automatically when AI is turned on again (or with **Sync now**).
+- Switching provider builds a second index and keeps the first, so switching back is instant.
+- Sync runs automatically after connecting a key, switching mode, adding a fact or uploading a document. When it changes the index, analyzed videos are offered **Re-check claims**.
+- Claude, Groq and DeepSeek have no embeddings API, so their workspaces sync with the local embedding model (`ollama pull nomic-embed-text`); claims are still judged by the chosen cloud model.
+
+The sync status is shown on the Knowledge page and in Settings → AI.
+
+### Knowledge base and re-checking claims
+
+Each workspace has its own **Knowledge base**: the official facts (specs, prices, policies, FAQs) that claims are checked against. A claim with no matching fact stays *unverified*, so a new workspace should add its facts first.
+
+There is no separate index to build: the search index (BM25 over title, category, clause and statement in `app/truth/retrieval.py`) is rebuilt from the database on every check, so a new fact is used straight away. Videos analyzed earlier keep their verdicts until they are re-checked:
+
+- Adding or deleting a fact flags every analyzed video in the workspace. The **Knowledge** page then offers **Re-check claims** for all of them (one at a time in the background, with a notification each).
+- A flagged video shows a banner on its Claims tab; any video can be re-checked from there.
+- A re-check runs only the fact-check on the stored claims and then re-links comments, because verdicts decide which negativity counts as misinformation. No new transcript, no new comments.
+
+### New comments after the first analysis
+
+- **Fetch new comments** on a video pulls only comments posted since the last check (newest first, stopping at the first one already stored), lets the AI read them and re-links the video. The transcript and fact-check stay as they are. It takes seconds to a minute.
+- **The schedule** does the same for every analyzed video. Each workspace picks the interval in **Settings → Workspace** (default every 6 hours, or off). Admins, approvers and agents get a notification when new negative comments or product ideas arrive. With several API copies running, a database lock lets only one of them run each round.
+- New comments are marked **New** in the inbox (filter: **New only**) until the next full analysis.
+
+Every verdict shows how it was made (`LLM`, `HEURISTIC` or `SEEDED`). The app works without the AI model; it switches to rules, and the robot in the top bar goes to sleep.
+
+### Reply workflow
+
+```mermaid
+stateDiagram-v2
+    [*] --> DRAFT: agent writes or uses AI draft
+    DRAFT --> IN_REVIEW: submit
+    IN_REVIEW --> APPROVED: approver (not the author)
+    IN_REVIEW --> REJECTED: request changes + reason
+    REJECTED --> DRAFT: edit
+    APPROVED --> POSTED: post
+    POSTED --> [*]: record outcome (improved, neutral, worsened)
+```
+
+Every state change is written to a hash-chained audit log (`audit_event`: each row's hash includes the previous row's hash, so edits are detectable).
+
+---
+
+## 2. Architecture
+
+### 2.1 System overview (what runs today)
 
 ```mermaid
 flowchart TB
-    subgraph ClientLayer ["Client & Interface Layer"]
-        UI["Angular 18 Web App<br/>(yudhix-web: Dashboard, Inbox, Approvals)"]
+    subgraph Clients
+        WEB[Browser<br/>desktop · tablet · phone]
+        APP[iOS / Android app]
     end
 
-    subgraph EdgeLayer ["Edge & Security"]
-        GW["API Gateway (yudhix-gateway)<br/>Spring Cloud Gateway · JWT OIDC · Rate Limiter"]
-        KC["Keycloak 25+ (Identity Provider)<br/>Tenants, Organizations & Realm Roles"]
+    GW[Gateway<br/>/ · /api · /auth]
+
+    subgraph Services
+        UI[Web app<br/>yudhix-web]
+        API[API<br/>yudhix-sense]
+        KC[Identity<br/>Keycloak]
     end
 
-    subgraph ServiceMesh ["Yudhix Microservices Mesh"]
-        TENANT["Tenant Service<br/>(yudhix-tenant)"]
-        CATALOG["Catalog Service<br/>(yudhix-catalog + pgvector)"]
-        RADAR["Discovery Rules<br/>(yudhix-radar)"]
-        LINK["Platform Connectors<br/>(yudhix-link: YouTube, LinkedIn SPI)"]
-        PULSE["Comment Storage & Scoring<br/>(yudhix-pulse: Monthly Partitions)"]
-        RESOLVE["Approval & Reply Engine<br/>(yudhix-resolve)"]
-        LOOP["Turnaround Feedback<br/>(yudhix-loop)"]
-        LEDGER["Audit Log<br/>(yudhix-ledger: Hash Chained)"]
-        DHARMA["Compliance & Policies<br/>(yudhix-dharma: DPDP/CCPA)"]
-        METER["Usage Billing<br/>(yudhix-meter)"]
-        NOTIFY["Notification Service<br/>(yudhix-notify)"]
+    subgraph EXT ["Data and external"]
+        DB[(PostgreSQL 16)]
+        LLM[Ollama<br/>local AI model]
+        YT[YouTube<br/>Data API · captions]
+        MAIL[SMTP<br/>Mailpit / ZeptoMail]
     end
 
-    subgraph Pipeline ["Batch Orchestration & AI Engine"]
-        AIRFLOW["Apache Airflow<br/>(Scheduled Ingestion & Refresh DAGs)"]
-        STAGING[("comment_staging<br/>(Encrypted, 24h TTL)")]
-        SENSE["Analysis & AI Pipeline (yudhix-sense)<br/>Presidio PII Masker · XLM-RoBERTa · Ollama Qwen3"]
-    end
-
-    subgraph DataTier ["Data & Storage Tier"]
-        DB[("PostgreSQL 16 + pgvector<br/>(Row-Level Security)")]
-        VAULT["Credential Vault<br/>(AES-256-GCM Envelope Encryption)"]
-    end
-
-    %% Edge traffic
-    UI -->|HTTPS / REST| GW
-    GW <-->|Validate OIDC Token| KC
-    GW -->|X-Tenant-Id header| ServiceMesh
-
-    %% Ingestion flow
-    AIRFLOW -->|Trigger incremental batch| LINK
-    LINK <-->|OAuth Vault| VAULT
-    LINK -->|Encrypted Staging| STAGING
-    STAGING -->|SKIP LOCKED batch| SENSE
-    SENSE -->|Masked Text + Sentiment + Aspects| PULSE
-    PULSE --> DB
-
-    %% Workflow & Feedback
-    PULSE -->|P1 Priority Spike Alert| NOTIFY
-    UI -->|Review & Approve Draft| RESOLVE
-    RESOLVE -->|Brand-Safe Post| LINK
-    RESOLVE -->|Cryptographic Hash Entry| LEDGER
-    LINK -->|Published Comment| LOOP
-    AIRFLOW -->|+24h/+72h/+7d Turnaround Check| LOOP
-    LOOP -->|Update Turnaround Rate KPI| PULSE
+    WEB --> GW
+    APP --> GW
+    GW -->|/| UI
+    GW -->|/api| API
+    GW -->|/auth| KC
+    API -->|verify tokens JWKS| KC
+    API --> DB
+    KC --> DB
+    API --> LLM
+    API --> YT
+    API --> MAIL
+    KC --> MAIL
 ```
 
----
+| Part | Tech | Role |
+|---|---|---|
+| **Web app** (`frontend/yudhix-web`) | Angular 20 (standalone components, signals, lazy routes), TypeScript, SCSS design tokens, Inter font, hand-built SVG charts, PWA service worker | All screens: public site, onboarding, Analyze → Track, settings. Responsive: sidebar on desktop, icon rail on tablet, bottom tabs on phone. Light/dark theme. |
+| **Mobile** | Capacitor 8 | Wraps the same Angular build as iOS and Android apps. |
+| **Gateway** (`deploy/gateway`) | nginx | One public address. Routes `/` → web, `/api` → API, `/auth` → Keycloak. Rate limits, security headers, gzip. Used in Docker, Kubernetes and Zoho; not in hot-reload dev. |
+| **API** (`services/yudhix-sense`) | Python 3.12, FastAPI, Uvicorn, psycopg2, PyJWT | Truth pipeline, inbox and reply workflow, insights, workspaces, team, billing, notifications. Stateless, so it scales out. Creates and migrates the database schema on start. |
+| **Identity** (`keycloak/`) | Keycloak 25, OpenID Connect, PKCE | Sign-up, sign-in, email verification, password reset, brute-force protection, enterprise SSO. Branded `yudhix` login theme. |
+| **Database** | PostgreSQL 16 (pgvector image) | All app data. Every row carries `tenant_id` (the workspace). |
+| **AI model** | Ollama with `llama3.1` | Claim extraction, fact-check reasoning, reply drafts. Optional. |
+| **Email** | SMTP: Mailpit locally, Zoho ZeptoMail (or any SMTP) in production | Verification and invitation emails. |
 
-## 3. End-to-End Working Flow: User Comment to Analytics & Reply
-
-The lifecycle of a customer comment from initial creation on social media to impact calculation, human review, brand turnaround, and executive analytics:
+### 2.2 Sign-in and request flow
 
 ```mermaid
 sequenceDiagram
-    autonumber
-    actor Customer as Social Media User (YouTube / LinkedIn)
-    participant Platform as Social Platform API (YouTube/LinkedIn)
-    participant Airflow as Apache Airflow DAGs
-    participant LinkSvc as yudhix-link (Connectors)
-    participant Staging as comment_staging (Postgres)
-    participant Sense as yudhix-sense (Python AI Engine)
-    participant Ollama as Ollama LLM (Qwen3:8b)
-    participant Pulse as yudhix-pulse (Scoring & Aggregates)
-    participant Notify as yudhix-notify (Alerting)
-    actor Agent as Support Agent (yudhix-web)
-    actor Approver as Brand Manager / Approver
-    participant Resolve as yudhix-resolve (Reply Workflow)
-    participant Ledger as yudhix-ledger (Audit Trail)
-    participant LoopSvc as yudhix-loop (Turnaround Tracker)
+    actor U as User
+    participant W as Web app
+    participant K as Keycloak
+    participant A as API
+    participant D as PostgreSQL
 
-    %% 1. Ingestion
-    Customer->>Platform: Posts comment ("PS5 controller battery dies in 2 hours! #fail")
-    Airflow->>LinkSvc: Triggers scheduled fetch task (every 15 min / cron)
-    LinkSvc->>Platform: Incremental fetchComments(since Watermark)
-    Platform-->>LinkSvc: Returns raw comment, platformAuthorId, likes, replies
-    Note over LinkSvc: Keyed Pseudonymization:<br/>author_hash = HMAC-SHA256(tenant_key, author_id)
-    LinkSvc->>Staging: Inserts to comment_staging (encrypted text, 24h TTL)
-
-    %% 2. Sanitization & AI Processing
-    Staging->>Sense: Batch worker pulls unanalyzed staging rows
-    Note over Sense: Step 1: PII Masking (Microsoft Presidio)<br/>Masks names, phones, emails, order IDs, Aadhaar
-    Note over Sense: Step 2: Fast Sentiment (XLM-RoBERTa)<br/>Result: NEGATIVE (-0.84)
-    Sense->>Ollama: Step 3: Deep LLM Aspect & Intent Extraction (JSON Schema)
-    Ollama-->>Sense: Aspects: [battery: NEGATIVE], Intent: COMPLAINT, ChurnRisk: 0.75<br/>Suggested Reply: "We're sorry! Try updating firmware or contact..."
-
-    %% 3. Scoring & Storage
-    Sense->>Pulse: Transfers sanitized comment + sentiment + aspects + reply draft
-    Note over Pulse: Computes Impact Score (0-100):<br/>Severity x (Likes + Replies + Velocity) x Recency<br/>Priority: P1 (Score: 86 >= 80)
-    Pulse->>Pulse: Upserts to monthly partitioned `comment` & `comment_analysis`
-    Pulse->>Notify: Emits Crisis / P1 Notification Event
-    Notify-->>Agent: Sends Slack / Email Alert (2-hour SLA response countdown)
-
-    %% 4. Human-in-the-Loop Review
-    Agent->>Pulse: Views prioritized comment in yudhix-web Agent Inbox
-    Agent->>Resolve: Opens AI Draft, refines response template, submits for review
-    Note over Resolve: Status: DRAFT -> IN_REVIEW<br/>(Enforces separation of duties)
-    Approver->>Resolve: Reviews diff in Approval Drawer and approves
-    Note over Resolve: Status: APPROVED
-
-    %% 5. Posting & Tamper-Evident Audit
-    Resolve->>LinkSvc: Dispatches authorized post request
-    LinkSvc->>Platform: API Call: postReply(parentId, replyText)
-    Platform-->>LinkSvc: Success: returns platformReplyId
-    Note over Resolve: Status: POSTED
-    Resolve->>Ledger: Appends audit event
-    Note over Ledger: SHA-256 Hash Chain:<br/>row_hash = SHA-256(prev_hash || tenant_id || action || payload)
-
-    %% 6. Feedback & Turnaround Outcome Loop
-    LoopSvc->>Airflow: Scheduled outcome checkpoints (+24h, +72h, +7d)
-    Airflow->>LinkSvc: Re-fetch original comment thread engagement & customer replies
-    LinkSvc-->>LoopSvc: Returns follow-up comments & sentiment delta
-    Note over LoopSvc: Evaluates Outcome:<br/>Customer: "Thanks for the quick help, working now!"<br/>Result: IMPROVED (Turnaround Success)
-    LoopSvc->>Pulse: Records turnaround outcome in daily_product_sentiment
-    Agent->>Pulse: Views executive dashboard (Turnaround Rate KPI & Aspect Heatmap)
+    U->>W: Open app, click Sign in / Start free trial
+    W->>K: Redirect (Authorization Code + PKCE)
+    U->>K: Sign up or sign in (Yudhix login theme)
+    K-->>W: Access token (5 min, refreshed in memory)
+    W->>A: Request + Authorization: Bearer token + X-Tenant-Id
+    A->>K: Check signature (JWKS, cached), issuer, expiry, client
+    A->>D: Is this user an active member of this workspace? Which role?
+    D-->>A: role = admin / approver / agent / analyst
+    A-->>W: Data for that workspace only
 ```
 
----
+| Piece | Tech | Notes |
+|---|---|---|
+| Browser login | `keycloak-js` 26 | PKCE (S256), silent SSO to restore sessions. Passwords never reach the app; the password grant is disabled. |
+| Token check | PyJWT + JWKS | RS256 signature, issuer, expiry and client (`azp`) checked on every call. |
+| Roles | PostgreSQL `tenant_user` | Roles live per workspace, not in the token, so one person can be admin in one brand and agent in another. |
+| Realm setup | `keycloak/configure_realm.py` | Applies sign-up, email verification, password policy, SMTP, theme and allowed origins. Safe to re-run. |
 
-## 4. Visual Data Pipeline & Lifecycle State Machine
+### 2.3 Deployment
 
-A step-by-step visual map showing how raw public social data is progressively enriched, prioritized, resolved, and tracked:
+The same four container images run everywhere.
 
 ```mermaid
-flowchart TD
-    classDef stage fill:#1e293b,stroke:#3b82f6,stroke-width:2px,color:#f8fafc;
-    classDef ai fill:#312e81,stroke:#6366f1,stroke-width:2px,color:#f8fafc;
-    classDef state fill:#0f766e,stroke:#14b8a6,stroke-width:2px,color:#f8fafc;
-    classDef action fill:#831843,stroke:#ec4899,stroke-width:2px,color:#f8fafc;
-    classDef kpi fill:#14532d,stroke:#22c55e,stroke-width:2px,color:#f8fafc;
-
-    subgraph PhaseIngestion ["STAGE 1 & 2: INGESTION & PRIVACY"]
-        RAW["💬 Public Comment<br/><i>'PS5 controller battery dies in 2 hrs!'</i>"]:::stage
-        HMAC["🔐 Keyed HMAC-SHA256<br/><b>Author Pseudonym:</b> v1.7F3A2C..."]:::stage
-        MASK["🛡️ Microsoft Presidio Masking<br/>Masks Names, Phones, Emails, Aadhaar"]:::stage
-        RAW --> HMAC --> MASK
-    end
-
-    subgraph PhaseAI ["STAGE 3: TWO-TIER AI PIPELINE (yudhix-sense)"]
-        TIER1["⚡ Tier-1 Fast Classifier (XLM-RoBERTa)<br/>Sentiment: <b>NEGATIVE (-0.84)</b>"]:::ai
-        RULES{"Passes Discovery Rules?<br/>(Sentiment/Keywords/Likes)"}
-        TIER2["🧠 Tier-2 LLM Enrichment (Ollama Qwen3:8b)<br/>• Aspects: [battery: NEGATIVE]<br/>• Intent: COMPLAINT | ChurnRisk: 0.75<br/>• Auto-generates Brand-Safe AI Reply Draft"]:::ai
-
-        MASK --> TIER1 --> RULES
-        RULES -- Yes --> TIER2
-        RULES -- No / Low Risk --> PASSIVE["📁 Store for Trend Metrics"]:::stage
-    end
-
-    subgraph PhaseScore ["STAGE 4: SCORING & ROUTING (yudhix-pulse)"]
-        SCORING["📊 Impact Scoring Formula (0-100)<br/>Severity × (Likes + Replies + Velocity) × Recency"]:::stage
-        PRIORITY{"Priority Band"}
-        P1["🚨 Priority P1 (Score ≥ 80)<br/>2h SLA Timer · Alert to Slack/Email"]:::action
-        P2["⚠️ Priority P2 (Score 50-79)<br/>24h SLA Queue"]:::stage
-        P3["ℹ️ Priority P3 (Score < 50)<br/>Low Urgency Backlog"]:::stage
-
-        TIER2 --> SCORING --> PRIORITY
-        PRIORITY -- "Score ≥ 80" --> P1
-        PRIORITY -- "50 - 79" --> P2
-        PRIORITY -- "< 50" --> P3
-    end
-
-    subgraph PhaseWorkflow ["STAGE 5: REPLY APPROVAL STATE MACHINE (yudhix-resolve)"]
-        DRAFT["📝 State: DRAFT<br/>Pre-filled with AI suggested reply"]:::state
-        IN_REVIEW["🔍 State: IN_REVIEW<br/>Agent edits & submits to manager"]:::state
-        DECISION{"Approver Decision"}
-        REJECTED["❌ State: REJECTED<br/>Feedback returned to agent"]:::state
-        APPROVED["✅ State: APPROVED<br/>Brand safety checks passed"]:::state
-
-        P1 --> DRAFT
-        P2 --> DRAFT
-        DRAFT -->|Agent submits| IN_REVIEW
-        IN_REVIEW --> DECISION
-        DECISION -- "Approve" --> APPROVED
-        DECISION -- "Request Changes" --> REJECTED
-        REJECTED -->|Edit Draft| DRAFT
-    end
-
-    subgraph PhasePosting ["STAGE 6: BRAND-SAFE POSTING & AUDIT (yudhix-link & yudhix-ledger)"]
-        POSTED["🚀 State: POSTED<br/>Published to YouTube/LinkedIn API"]:::state
-        AUDIT["⛓️ Hash-Chained Audit Ledger<br/>row_hash = SHA-256(prev_hash || tenant || action)"]:::stage
-        BILLING["💳 Metered Billing Event<br/>Idempotent event: replies_posted"]:::stage
-
-        APPROVED -->|connector-service| POSTED
-        POSTED --> AUDIT
-        POSTED --> BILLING
-    end
-
-    subgraph PhaseOutcome ["STAGE 7: TURNAROUND OUTCOME LOOP (yudhix-loop)"]
-        CHECKPOINTS["⏱️ Scheduled Checks (+24h, +72h, +7d)<br/>Re-fetches thread & customer reply"]:::stage
-        EVAL{"Did Thread Sentiment Improve?"}
-        IMPROVED["🌟 Outcome: IMPROVED<br/>Customer satisfied / positive reply"]:::kpi
-        NEUTRAL["⚖️ Outcome: NEUTRAL<br/>No further negative responses"]:::stage
-        WORSENED["⚠️ Outcome: WORSENED<br/>Escalate to Customer Support Lead"]:::action
-        DASH["📈 Executive Analytics Dashboard<br/><b>Turnaround Rate KPI</b> = Improved / Total Posted"]:::kpi
-
-        POSTED --> CHECKPOINTS --> EVAL
-        EVAL -- "Sentiment Delta > 0" --> IMPROVED
-        EVAL -- "No Change" --> NEUTRAL
-        EVAL -- "Sentiment Delta < 0" --> WORSENED
-        IMPROVED --> DASH
-        NEUTRAL --> DASH
-        WORSENED --> DASH
-    end
+flowchart LR
+    U[Users] --> G[gateway<br/>2–10 pods]
+    G --> W[web<br/>2–6 pods]
+    G --> A[api<br/>2–10 pods, autoscaled]
+    G --> K[keycloak<br/>1–2 pods]
+    A --> P[(PostgreSQL<br/>in-cluster locally,<br/>managed in prod)]
+    K --> P
+    A --> O[Ollama<br/>GPU host, optional]
 ```
+
+| Target | Tech | Command |
+|---|---|---|
+| Laptop, whole stack | Docker Compose (`deploy/docker/compose.yaml`) | `./yudhix.sh docker-up` → http://localhost:8080 |
+| Laptop, Kubernetes | Kustomize `deploy/k8s/overlays/local` | `./yudhix.sh k8s-up` → http://localhost:8081 |
+| Production, Kubernetes | Kustomize `deploy/k8s/overlays/production`: HPA autoscaling, PodDisruptionBudgets, NetworkPolicies, TLS ingress (ingress-nginx + cert-manager), clustered Keycloak | `kubectl apply -k deploy/k8s/overlays/production` |
+| Zoho Catalyst | AppSail (one app per image) + managed Postgres + ZeptoMail | `deploy/zoho/deploy-catalyst.sh` |
+
+Details: [deploy/README.md](deploy/README.md) · Zoho: [deploy/zoho/README.md](deploy/zoho/README.md).
 
 ---
 
-## 4.1 Ground Truth Triangulation: Influencer Video Decoding & RAG Fact-Check Engine
+## 3. Run it locally
 
-A major architectural innovation of Yudhix is **Ground Truth Triangulation**. Unlike legacy monitoring tools that evaluate customer comments in a vacuum, Yudhix decodes the video narrative, verifies claims against official brand records, and links audience outrage to its root cause:
+Two ways to run it. For daily development use **A** (hot reload, your sample data). Use **B** to test the production setup.
 
-```
-               ┌────────────────────────────────────────────────────────┐
-               │              OFFICIAL BRAND KNOWLEDGE RAG              │
-               │   (Sony Hardware Specs, EULAs, Discs Policy, Warranties)│
-               └───────────────────────────┬────────────────────────────┘
-                                           │ Semantic Cross-Encoder
-                                           ▼
-┌──────────────────────────────┐          ┌─────────────────────────────┐
-│  INFLUENCER VIDEO ANALYSIS   │ ───────► │    RAG FACT-CHECK MATRIX    │
-│  • Whisper Speech-to-Text    │          │  • Verified True            │
-│  • Atomic Chronological Quote│          │  • Misleading / False       │
-│  • Sensationalism / Rage-Bait│          │  • Unverified Speculation   │
-└──────────────────────────────┘          └──────────────┬──────────────┘
-                                                         │
-                                                         ▼
-                                          ┌─────────────────────────────┐
-                                          │  CAUSALITY OUTRAGE MAPPING  │
-                                          │  • 86.4% boycott comments   │
-                                          │    triggered by Claim @01:14│
-                                          │  • Action: Creator Outreach │
-                                          └─────────────────────────────┘
+### Prerequisites (once)
+
+| Tool | Version | Install (macOS) |
+|---|---|---|
+| Docker Desktop | latest | docker.com |
+| PostgreSQL | 16 | `brew install postgresql@16 && brew services start postgresql@16` |
+| Python | 3.11+ | `brew install python` |
+| Node.js | 22 (or 20.19+) | `brew install node@22` |
+| Ollama + model (optional) | latest | `brew install ollama && ollama pull llama3.1` |
+
+### A. Development mode (hot reload)
+
+**First time only:**
+
+```bash
+cd ~/Desktop/code/yudhix
+./yudhix.sh init-db                       # creates the yudhix database and all tables
+docker compose up -d keycloak mailpit     # sign-in server + email catcher
+./yudhix.sh keycloak                      # applies sign-up / PKCE / SMTP / theme settings to Keycloak
 ```
 
-### Triangulation Capabilities
-1. **Atomic Claim Extraction**: Automatically identifies and timestamps key statements made in YouTube videos (e.g., *"Sony is revoking offline disc playability with a mandatory patch"*).
-2. **Product Knowledge RAG**: Semantically matches creator assertions against authoritative product engineering specs (`product_knowledge` table in PostgreSQL).
-3. **Automated Claim Verdicts**: Emits structured confidence scores, official document citations (e.g. *Section 4.2: Media Drive Verification*), and verdicts (`MISLEADING`, `UNVERIFIED_SPECULATION`, `FACTUALLY_CORRECT`).
-4. **Causality & Anger Attribution**: Proves to brand executives that public backlash was triggered by *creator misinformation* rather than a failure of the product itself.
-5. **Creator Clarification Kit**: Generates personalized, polite outreach notes citing official specifications so creators can update pinned comments and avoid viral PR crises.
+**Every day (and after a restart), in this order:**
+
+```bash
+open -a Docker                            # 1. start Docker Desktop, wait until it says running
+brew services start postgresql@16         # 2. dev database (usually already up, it starts at login)
+cd ~/Desktop/code/yudhix
+docker compose up -d keycloak mailpit     # 3. sign-in + email catcher
+./yudhix.sh start                         # 4. API (:8000) + web app (:4200); installs dependencies on first run
+./yudhix.sh status                        # 5. check everything is online
+```
+
+Open **http://localhost:4200**.
+
+| What | Address | Login |
+|---|---|---|
+| Web app | http://localhost:4200 | `admin@sony.com` / `sony_admin_2026`, or **Start free trial** to sign up |
+| API docs | http://localhost:8000/docs | – |
+| Keycloak admin | http://localhost:8180 | `admin` / `admin_yudhix_2026` |
+| Emails (Mailpit) | http://localhost:8025 | – (verification and invite emails land here) |
+| AI model | localhost:11434 | – |
+
+Try it: **Videos → "PlayStation Explains Why it's Ending Physical Discs"** shows a full report built from 2,662 stored comments. From the workspace menu you can also **Explore the demo workspace**.
+
+**Stop:**
+
+```bash
+./yudhix.sh stop                          # API + web app
+docker compose stop                       # Keycloak + Mailpit
+```
+
+Logs are in `.logs/` (`sense.log` for the API, `frontend.log` for the web app).
+
+### B. Whole stack in containers
+
+```bash
+./yudhix.sh docker-up                     # builds 4 images, starts everything → http://localhost:8080
+./yudhix.sh docker-down                   # stop (add --wipe to delete its database)
+API_REPLICAS=4 ./yudhix.sh docker-up      # run 4 API copies behind the gateway
+```
+
+It reads `YOUTUBE_API_KEY` from the same `services/yudhix-sense/.env` file as dev mode. App: http://localhost:8080 · Keycloak admin: http://localhost:8080/auth/admin (`admin` / `admin_local_pw`) · Emails: http://localhost:8026. This stack has its **own empty database**: sign up, create a workspace and analyze a video.
+
+### Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| Postgres won't start after a restart or crash | `tail /opt/homebrew/var/log/postgresql@16.log`. If it says `lock file "postmaster.pid" already exists` and `pgrep postgres` shows nothing, run `rm /opt/homebrew/var/postgresql@16/postmaster.pid && brew services restart postgresql@16`. |
+| Sign-in page doesn't load | Keycloak takes ~30 s to start. `docker compose ps` should show `yudhix-keycloak` up. |
+| No verification email | Check http://localhost:8025. Re-run `./yudhix.sh keycloak` if SMTP settings were lost. |
+| Video report shows **0 comments** | The API has no YouTube API key. Put `YOUTUBE_API_KEY=...` in `services/yudhix-sense/.env`, run `./yudhix.sh restart`, then analyze the link again. |
+| Robot in the top bar is asleep | The AI model isn't reachable. Run `ollama serve` and `ollama pull llama3.1`. The app still works in rule-based mode. |
+| `./yudhix.sh k8s-up` can't find images | Docker Desktop's Kubernetes in **kind** mode doesn't share local images. Switch it to **kubeadm** (Settings → Kubernetes), or push to a registry: `REGISTRY=ghcr.io/<you> ./yudhix.sh k8s-up`. |
+| Old icon or old page after an update | Hard reload (Cmd+Shift+R). The PWA service worker caches the app. |
+
+> Note: the `postgres` container in `docker-compose.yml` holds Keycloak's data. Your app data is in the Homebrew Postgres. Both use port 5432; the API connects to `127.0.0.1`, which reaches Homebrew.
 
 ---
 
-## 5. Microservices Catalog & Responsibilities
+## 4. Configuration
 
-| # | Service Directory | Service Name | Tech Stack | Responsibility | Owned Tables |
-|---|---|---|---|---|---|
-| 1 | `services/yudhix-gateway` | **yudhix-gateway** | Spring Cloud Gateway, Java 21 | OIDC token validation, tenant route isolation, rate-limiting, CORS | *Stateless* |
-| 2 | `services/yudhix-tenant` | **yudhix-tenant** | Spring Boot 3.3, Java 21 | Tenant lifecycle, settings, Keycloak org sync, multi-country configuration | `tenant`, `tenant_setting`, `tenant_user` |
-| 3 | `services/yudhix-catalog` | **yudhix-catalog** | Spring Boot 3.3, Java 21, pgvector | Product catalog, aliases, competitor tracking, embeddings (bge-m3) | `product`, `product_alias`, `owned_source` |
-| 4 | `services/yudhix-radar` | **yudhix-radar** | Spring Boot 3.3, Java 21 | Topic taxonomy, discovery keyword rules, sentiment & engagement filters | `discovery_rule`, `topic` |
-| 5 | `services/yudhix-link` | **yudhix-link** | Spring Boot 3.3, Java 21 | Platform SPI, OAuth token vault (AES-256-GCM), watermarks, fetch & post | `platform_credential`, `source_watermark`, `comment_staging` |
-| 6 | `services/yudhix-sense` | **yudhix-sense** | Python 3.11, FastAPI, Presidio | PII sanitization, fast XLM-RoBERTa classifier, Ollama LLM aspect extraction | `comment_analysis`, `comment_aspect` |
-| 7 | `services/yudhix-pulse` | **yudhix-pulse** | Spring Boot 3.3, Java 21, pg_partman | Monthly partitioned comments, velocity & engagement decay, P1/P2/P3 scoring | `comment`, `daily_product_sentiment` |
-| 8 | `services/yudhix-resolve` | **yudhix-resolve** | Spring Boot 3.3, Java 21 | Reply state machine (DRAFT → IN_REVIEW → APPROVED → POSTED), SLA, brand voice | `reply`, `reply_template`, `approval_step` |
-| 9 | `services/yudhix-loop` | **yudhix-loop** | Spring Boot 3.3, Java 21 | +24h/+72h/+7d thread turnaround outcome measurement, agent label feedback | `reply_outcome`, `label_feedback` |
-| 10 | `services/yudhix-ledger` | **yudhix-ledger** | Spring Boot 3.3, Java 21 | Append-only, SHA-256 cryptographic hash-chained audit logging, verification | `audit_event` |
-| 11 | `services/yudhix-dharma` | **yudhix-dharma** | Spring Boot 3.3, Java 21 | Policy packs (DPDP 2023, CCPA), cryptographic consent records, DSR execution | `policy_document`, `consent_record`, `retention_policy`, `dsr_request` |
-| 12 | `services/yudhix-meter` | **yudhix-meter** | Spring Boot 3.3, Java 21 | Idempotent usage events, plan quotas, Stripe/Razorpay invoicing, GST & US tax | `usage_event`, `plan`, `subscription`, `invoice` |
-| 13 | `services/yudhix-notify` | **yudhix-notify** | Spring Boot 3.3, Java 21 | Crisis spike alerts, SLA warnings, email (Mailpit/SMTP) & Slack dispatch | `notification` |
-| 14 | `services/yudhix-config` | **yudhix-config** | Spring Cloud Config | Centralized Git/file-backed application properties & tenant config profiles | *Config Store* |
+API settings are environment variables (`services/yudhix-sense/app/core/config.py`). All have working local defaults.
 
-### Shared Modules & Frontend
-- **`libs/yudhix-common`**: Shared tenant context (`TenantContextHolder`), PostgreSQL RLS interceptors, keyed `AuthorHasher`, standard API responses (`ApiResponse<T>`, `ErrorResponse`).
-- **`libs/yudhix-connector-sdk`**: Pluggable `PlatformConnector` Java SPI, `FetchRequest`, `FetchResult`, `PostResult`, `EngagementSnapshot`, `Watermark`.
-- **`frontend/yudhix-web`**: Angular 18+ application with standalone components, Signals, Keycloak OIDC, and ECharts analytics.
+For local secrets, copy `services/yudhix-sense/.env.example` to `.env` in the same folder (git-ignored) and restart the API. **To pull comments for new videos, set `YOUTUBE_API_KEY` there**: without it, analysis still finds and checks claims, but collects no comments.
 
----
+| Variable | Default | Purpose |
+|---|---|---|
+| `PG_HOST` `PG_PORT` `PG_DB` `PG_USER` `PG_PASSWORD` | `localhost` `5432` `yudhix` `postgres` `postgres` | Database |
+| `OLLAMA_URL` / `OLLAMA_MODEL` | `http://127.0.0.1:11434` / `llama3.1:latest` | AI model. Without it, rule-based mode. |
+| `YOUTUBE_API_KEY` | empty | Pull metadata and comments for new videos. Server-side only. |
+| `WHISPER_MODEL` | `small` | Only for videos without captions (needs `faster-whisper` and `yt-dlp`). |
+| `KEYCLOAK_URL` / `KEYCLOAK_REALM` | `http://localhost:8180` / `yudhix` | Where tokens come from. |
+| `KEYCLOAK_ISSUER` / `KEYCLOAK_JWKS_URL` | derived | Set when the browser and the API reach Keycloak by different addresses. |
+| `APP_URL` / `CORS_ORIGINS` | `http://localhost:4200` / local + Capacitor origins | Invitation links; allowed web and app origins. |
+| `SMTP_HOST` `SMTP_PORT` `SMTP_FROM` `SMTP_USER` `SMTP_PASSWORD` `SMTP_STARTTLS` | `localhost` `1025` … | Invitation emails. |
+| `AUTHOR_HMAC_KEY` | `dev-only-change-me` | Secret for hashing comment authors. **Set a strong value in production.** |
+| `TRIAL_DAYS` / `TRIAL_PLAN` | `14` / `PROFESSIONAL` | Free trial for new workspaces. |
+| `DEMO_WORKSPACE_JOIN` | `true` | Anyone signed in can join the demo workspace. **Turn off in production.** |
+| `MAX_COMMENTS_PER_VIDEO` | `100` | Comments kept per analysis. |
+| `COMMENT_SAMPLING` | `spread` | `spread`: 40% newest, 40% oldest, 20% random from the middle, so the charts show a cross-section over time; the video's other stored comments are archived (hidden, not deleted), except ones with a reply. `top`: the most relevant comments as YouTube ranks them. |
+| `COMMENT_POOL_MAX` | `2000` | `spread` reads up to this many comments, newest first, to find the oldest (1 YouTube quota unit per 100). |
+| `OLLAMA_EMBED_MODEL` | `nomic-embed-text` | Local embedding model for meaning-based fact search (used when the cloud provider has no embeddings). Optional. |
+| `AI_KEY_SECRET` | `AUTHOR_HMAC_KEY` | Encrypts workspace AI keys. Set a long random value in production; changing it makes saved keys unreadable. |
+| `SECOND_OPINION` | `cloud` | Read each claim twice and flag disagreements: `cloud` (only with cloud AI), `always`, `off`. |
+| `AMAZON_REVIEWS_API_KEY` | (empty) | Rainforest API key: collect all Amazon reviews through the provider instead of reading the product page. |
+| `AMAZON_MAX_REVIEWS` | `100` | Most reviews read per check with the provider. |
+| `LLM_FACTCHECK_BUDGET_SECONDS` | `180` | Time the AI gets to fact-check a video's claims; the rest use the rule-based check (marked "Rule-based"). Cloud AI checks 4 claims at a time. |
+| `NEW_COMMENTS_MAX` | `100` | Most comments one "Fetch new comments" check adds. |
+| `SCHEDULER_ENABLED` | `true` | Background checks for new comments on this server. Workspaces set their own interval. |
+| `SCHEDULER_TICK_SECONDS` | `300` | How often the scheduler looks for videos that are due. |
+| `SCHEDULER_DEFAULT_HOURS` | `6` | Interval for workspaces that haven't chosen one. |
+| `LLM_COMMENT_BUDGET_SECONDS` | `240` | Time the AI may spend reading comments per analysis (most-liked first); the rest use keyword rules. About 20 comments per 50 s on an M-series Mac with `llama3.1`. |
+| `INTERNAL_API_KEY` | empty (disabled) | Unlocks the old internal endpoints (`/api/v1/comments`, `/analyze`, `/scheduler/…`). |
 
-## 6. Privacy, Pseudonymization & Data Lifecycle
-
-```
-[Raw Social Comment]
-       │
-       ▼
-[Keyed HMAC-SHA256] ──► author_hash = v1.<Base64Url(HMAC(tenant_key, platform + ":" + author_id))>
-       │
-       ▼
-[Microsoft Presidio] ──► Masks PII: <PERSON>, <PHONE>, <EMAIL>, <ORDER_ID>, <GOV_ID>
-       │
-       ▼
-[Only Masked Text] ──► Passed to AI Models & Persisted in Monthly Partitioned DB
-       │
-       ▼
-[Retention Policy] ──► Staging TTL: 24 Hours | Masked Text Nullified: 30 Days | Aggregates: Long-term
-```
-
-1. **Author Pseudonymization**: Rather than plain SHA-256 (which is vulnerable to dictionary attacks on public channel IDs), Yudhix uses per-tenant HMAC keys. The same person commenting on two different tenant products generates completely independent hashes.
-2. **Short-Lived Staging (24h TTL)**: Raw text exists only in-memory or in an encrypted staging partition with a 24-hour time-to-live before PII scrubbing.
-3. **Data Minimization & Expiration**: Masked comment text is retained for $\le 30$ days (satisfying YouTube API Developer Policies) and then set to `NULL`. Statistical aggregates (`daily_product_sentiment`) remain indefinitely for historical business intelligence.
+Web app settings: `frontend/yudhix-web/src/environments/` (`apiUrl`, `keycloak`, `salesEmail`). Container builds read `/config.json` at start instead, written from env vars. `GET /health` shows which optional features are active.
 
 ---
 
-## 7. Repository Directory Structure
+## 5. Project structure
 
 ```
 yudhix/
-├── pom.xml                               # Root Multi-Module Maven POM
-├── mvnw / mvnw.cmd                       # Maven Wrapper Executables
-├── docker-compose.yml                    # Containerized Local Dev Stack
-├── README.md                             # Platform Architecture & Working Flow
-├── .gitignore                            # Root Project Git Ignore
-├── db/
-│   └── init/
-│       ├── 01-init-databases.sql         # Database provisioning (yudhix, keycloak, airflow)
-│       └── 02-enable-extensions.sql      # Extensions: uuid-ossp, pgcrypto, vector
-├── keycloak/
-│   └── realm-yudhix.json                 # Pre-configured Realm, Clients, and Roles
-├── secrets/                              # Docker secrets (git-ignored)
-│   ├── pg_password.txt
-│   ├── kc_admin_password.txt
-│   └── master_key.txt
-├── airflow/
-│   └── dags/                             # Airflow Batch & Turnaround DAGs
-├── libs/
-│   ├── yudhix-common/                    # Shared Context, RLS, HMAC Hasher, DTOs
-│   └── yudhix-connector-sdk/             # Platform Connector Java SPI
-├── services/                             # Microservices Ecosystem
-│   ├── yudhix-gateway/
-│   ├── yudhix-tenant/
-│   ├── yudhix-catalog/
-│   ├── yudhix-radar/
-│   ├── yudhix-link/
-│   ├── yudhix-sense/
-│   ├── yudhix-pulse/
-│   ├── yudhix-resolve/
-│   ├── yudhix-loop/
-│   ├── yudhix-ledger/
-│   ├── yudhix-dharma/
-│   ├── yudhix-meter/
-│   ├── yudhix-notify/
-│   └── yudhix-config/
-└── frontend/
-    └── yudhix-web/                       # Angular 18 Single Page App
+├── yudhix.sh                    # start / stop / status / tests / docker / k8s helper
+├── docker-compose.yml           # dev infrastructure: Keycloak, Mailpit, Postgres for Keycloak, Ollama
+├── frontend/yudhix-web/         # Angular 20 PWA + Capacitor
+│   └── src/app/
+│       ├── core/                # API client, auth (keycloak-js), session & roles, guards
+│       ├── layout/              # app shell: sidebar, top bar, bottom tabs
+│       ├── shared/              # icons, badges, charts, money formatting, AI status robot
+│       └── features/            # public, onboarding, analyze, videos, inbox, approvals, track, knowledge, settings
+├── services/yudhix-sense/       # Python API (FastAPI): everything the web app calls
+│   ├── app/
+│   │   ├── api/                 # HTTP routes
+│   │   ├── truth/               # video analysis pipeline
+│   │   ├── workflow/            # inbox, reply state machine, outcomes, insights
+│   │   ├── platform/            # auth, workspaces, team, billing, notifications, email
+│   │   ├── pipeline/            # PII masking, sentiment, LLM enrichment
+│   │   ├── core/                # config, database, migrations runner, LLM client
+│   │   └── migrations/          # V2 truth-first · V3 SaaS · V4 regional pricing
+│   └── tests/                   # pytest unit tests + end-to-end SaaS test
+├── keycloak/                    # realm file, configure_realm.py, login theme
+├── deploy/                      # gateway, Dockerfiles, Compose stack, Kubernetes, Zoho, scripts
+├── services/yudhix-*/ (Java)    # planned Spring Boot services; their V1 SQL is the base schema
+├── libs/                        # shared Java libraries for those services
+└── airflow/dags/                # planned scheduled jobs (ingestion, outcomes, retention)
 ```
+
+### Main database tables
+
+| Area | Tables |
+|---|---|
+| Workspaces & team | `tenant`, `tenant_user`, `workspace_invitation`, `country_config` |
+| Products & facts | `product`, `product_knowledge`, `knowledge_document`, `knowledge_embedding`, `ai_sync_run` |
+| AI | `ai_setting` (provider, model, encrypted key per workspace) |
+| Videos & claims | `video_truth_analysis`, `video_claim`, `video_analysis_job`, `creator_outreach` |
+| Comments | `comment` (YouTube comments and Amazon reviews), `comment_analysis`, `comment_claim_link`, `comment_watch` (schedule) |
+| Channels | `product_listing` (Amazon listings per product) |
+| Product ideas | `product_idea`, `product_idea_comment` |
+| Replies | `reply`, `approval_step`, `reply_outcome` |
+| Billing | `plan`, `plan_price`, `subscription`, `usage_event`, `invoice`, `invoice_line` |
+| Other | `app_notification`, `audit_event` |
+
+The API creates every table on an empty database, then applies `app/migrations/V*.sql` on each start. Migrations are safe to run from many API copies at once.
 
 ---
 
-## 8. Getting Started (Local Development)
+## 6. Workspaces, roles and plans
 
-### Prerequisites
-- **Java 21** (Temurin 21 recommended)
-- **Maven 3.9+** (or use included `./mvnw`)
-- **Docker & Docker Compose**
-- **Python 3.11** (for `yudhix-sense`)
-- **Node.js 20+ & npm** (for `yudhix-web`)
+**Sign-up flow:** Landing → Start free trial → Keycloak sign-up → verify email → onboarding (workspace → product + one official fact → first video) → truth report. Agencies switch between client workspaces from one login.
 
-### Build Shared Modules
-```bash
-./mvnw clean install
-```
+| Permission | Admin | Approver | Agent | Analyst |
+|---|:-:|:-:|:-:|:-:|
+| Read reports, inbox, insights | ✓ | ✓ | ✓ | ✓ |
+| Analyze videos, edit facts, draft and post replies | ✓ | ✓ | ✓ | |
+| Approve / reject replies (never their own) | ✓ | ✓ | | |
+| Workspace settings, team, billing | ✓ | | | |
 
-### Start Core Infrastructure
-```bash
-docker compose up -d postgres keycloak ollama mailpit
-```
-- **PostgreSQL**: `localhost:5432` (Database: `yudhix`, User: `postgres` or `yudhix`)
-- **Keycloak Admin Console**: `http://localhost:8180` (User: `admin`)
-- **Mailpit Web UI**: `http://localhost:8025`
-- **Ollama AI Server**: `http://localhost:11434` (Model: `llama3.1:latest`)
+| Plan | India (INR + 18% GST) | Other countries (USD) | Video analyses | Comments | Team |
+|---|---|---|---|---|---|
+| Starter | ₹7,999 / mo | $99 / mo | 20 | 10,000 | 5 |
+| Professional | ₹39,999 / mo | $499 / mo | 100 | 100,000 | 20 |
+| Enterprise | ₹1,59,999 / mo | $1,999 / mo | Unlimited | Unlimited | Unlimited |
 
----
-
-## 9. Database Architecture & Complete Table Dictionary
-
-Yudhix utilizes **PostgreSQL 16** with a strict multi-tenant schema partitioning architecture. Every tenant-owned table is partitioned logically with `tenant_id UUID NOT NULL` as part of composite primary keys, enforcing tenant data isolation and PostgreSQL Row-Level Security (RLS).
-
-### Entity Relationship & Data Flow Diagram
-
-```mermaid
-erDiagram
-    tenant ||--o{ tenant_setting : "configures"
-    tenant ||--o{ tenant_user : "members"
-    tenant ||--o{ country_config : "localizes"
-    tenant ||--o{ product : "owns"
-    product ||--o{ product_alias : "has synonyms"
-    product ||--o{ owned_source : "tracks channels"
-    product ||--o{ discovery_rule : "matches"
-    topic ||--o{ discovery_rule : "categorizes"
-    owned_source ||--o{ platform_credential : "authenticates"
-    owned_source ||--o{ source_watermark : "poll cursor"
-    owned_source ||--o{ comment_staging : "buffers raw"
-    
-    product ||--o{ comment : "receives"
-    comment ||--|| comment_analysis : "1:1 AI analysis"
-    comment ||--o{ comment_aspect : "1:N granular aspects"
-    comment ||--o{ reply : "addressed by"
-    reply ||--o{ approval_step : "human review"
-    reply ||--o{ reply_outcome : "+24h/+72h/+7d turnaround"
-    comment ||--o{ label_feedback : "RLHF corrections"
-    
-    tenant ||--o{ audit_event : "cryptographic SHA-256 chain"
-    tenant ||--o{ consent_record : "proof of consent"
-    tenant ||--o{ dsr_request : "GDPR/DPDP erasure"
-    tenant ||--o{ usage_event : "metered actions"
-    tenant ||--o{ invoice : "monthly billing"
-    tenant ||--o{ notification_rule : "triggers alerts"
-```
+- Yearly = 10× monthly. New workspaces get a 14-day Professional trial.
+- Currency comes from the workspace's country (India → INR, else USD) and stays fixed while a paid plan is active. The pricing page shows ₹ to visitors in India and $ to others, with a toggle.
+- Prices live in the `plan_price` table. To change one: `UPDATE plan_price SET monthly_price = 8999, yearly_price = 89990 WHERE plan_id = 'STARTER' AND currency = 'INR';`
+- When the trial ends or a quota is used up, reports stay readable but new analyses and posting are blocked until an admin picks a plan. Admins are notified at 80% and 100%.
+- Invoices are real (proration, GST, printable), but **no card is charged yet**.
 
 ---
 
-### Complete 31-Table Dictionary & Links
+## Demo kit
 
-#### Group 1: Tenant & Identity Domain (`yudhix-tenant`)
-| Table Name | Primary Key | Foreign Keys / Links | Usage & Business Responsibility |
-|---|---|---|---|
-| `tenant` | `id (UUID)` | Root Entity | Stores enterprise organizations (e.g. Sony, PlayStation). Manages tier, status, slug, and billing contact. |
-| `tenant_setting` | `(tenant_id, key)` | `tenant_id` $\rightarrow$ `tenant.id` | Key-value store for tenant-specific configuration (SLA response time thresholds, default AI models, custom PII masking regex). |
-| `tenant_user` | `(tenant_id, user_id)` | `tenant_id` $\rightarrow$ `tenant.id` | Maps Keycloak authentication users to internal tenant roles (`ADMIN`, `AGENT`, `APPROVER`, `COMPLIANCE`). |
-| `country_config` | `(tenant_id, country_code)` | `tenant_id` $\rightarrow$ `tenant.id` | Multi-jurisdiction data privacy parameters. Governs whether India DPDP 2023 or US CCPA rules apply, and sets localized data retention limits. |
+`docs/demo/` has everything for presenting Yudhix: a scene-by-scene script with narration (`DEMO_SCRIPT.md`), a slide deck with real screenshots (`Yudhix-Demo.pptx`), and a recorder that produces a narrated 1080p video from the running app. See `docs/demo/README.md`.
 
-#### Group 2: Product Catalog & Source Tracking (`yudhix-catalog`)
-| Table Name | Primary Key | Foreign Keys / Links | Usage & Business Responsibility |
-|---|---|---|---|
-| `product` | `(tenant_id, id)` | `tenant_id` $\rightarrow$ `tenant.id` | Registered brand products (e.g. "DualSense Wireless Controller", "Sony Cloud Platform"). Stores SKU and semantic vector embeddings for NLP matching. |
-| `product_alias` | `(tenant_id, id)` | `product_id` $\rightarrow$ `product.id` | Alternate names, colloquial abbreviations, hashtags, and competitor comparison terms used by ingestion matching rules. |
-| `owned_source` | `(tenant_id, id)` | `product_id` $\rightarrow$ `product.id` | Registered social channels (official YouTube channels, LinkedIn company pages, subreddits) subscribed for automated ingestion. |
+## 7. Tests
 
-#### Group 3: Discovery Radar & Topic Taxonomy (`yudhix-radar`)
-| Table Name | Primary Key | Foreign Keys / Links | Usage & Business Responsibility |
-|---|---|---|---|
-| `topic` | `(tenant_id, id)` | `parent_id` $\rightarrow$ `topic.id` | Hierarchical taxonomy of customer issues (e.g. Hardware $\rightarrow$ Battery Life, Billing $\rightarrow$ API Overages). Enables categorization in the dashboard. |
-| `discovery_rule` | `(tenant_id, id)` | `product_id`, `topic_id` | Keyword rules, regex patterns, sentiment thresholds, and language filters that determine which harvested comments are routed to agents. |
+```bash
+./yudhix.sh unit     # backend (34 pytest) + frontend (10 Karma) unit tests
+./yudhix.sh e2e      # ~47 end-to-end checks through the real Keycloak (needs dev mode running)
+```
 
-#### Group 4: Social Connectors & Ingestion (`yudhix-link`)
-| Table Name | Primary Key | Foreign Keys / Links | Usage & Business Responsibility |
-|---|---|---|---|
-| `platform_credential` | `(tenant_id, platform, source_id)` | `source_id` $\rightarrow$ `owned_source.id` | Secure OAuth2 access tokens and refresh tokens encrypted with envelope AES-256-GCM. |
-| `source_watermark` | `(tenant_id, source_id, platform)` | `source_id` $\rightarrow$ `owned_source.id` | High-water mark tracking for incremental polling. Remembers `last_comment_id` and timestamp so duplicate API requests are prevented. |
-| `comment_staging` | `id (BIGSERIAL)` | `tenant_id` $\rightarrow$ `tenant.id` | High-throughput, short-lived ingestion buffer (24-hour TTL). Holds encrypted raw payloads before PII sanitization and sentiment inference. |
-
-#### Group 5: Comments, AI Sentiment & Granular Aspects (`yudhix-pulse` & `yudhix-sense`)
-| Table Name | Primary Key | Foreign Keys / Links | Usage & Business Responsibility |
-|---|---|---|---|
-| `comment` | `(tenant_id, id)` | `product_id` $\rightarrow$ `product.id`<br/>`source_id` $\rightarrow$ `owned_source.id` | Master comment record with keyed author pseudonym (`author_hash`), PII-masked text, likes, reply counts, and YouTube comment IDs. Enforces `UNIQUE(tenant_id, platform, platform_comment_id)`. |
-| `comment_analysis` | `(tenant_id, comment_id)` | `comment_id` $\rightarrow$ `comment.id` | 1-to-1 AI intelligence results: fast sentiment classification, Ollama LLM intent (`COMPLAINT`, `PRAISE`), churn risk (0-1.0), impact score (0-100), priority (`P1`, `P2`, `P3`), and AI suggested turnaround reply. |
-| `comment_aspect` | `id (BIGSERIAL)` | `comment_id` $\rightarrow$ `comment.id` | 1-to-Many granular aspect breakdown (e.g. `battery`: NEGATIVE, `customer-support`: NEGATIVE) with extracted text evidence and confidence scores. |
-| `daily_product_sentiment` | `(tenant_id, day, product_id, platform, country_code)` | `product_id` $\rightarrow$ `product.id` | Daily pre-aggregated rollups (total positive/negative counts, engagement counts, turnaround success rates). Kept long-term for executive analytics after raw comments expire. |
-
-#### Group 6: Reply Turnaround & Approval Workflow (`yudhix-resolve`)
-| Table Name | Primary Key | Foreign Keys / Links | Usage & Business Responsibility |
-|---|---|---|---|
-| `reply` | `(tenant_id, id)` | `comment_id` $\rightarrow$ `comment.id`<br/>`product_id` $\rightarrow$ `product.id` | Outbound responses crafted to turn negative comments around. Tracks lifecycle state (`DRAFT` $\rightarrow$ `IN_REVIEW` $\rightarrow$ `APPROVED` $\rightarrow$ `POSTED`). |
-| `reply_template` | `(tenant_id, id)` | `topic_id` $\rightarrow$ `topic.id`<br/>`product_id` $\rightarrow$ `product.id` | Approved, brand-safe message templates containing interpolation variables (e.g. `{{author}}`, `{{support_link}}`). |
-| `approval_step` | `id (BIGSERIAL)` | `reply_id` $\rightarrow$ `reply.id` | Multi-tiered human-in-the-loop review log. Enforces Separation of Duties—an agent cannot approve their own drafted reply. |
-
-#### Group 7: Feedback Loop & Turnaround Outcome (`yudhix-loop`)
-| Table Name | Primary Key | Foreign Keys / Links | Usage & Business Responsibility |
-|---|---|---|---|
-| `reply_outcome` | `id (BIGSERIAL)` | `reply_id` $\rightarrow$ `reply.id`<br/>`comment_id` $\rightarrow$ `comment.id` | Follow-up tracking at +24h, +72h, and +7d. Measures if the customer replied, if their sentiment flipped from negative to positive, and calculates the Turnaround Success Rate. |
-| `label_feedback` | `id (BIGSERIAL)` | `comment_id` $\rightarrow$ `comment.id` | RLHF audit log where human agents correct model predictions (e.g. correcting sentiment from NEUTRAL to NEGATIVE). Used for local Ollama fine-tuning datasets. |
-
-#### Group 8: Immutable Cryptographic Ledger (`yudhix-ledger`)
-| Table Name | Primary Key | Foreign Keys / Links | Usage & Business Responsibility |
-|---|---|---|---|
-| `audit_event` | `id (BIGSERIAL)` | `tenant_id` $\rightarrow$ `tenant.id` | Append-only, cryptographic SHA-256 hash-chained audit trail. Every ingestion, analysis, approval, and reply posts a `row_hash = SHA256(prev_hash \|\| tenant_id \|\| action \|\| payload)`. |
-
-#### Group 9: Dharma Compliance & Privacy Framework (`yudhix-dharma`)
-| Table Name | Primary Key | Foreign Keys / Links | Usage & Business Responsibility |
-|---|---|---|---|
-| `policy_document` | `(tenant_id, id)` | `tenant_id` $\rightarrow$ `tenant.id` | Versioned compliance declarations (India DPDP 2023, US CCPA/CPRA, GDPR) with cryptographic content checksums. |
-| `consent_record` | `id (BIGSERIAL)` | `policy_id` $\rightarrow$ `policy_document.id` | Cryptographic evidence of data processing consent with timestamp and cryptographic signature. |
-| `dsr_request` | `id (BIGSERIAL)` | `tenant_id` $\rightarrow$ `tenant.id` | Data Subject Request log for Right-to-Erasure (RTBF) and Data Access requests. Orchestrates zero-trace comment purging across all tables. |
-
-#### Group 10: Usage Metering & Billing (`yudhix-meter`)
-| Table Name | Primary Key | Foreign Keys / Links | Usage & Business Responsibility |
-|---|---|---|---|
-| `plan` | `id (VARCHAR)` | Global | Available subscription tiers (Free, Pro, Enterprise) defining monthly comment limits, active channel quotas, and API access. |
-| `subscription` | `tenant_id (UUID)` | `tenant_id` $\rightarrow$ `tenant.id`<br/>`plan_id` $\rightarrow$ `plan.id` | Active billing subscription, billing cycle anchors, and current status (`ACTIVE`, `PAST_DUE`, `CANCELED`). |
-| `usage_event` | `id (BIGSERIAL)` | `tenant_id` $\rightarrow$ `tenant.id` | Real-time idempotent metering log. Records billable units (`COMMENT_INGESTED`, `AI_ANALYZE_INVOCATION`, `POST_PUBLISHED`). |
-| `invoice` | `id (VARCHAR)` | `tenant_id` $\rightarrow$ `tenant.id` | Monthly billing statements, payment processor IDs (Stripe/Razorpay), and tax calculation records. |
-
-#### Group 11: Alerting & Notifications (`yudhix-notify`)
-| Table Name | Primary Key | Foreign Keys / Links | Usage & Business Responsibility |
-|---|---|---|---|
-| `notification_rule` | `(tenant_id, id)` | `tenant_id` $\rightarrow$ `tenant.id` | Configurable alert triggers (e.g. "Trigger Slack alert if >5 P1 negative comments arrive within 15 minutes"). |
-| `notification_log` | `id (BIGSERIAL)` | `rule_id` $\rightarrow$ `notification_rule.id` | History of dispatched alerts across Slack webhooks, SMTP emails, and agent dashboard banners. |
+The end-to-end test creates two throwaway users, signs in with the real PKCE flow, and checks workspaces, invitations (including the email), role permissions, workspace isolation, plan changes with invoices, notifications and deletion. It removes its users at the end.
 
 ---
 
-## 10. Database Configuration & Setup Guide
+## 8. Mobile apps
 
-Follow these step-by-step instructions to configure, initialize, and verify the PostgreSQL database.
+The Angular build ships to the stores through Capacitor (`capacitor.config.ts`, app id `io.yudhix.app`). Native projects aren't generated yet. On a Mac with Xcode and Android Studio:
 
-### Step 1: Start PostgreSQL
-Ensure PostgreSQL 16+ is running locally or via Docker:
 ```bash
-# Verify PostgreSQL is active
-pg_isready -h localhost -p 5432
+cd frontend/yudhix-web
+# Set apiUrl and keycloak.url in src/environments/environment.prod.ts to your public address
+npx cap add ios && npx cap add android     # once; commit the ios/ and android/ folders
+npm run mobile:sync                        # build + copy into the native projects
+npm run mobile:ios                         # opens Xcode
+npm run mobile:android                     # opens Android Studio
 ```
 
-### Step 2: Create the `yudhix` Database
-Create the dedicated application database:
-```bash
-# Create database using standard PostgreSQL CLI
-createdb -h localhost -p 5432 -U postgres yudhix
-```
-
-### Step 3: Enable Required PostgreSQL Extensions
-Connect to the database and enable the required extensions:
-```bash
-psql -h localhost -U postgres -d yudhix -c '
-  CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-  CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-'
-```
-
-### Step 4: Run Database Schema Migrations
-You can execute all migrations using **Option A (Automated)** or **Option B (Manual)**:
-
-#### Option A: One-Command Automated Setup (Recommended)
-Use the included lifecycle manager script:
-```bash
-./yudhix.sh init-db
-```
-This command automatically creates the database if missing, enables `uuid-ossp` and `pgcrypto`, and applies all 11 Flyway migration scripts in correct dependency order.
-
-#### Option B: Manual Execution Order
-Execute the migration scripts sequentially:
-```bash
-MIGRATIONS=(
-  "services/yudhix-tenant/src/main/resources/db/migration/V1__init_tenant_schema.sql"
-  "services/yudhix-ledger/src/main/resources/db/migration/V1__init_ledger_schema.sql"
-  "services/yudhix-dharma/src/main/resources/db/migration/V1__init_dharma_schema.sql"
-  "services/yudhix-catalog/src/main/resources/db/migration/V1__init_catalog_schema.sql"
-  "services/yudhix-radar/src/main/resources/db/migration/V1__init_radar_schema.sql"
-  "services/yudhix-link/src/main/resources/db/migration/V1__init_link_schema.sql"
-  "services/yudhix-pulse/src/main/resources/db/migration/V1__init_pulse_schema.sql"
-  "services/yudhix-resolve/src/main/resources/db/migration/V1__init_resolve_schema.sql"
-  "services/yudhix-loop/src/main/resources/db/migration/V1__init_loop_schema.sql"
-  "services/yudhix-notify/src/main/resources/db/migration/V1__init_notify_schema.sql"
-  "services/yudhix-meter/src/main/resources/db/migration/V1__init_meter_schema.sql"
-)
-
-for file in "${MIGRATIONS[@]}"; do
-  echo "Applying $file..."
-  psql -h localhost -U postgres -d yudhix -f "$file"
-done
-```
-
-### Step 5: Verify Database Tables
-Confirm that all 31 tables are created:
-```bash
-psql -h localhost -U postgres -d yudhix -c "\dt"
-```
-You should see 31 rows returned, spanning all domains.
-
-### Step 6: Query Live Ingested Comments & AI Sentiments
-Whenever you fetch live comments in the UI (`http://localhost:3000`) or via API, you can view the stored data directly in the terminal:
-```bash
-# View comments and granular aspects in formatted record view
-./yudhix.sh db
-```
-
-Or query directly with `psql`:
-```sql
-SELECT 
-    c.platform,
-    c.platform_comment_id,
-    c.masked_text,
-    c.like_count,
-    ca.sentiment,
-    ca.priority,
-    ca.impact_score,
-    ca.intent,
-    ca.suggested_reply
-FROM comment c
-LEFT JOIN comment_analysis ca ON c.id = ca.comment_id
-ORDER BY c.first_seen_at DESC
-LIMIT 10;
-```
+Still needed before submitting: app icons and splash (`npx @capacitor/assets generate`), store listings, a privacy policy URL and the production API.
 
 ---
 
-## 11. Keycloak Multi-Tenant Identity, Authentication & Setup Guide
+## 9. Deployment
 
-Yudhix uses **Keycloak 25+** as its centralized OpenID Connect (OIDC) / OAuth2 Identity and Access Management (IAM) engine. In this multi-tenant SaaS architecture, every tenant operates in logical isolation while sharing unified authentication and authorization primitives.
+| Where | Command | URL |
+|---|---|---|
+| Docker, whole stack | `./yudhix.sh docker-up` | http://localhost:8080 |
+| Kubernetes on your laptop | `./yudhix.sh k8s-up` | http://localhost:8081 |
+| Kubernetes in production | `kubectl apply -k deploy/k8s/overlays/production` | your domain |
+| Zoho Catalyst AppSail | `deploy/zoho/deploy-catalyst.sh` | your domain → gateway app |
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User as Tenant Administrator / Agent
-    participant Web as Yudhix Web SPA (Port 3000)
-    participant KC as Keycloak 25+ (Port 8180)
-    participant GW as API Gateway (Port 8080)
-    participant Svc as Microservices Mesh (Port 8000+)
-    participant DB as PostgreSQL 16 (Port 5432)
+Step-by-step guides: [deploy/README.md](deploy/README.md) and [deploy/zoho/README.md](deploy/zoho/README.md).
 
-    User->>Web: Enters Tenant Code, Email & Password (or Registers)
-    Web->>KC: POST /realms/yudhix/protocol/openid-connect/token (Direct Grant / PKCE)
-    KC-->>Web: Signed RS256 JWT Token (claims: tenant_id, tenant_code, roles)
-    Note over Web: Saves session to localStorage (yudhix_session, 24h TTL)
-    Web->>GW: API Request + Authorization: Bearer <JWT>
-    GW->>KC: Validates signature against JWKS endpoint (/certs)
-    GW->>Svc: Forwards request with X-Tenant-ID & X-User-Roles headers
-    Svc->>DB: SET LOCAL app.current_tenant = '9b1deb4d...';
-    DB-->>Svc: Returns strictly isolated tenant data (RLS enforced)
-    Svc-->>Web: Filtered Comments, Ingestion Status & Metrics
-```
+Production checklist: strong `AUTHOR_HMAC_KEY` and database passwords, `DEMO_WORKSPACE_JOIN=false`, real SMTP, HTTPS, and `APP_ORIGINS=https://your-domain` when running `configure_realm.py`.
 
 ---
 
-### 11.1 Keycloak Realm, Roles & Client Architecture
+## 10. Status and roadmap
 
-All enterprise tenant identities reside under the dedicated **`yudhix`** realm:
+| Area | Today | Next |
+|---|---|---|
+| Posting replies | Approved replies are recorded as `SIMULATED`; nothing is sent to YouTube. | YouTube OAuth connector, live posting, automatic +24h / +72h / +7d outcome checks. |
+| Payments | Plans, quotas and invoices work; no card is charged. | Stripe / Razorpay checkout and webhooks. |
+| Ingestion | On demand per video, plus scheduled checks for new comments on analyzed videos. | Channel watchers that pick up new uploads. |
+| Attribution | Keyword matching with evidence; weak on sarcasm and memes. | Embedding similarity (pgvector) with LLM re-ranking. |
+| Fact-checking | Hybrid search (BM25 + embeddings) and local or cloud AI with quote, number and second-opinion checks. | Scanned PDFs (OCR); an evaluation set from human verdicts. |
+| Sentiment & topics | Local LLM for the most-liked comments, keyword rules for the rest. | Faster model or GPU so the AI reads every comment; agent corrections. |
+| Product impact & growth | Per video; product ideas across videos. | **Product health** across all videos of a product: trend, top issues, which creators drive negativity. |
+| Services | One Python API does everything. | Split into the planned Java services (`services/yudhix-*`) as load requires. |
+| Mobile | Capacitor configured. | Generate native projects, icons, store listings, push alerts. |
 
-| Role Name | Scope | Permissions & Capabilities |
-| :--- | :--- | :--- |
-| `tenant_admin` | Realm | Full control over tenant lifecycle, platform subscriptions (YouTube, LinkedIn, Reddit), user invitations, and billing. |
-| `approver` | Realm | Authorized brand lead who reviews and formally approves or rejects AI-drafted turnaround replies (Separation of Duties). |
-| `agent` | Realm | Frontline triage agent who monitors the Social Inbox and refines drafted responses. |
-| `analyst` | Realm | Access to executive intelligence overview, sentiment velocity charts, and turnaround analytics. |
-| `viewer` | Realm | Read-only access to metrics and reports. |
-
-#### Registered Clients in `realm-yudhix.json`
-* **`yudhix-web`**: Public Single Page Application (SPA) client supporting Authorization Code Flow with PKCE and Direct Access Grants (Resource Owner Password Credentials). Allowed origins: `http://localhost:3000`, `http://127.0.0.1:3000`.
-* **`yudhix-gateway`**: Confidential client used by Spring Cloud Gateway (`services/yudhix-gateway`) to authenticate microservice service-to-service calls.
-
----
-
-### 11.2 Authentication & Authorization Token Claims
-
-When a user logs in, Keycloak generates a cryptographically signed RS256 JWT `access_token` with custom tenant claims:
-
-```json
-{
-  "iss": "http://localhost:8180/realms/yudhix",
-  "aud": "account",
-  "sub": "314c7634-074a-45e1-b55e-1e1c27c8a762",
-  "typ": "Bearer",
-  "azp": "yudhix-web",
-  "preferred_username": "admin@sony.com",
-  "email": "admin@sony.com",
-  "tenant_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
-  "tenant_code": "sony-playstation",
-  "organization": "Sony Interactive Entertainment",
-  "realm_access": {
-    "roles": [
-      "tenant_admin",
-      "default-roles-yudhix",
-      "offline_access",
-      "uma_authorization"
-    ]
-  }
-}
-```
-
-#### How Microservices Enforce Isolation:
-1. **Gateway Validation**: The API Gateway validates token expiration (`exp`) and signature against `http://localhost:8180/realms/yudhix/protocol/openid-connect/certs`.
-2. **Context Injection**: `TenantContextFilter` extracts `tenant_id` from claims and propagates it via the `X-Tenant-ID` header.
-3. **Database RLS**: When microservices open a connection, they execute:
-   ```sql
-   SET LOCAL app.current_tenant = '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d';
-   ```
-   PostgreSQL Row-Level Security policies automatically filter out any rows belonging to other tenants.
-
----
-
-### 11.3 Step-by-Step Keycloak Setup Guide
-
-#### Step 1: Start Keycloak with Docker Compose
-Keycloak is pre-configured in `docker-compose.yml`. Start the container:
-```bash
-docker compose up -d keycloak
-```
-
-Verify that Keycloak is running and healthy:
-```bash
-curl -I http://localhost:8180
-# Returns HTTP/1.1 302 Found (Redirects to /admin/)
-```
-
-#### Step 2: Access Keycloak Admin Console
-* **URL**: [http://localhost:8180](http://localhost:8180)
-* **Master Username**: `admin`
-* **Master Password**: `admin_yudhix_2026`
-
-#### Step 3: Switch to the `yudhix` Realm
-1. In the top-left dropdown (next to the Keycloak logo), switch from `master` to **`yudhix`**.
-2. Verify that the realm is active and roles (`tenant_admin`, `approver`, `agent`, `analyst`) are present.
-
-#### Step 4: Create a New Tenant User
-1. Go to **Manage** $\rightarrow$ **Users** $\rightarrow$ **Add user**.
-2. Set:
-   * **Username**: `admin@sony.com`
-   * **Email**: `admin@sony.com`
-   * **Email verified**: **ON**
-3. Open the **Attributes** tab and add:
-   * `tenant_id`: `9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d`
-   * `tenant_code`: `sony-playstation`
-   * `organization`: `Sony Interactive Entertainment`
-4. Open the **Credentials** tab:
-   * Click **Set password** $\rightarrow$ `sony_admin_2026` (Toggle **Temporary** to **OFF**).
-5. Open the **Role mapping** tab:
-   * Click **Assign role** $\rightarrow$ Select `tenant_admin`.
-
-#### Step 5: Test Token Generation via Terminal
-You can authenticate and inspect the live JWT directly:
-```bash
-curl -X POST "http://localhost:8180/realms/yudhix/protocol/openid-connect/token" \
-  -d "client_id=yudhix-web" \
-  -d "username=admin@sony.com" \
-  -d "password=sony_admin_2026" \
-  -d "grant_type=password"
-```
-
----
-
-### 11.4 SaaS Auth Portal & Persistent Session Management
-
-The web application (`http://localhost:3000`) provides a centralized **SaaS Auth Portal**:
-
-#### 1. Sign In Tab
-* Allows tenant admins and agents to authenticate using their **Tenant Code**, **Work Email**, and **Password**.
-* Includes a **"Maintain persistent session"** option enabled by default.
-* Includes a **"Quick Fill: Sony PlayStation Demo"** button for instant one-click onboarding.
-
-#### 2. Register New Tenant Tab (Sign Up)
-* Allows new enterprise customers to register their organization.
-* Fields: Company Name, auto-generated Tenant Code (kebab-case slug), Admin Full Name, Email, Password, and initial platform subscription toggles (YouTube up to 20 channels, LinkedIn, Reddit).
-* Automatically provisions a new Tenant UUID, initializes quotas, and starts the workspace.
-
-#### 3. Session Persistence Engine
-* Sessions are persisted in browser `localStorage` under the key `yudhix_session` with a 24-hour expiration.
-* On page refresh (`F5`), `initSession()` checks the token validity and restores tenant context without forcing re-login.
-* The header and sidebar include a **Log Out** button that clears `localStorage` and smoothly returns to the Auth Portal.
-
-
+> **Security:** an old version of the web app had a YouTube API key in its code. It is still in git history, so **rotate that key in Google Cloud Console**. YouTube access now happens only on the server.

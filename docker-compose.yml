@@ -35,12 +35,14 @@ services:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin_yudhix_2026
       KC_HEALTH_ENABLED: "true"
+      KC_FEATURES: persistent-user-sessions   # sessions survive Keycloak restarts
       KC_METRICS_ENABLED: "true"
     secrets:
       - pg_password
       - kc_admin_password
     volumes:
       - ./keycloak/realm-yudhix.json:/opt/keycloak/data/import/realm-yudhix.json:ro
+      - ./keycloak/themes/yudhix:/opt/keycloak/themes/yudhix:ro
     ports:
       - "8180:8080"
     depends_on:

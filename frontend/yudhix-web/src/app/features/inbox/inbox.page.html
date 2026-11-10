@@ -1,0 +1,194 @@
+<div class="page wide">
+  <header class="page-head">
+    <div>
+      <h1>Inbox</h1>
+      <p>Comments ranked by impact. Each one shows whether it reacts to misinformation or to a real product issue.</p>
+    </div>
+  </header>
+
+  <!-- Filters -->
+  <div class="filters">
+    <div class="row-wrap">
+      <select class="select video-select" [ngModel]="videoFilter()" (ngModelChange)="setFilter('video', $event)" aria-label="Filter by video">
+        <option value="">All videos</option>
+        @for (v of videos(); track v.id) { <option [value]="v.videoId">{{ v.title }}</option> }
+      </select>
+      @if (videoFilter()) {
+        <a class="btn" [routerLink]="['/videos', videoFilter()]" [queryParams]="{ tab: 'impact' }" title="Charts: sentiment, topics, what can fix it">
+          <y-icon name="chart" [size]="16" /> View impact
+        </a>
+      }
+      <div class="search grow">
+        <y-icon name="search" />
+        <input class="input" placeholder="Search comments" (input)="onSearch($any($event.target).value)" aria-label="Search comments" />
+      </div>
+    </div>
+    <div class="row-wrap filter-pills">
+      <div class="segmented" aria-label="Root cause">
+        <button type="button" [class.active]="!causeFilter()" (click)="setFilter('cause', '')">All</button>
+        <button type="button" [class.active]="causeFilter() === 'MISINFORMATION'" (click)="setFilter('cause', 'MISINFORMATION')"><i class="dot" style="background: var(--warn)"></i>Misinformation</button>
+        <button type="button" [class.active]="causeFilter() === 'VALID_CONCERN'" (click)="setFilter('cause', 'VALID_CONCERN')"><i class="dot" style="background: var(--info)"></i>Valid concern</button>
+        <button type="button" [class.active]="causeFilter() === 'UNLINKED'" (click)="setFilter('cause', 'UNLINKED')">General</button>
+      </div>
+      <div class="segmented" aria-label="Priority">
+        <button type="button" [class.active]="!priorityFilter()" (click)="setFilter('priority', '')">Any priority</button>
+        <button type="button" [class.active]="priorityFilter() === 'P1'" (click)="setFilter('priority', 'P1')">P1</button>
+        <button type="button" [class.active]="priorityFilter() === 'P2'" (click)="setFilter('priority', 'P2')">P2</button>
+        <button type="button" [class.active]="priorityFilter() === 'P3'" (click)="setFilter('priority', 'P3')">P3</button>
+      </div>
+      <div class="segmented" aria-label="Channel">
+        <button type="button" [class.active]="!channelFilter()" (click)="setFilter('channel', '')">All channels</button>
+        <button type="button" [class.active]="channelFilter() === 'YOUTUBE'" (click)="setFilter('channel', 'YOUTUBE')">YouTube</button>
+        <button type="button" [class.active]="channelFilter() === 'AMAZON'" (click)="setFilter('channel', 'AMAZON')">Amazon</button>
+      </div>
+      <select class="select intent-select" [ngModel]="intentFilter()" (ngModelChange)="setFilter('intent', $event)" aria-label="Filter by what the commenter wants">
+        <option value="">Any intent</option>
+        @for (i of intentOptions; track i) { <option [value]="i">{{ intentLabels[i] }}</option> }
+      </select>
+      <button type="button" class="btn btn-sm" [class.active]="freshFilter()" [attr.aria-pressed]="freshFilter()"
+              (click)="setFilter('fresh', freshFilter() ? '' : '1')" title="Comments added since the last full analysis">
+        New only
+      </button>
+      <div class="segmented" aria-label="Status">
+        <button type="button" [class.active]="statusFilter() === 'OPEN'" (click)="setFilter('status', 'OPEN')">Open</button>
+        <button type="button" [class.active]="statusFilter() === 'REPLIED'" (click)="setFilter('status', 'REPLIED')">Replied</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="split">
+    <!-- List -->
+    <section class="card list-card" aria-label="Comments">
+      <div class="list-head subtle truncate">
+        @if (items() !== null) { {{ total() | compact }} comments } @else { Loading… }@if (videoFilter()) { · {{ selectedVideoTitle() }} }
+      </div>
+      @if (error()) {
+        <div class="card-body"><div class="callout callout-danger">{{ error() }}</div></div>
+      } @else if (items() === null) {
+        <div class="card-body stack">@for (i of [1, 2, 3, 4, 5]; track i) { <div class="skeleton" style="height: 76px"></div> }</div>
+      } @else {
+        <div class="list">
+          @for (it of items(); track it.id; let i = $index) {
+            <button type="button" class="list-item clickable row-btn enter" [style.--i]="i % 40" [class.selected]="it.id === selectedId()" (click)="select(it)">
+              <span class="prio" [class]="'prio-' + it.priority">{{ it.priority }}</span>
+              <div class="item-main">
+                <p class="clamp-2">{{ it.text }}</p>
+                <div class="row-wrap meta">
+                  <span class="chip" [class]="causeMeta[it.rootCause].chip">{{ causeMeta[it.rootCause].short }}</span>
+                  @if (it.platform === 'AMAZON') { <span class="chip chip-outline" [attr.title]="it.listingTitle">Amazon{{ it.rating ? ' · ★' + it.rating : '' }}</span> }
+                  @if (it.isNew) { <span class="chip chip-brand">New</span> }
+                  @if (it.intent === 'IDEA' || it.intent === 'BUY' || it.intent === 'LEAVE') { <span class="chip chip-outline">{{ intentLabels[it.intent] }}</span> }
+                  @if (it.claim) { <span class="subtle truncate claim-ref">{{ it.claim.timestamp }} · {{ it.claim.topic }}</span> }
+                  <span class="spacer"></span>
+                  @if (it.replyStatus) { <span class="chip" [class]="statusLabel[it.replyStatus].chip">{{ statusLabel[it.replyStatus].label }}</span> }
+                  <span class="subtle nowrap"><y-icon name="thumbsUp" [size]="12" /> {{ it.likes | compact }}</span>
+                </div>
+              </div>
+            </button>
+          } @empty {
+            <y-empty icon="inbox" title="Nothing here" text="No comments match these filters." />
+          }
+        </div>
+        @if ((items()?.length ?? 0) < total()) {
+          <div class="card-body">
+            <button class="btn btn-block" type="button" (click)="loadMore()" [disabled]="loadingMore()">
+              {{ loadingMore() ? 'Loading…' : 'Load more' }}
+            </button>
+          </div>
+        }
+      }
+    </section>
+
+    <!-- Detail (desktop) -->
+    <section class="card detail-card desktop-only" aria-label="Comment detail">
+      @if (detail()) {
+        @for (d of [detail()!]; track d.id) {
+          <div class="enter-fade"><ng-container *ngTemplateOutlet="detailTpl" /></div>
+        }
+      } @else {
+        <y-empty icon="message" title="Pick a comment" text="Select a comment to see why it matters and draft a reply." />
+      }
+    </section>
+  </div>
+</div>
+
+<!-- Detail (mobile / tablet sheet) -->
+@if (sheetOpen() && detail()) {
+  <div class="sheet-backdrop" (click)="closeSheet()"></div>
+  <aside class="sheet" role="dialog" aria-modal="true" aria-label="Comment detail">
+    <div class="sheet-head">
+      <strong style="flex: 1">Comment</strong>
+      <button class="btn btn-ghost btn-icon" type="button" (click)="closeSheet()" aria-label="Close"><y-icon name="x" /></button>
+    </div>
+    <div class="sheet-body"><ng-container *ngTemplateOutlet="detailTpl" /></div>
+  </aside>
+}
+
+<ng-template #detailTpl>
+  @let d = detail()!;
+  <div class="detail stack-lg">
+    <div class="stack">
+      <div class="row-wrap">
+        <span class="chip" [class]="priorityChip[d.priority]">{{ d.priority }} · impact {{ d.impactScore | number: '1.0-0' }}</span>
+        <span class="chip" [class]="sentimentChip[d.sentiment]">{{ d.sentiment | titlecase }}</span>
+        <span class="subtle">{{ d.platform | titlecase }} · {{ d.createdAt | ago }} · <y-icon name="thumbsUp" [size]="12" /> {{ d.likes | compact }} · {{ d.replies }} replies</span>
+      </div>
+      <p class="comment-text">{{ d.text }}</p>
+      @if (d.videoTitle) {
+        <a class="subtle video-link" [routerLink]="['/videos', d.videoId]"><y-icon name="video" [size]="14" /> {{ d.videoTitle }}</a>
+      }
+      <span class="subtle mono">Author {{ d.authorHash.slice(0, 18) }}… (pseudonymized)</span>
+    </div>
+
+    <div class="cause-box" [style.border-color]="causeMeta[d.rootCause].color">
+      <div class="row"><i class="dot" [style.background]="causeMeta[d.rootCause].color"></i><strong>{{ causeMeta[d.rootCause].label }}</strong></div>
+      <p class="subtle">{{ causeMeta[d.rootCause].help }}</p>
+      @if (d.claim) {
+        <div class="claim-box">
+          <div class="row-wrap"><span class="mono ts">{{ d.claim.timestamp }}</span><y-verdict [verdict]="d.claim.verdict" /><strong>{{ d.claim.topic }}</strong></div>
+          @if (d.claim.quote) { <blockquote class="quote" [class]="verdictMeta[d.claim.verdict].quote">"{{ d.claim.quote }}"</blockquote> }
+          @if (d.claim.officialStatement) {
+            <div class="fact"><strong>Official fact</strong> ({{ d.claim.source }}): {{ d.claim.officialStatement }}</div>
+          }
+          @if (d.claim.evidence) { <span class="subtle">Why linked: {{ d.claim.evidence }}</span> }
+        </div>
+      }
+    </div>
+
+    <!-- Reply -->
+    <div class="stack">
+      <h3>Reply</h3>
+      @if (d.replyStatus && d.replyStatus !== 'POSTED') {
+        @let r = d.replyHistory?.[0];
+        <div class="callout callout-info">
+          <y-icon name="info" [size]="16" />
+          <div>
+            <strong>{{ statusLabel[d.replyStatus].label }}</strong>
+            @if (r) { <div class="reply-preview">"{{ r.text }}"</div> }
+            @if (r?.rejectionReason) { <div>Reviewer: {{ r!.rejectionReason }}</div> }
+          </div>
+        </div>
+        <a class="btn" routerLink="/approvals">Open in approvals <y-icon name="arrowRight" [size]="15" /></a>
+      } @else if (d.replyStatus === 'POSTED') {
+        <div class="callout callout-ok"><y-icon name="checkCircle" [size]="16" /><span>Replied. Track the outcome under <a routerLink="/approvals">Approvals → Posted</a>.</span></div>
+      } @else if (!session.can('content.write')) {
+        <div class="callout callout-info"><y-icon name="info" [size]="16" /><span>Your role is read-only here. An admin can give you agent access under Settings → Team.</span></div>
+      } @else {
+        <div class="field">
+          <label for="draft" class="sr-only">Reply text</label>
+          <textarea id="draft" class="textarea" rows="5" [(ngModel)]="draft" placeholder="Write a reply, or let AI draft one that cites the official fact."></textarea>
+          @if (citesFact()) { <span class="hint"><y-icon name="book" [size]="12" /> This draft cites your official documentation.</span> }
+        </div>
+        <div class="row-wrap">
+          <button class="btn" type="button" (click)="suggest()" [disabled]="drafting()">
+            @if (drafting()) { <y-icon name="loader" class="spin" [size]="16" /> Drafting… } @else { <y-icon name="sparkles" [size]="16" /> Draft with AI }
+          </button>
+          <span class="spacer"></span>
+          <button class="btn" type="button" (click)="save(false)" [disabled]="saving()">Save draft</button>
+          <button class="btn btn-primary" type="button" (click)="save(true)" [disabled]="saving()"><y-icon name="send" [size]="16" /> Submit for approval</button>
+        </div>
+        <p class="subtle">Every reply needs an approver's sign-off before it's posted.</p>
+      }
+    </div>
+  </div>
+</ng-template>

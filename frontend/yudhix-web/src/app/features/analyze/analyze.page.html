@@ -1,0 +1,231 @@
+<div class="page">
+  <header class="page-head enter">
+    <div>
+      <h1>Analyze</h1>
+      <p>Check what a creator claims against your official facts, then see which reactions each claim caused.</p>
+    </div>
+    <a class="btn hide-mobile" routerLink="/videos"><y-icon name="video" [size]="16" /> All videos</a>
+  </header>
+
+  <div class="layout">
+    <!-- ===================== Main column ===================== -->
+    <div class="main-col">
+      @if (!session.can('content.write')) {
+        <div class="callout callout-info enter"><y-icon name="info" [size]="16" /><span>Your role is read-only in this workspace. Browse existing reports under Videos, or ask an admin for agent access.</span></div>
+      } @else if (!job() || job()!.status === 'FAILED') {
+        <form class="card new enter" style="--i: 1" (ngSubmit)="submit()">
+          <div class="card-head">
+            <div>
+              <h2>New analysis</h2>
+              <p class="subtle">
+                @if (channel() === 'AMAZON') { Paste an Amazon product link: Yudhix collects its reviews and keeps checking for new ones. }
+                @else { Paste a YouTube link: a review, unboxing or opinion video. }
+              </p>
+            </div>
+          </div>
+          <div class="card-body stack">
+            <div class="segmented channel-pick" role="radiogroup" aria-label="Channel">
+              <button type="button" role="radio" [attr.aria-checked]="channel() === 'YOUTUBE'" [class.active]="channel() === 'YOUTUBE'" (click)="setChannel('YOUTUBE')">
+                <y-icon name="play" [size]="15" /> YouTube video
+              </button>
+              <button type="button" role="radio" [attr.aria-checked]="channel() === 'AMAZON'" [class.active]="channel() === 'AMAZON'" (click)="setChannel('AMAZON')">
+                <y-icon name="card" [size]="15" /> Amazon reviews
+              </button>
+            </div>
+            @if (products().length) {
+              <div class="field">
+                <label for="product">Product</label>
+                <select id="product" name="product" class="select input" [(ngModel)]="productId">
+                  @if (channel() === 'YOUTUBE') { <option value="">Not about one product</option> }
+                  @for (p of products(); track p.id) { <option [value]="p.id">{{ p.name }}</option> }
+                </select>
+                <span class="hint">{{ channel() === 'AMAZON' ? 'The reviews are added to this product, next to its YouTube comments.'
+                  : 'The comments count toward this product on the Products page. You can change it later on the video.' }}</span>
+              </div>
+            }
+            <div class="field">
+              <label for="url">{{ channel() === 'AMAZON' ? 'Amazon product URL' : 'Video URL' }}</label>
+              <div class="url-row">
+                <div class="search grow">
+                  <y-icon name="link" [size]="16" />
+                  <input id="url" name="url" class="input" [(ngModel)]="url"
+                    [placeholder]="channel() === 'AMAZON' ? 'https://www.amazon.in/dp/B08FV5GC28' : 'https://www.youtube.com/watch?v=…'"
+                    autocomplete="off" inputmode="url" enterkeyhint="go" />
+                </div>
+                <button class="btn btn-primary" type="submit" [disabled]="submitting()">
+                  @if (submitting()) { <y-icon name="loader" class="spin" [size]="16" /> Starting… }
+                  @else { {{ channel() === 'AMAZON' ? 'Collect reviews' : 'Analyze video' }} }
+                </button>
+              </div>
+            </div>
+            @if (formError()) {
+              <div class="callout callout-danger"><y-icon name="alert" [size]="16" />{{ formError() }}</div>
+            }
+            @if (job()?.status === 'FAILED') {
+              <div class="callout callout-danger"><y-icon name="alert" [size]="16" /><span><strong>Analysis failed.</strong> {{ job()!.message }}</span></div>
+            }
+            @if (channel() === 'AMAZON') {
+              <p class="hint">Reads the reviews shown on the product page (about 8-13 per check) and checks again on your schedule,
+                so new reviews keep arriving. With a review-data provider key on the server, all reviews are collected.</p>
+            } @else {
+            <button type="button" class="link-btn" (click)="showTranscript.set(!showTranscript())" [attr.aria-expanded]="showTranscript()">
+              <y-icon [name]="showTranscript() ? 'chevronDown' : 'chevronRight'" [size]="15" />
+              Paste a transcript instead
+            </button>
+            @if (showTranscript()) {
+              <div class="field enter-fade">
+                <textarea class="textarea mono" name="transcript" [(ngModel)]="transcript" rows="6"
+                  placeholder="[00:42] Sony is forcing an online check on disc drives…&#10;[01:14] …"></textarea>
+                <span class="hint">For videos without captions. Start lines with [mm:ss] so claims link to the right moment.</span>
+              </div>
+            }
+            }
+          </div>
+          @if (health(); as h) {
+            <div class="caps">
+              <span class="cap"><i class="dot" [class.on]="h.capabilities.llm"></i>{{ h.capabilities.llm ? 'AI fact-checking · ' + h.capabilities.llmModel : 'Rule-based fact-checking' }}</span>
+              <span class="cap"><i class="dot" [class.on]="h.capabilities.captions || h.capabilities.whisper"></i>{{ h.capabilities.whisper ? 'Captions + Whisper' : h.capabilities.captions ? 'YouTube captions' : 'Paste transcript' }}</span>
+              <span class="cap" [attr.title]="h.capabilities.youtubeApi ? '' : 'Set YOUTUBE_API_KEY on the server to pull comments for new videos'">
+                <i class="dot" [class.on]="h.capabilities.youtubeApi"></i>{{ h.capabilities.youtubeApi ? 'Pulls new comments' : 'Comments: existing only' }}
+              </span>
+            </div>
+          }
+        </form>
+      } @else {
+        <div class="card progress-card enter-fade" aria-live="polite">
+          <div class="card-head">
+            <div class="grow">
+              <h2>{{ job()!.kind === 'AMAZON' ? (job()!.status === 'COMPLETED' ? 'Reviews collected' : 'Collecting Amazon reviews')
+                     : job()!.status === 'COMPLETED' ? 'Analysis complete' : 'Analyzing video' }}</h2>
+              <p class="subtle truncate">{{ job()!.videoUrl }}</p>
+            </div>
+            <span class="pct">{{ job()!.progress }}%</span>
+          </div>
+          <div class="card-body stack">
+            <div class="bar progress"><span class="bar-brand" [style.width.%]="job()!.progress"></span></div>
+            <ol class="steps">
+              @for (s of stages(); track s.key; let i = $index) {
+                <li [class.done]="i < stageIndex()" [class.current]="i === stageIndex()">
+                  <span class="step-dot">
+                    @if (i < stageIndex()) { <y-icon name="check" [size]="12" [stroke]="3" /> }
+                    @else if (i === stageIndex()) { <y-icon name="loader" [size]="12" [stroke]="3" class="spin" /> }
+                  </span>
+                  <span>{{ s.label }}</span>
+                </li>
+              }
+            </ol>
+            <p class="muted">{{ job()!.message }}@if (job()!.status === 'RUNNING' && elapsed()) { <span class="subtle"> · {{ duration(elapsed()) }}</span> }</p>
+            @if (slowHint()) {
+              <div class="callout callout-info"><y-icon name="clock" [size]="15" />
+                <span>The AI runs on this machine ({{ ai()?.model || 'local model' }}), about 30-60 seconds per claim and per batch of comments.
+                  It's still working; each step has a time limit, so it won't hang. For runs in about a minute,
+                  connect Claude, ChatGPT or Gemini in <a routerLink="/settings/ai">Settings → AI</a>.</span>
+              </div>
+            }
+            <div class="row-wrap">
+              @if (job()!.status === 'COMPLETED' && job()!.kind === 'AMAZON') {
+                <a class="btn btn-primary" [routerLink]="['/products', job()!.productId]" [queryParams]="{ channel: 'AMAZON' }">Open product <y-icon name="arrowRight" [size]="16" /></a>
+              } @else if (job()!.status === 'COMPLETED') {
+                <a class="btn btn-primary" [routerLink]="['/videos', job()!.videoId]">Open truth report <y-icon name="arrowRight" [size]="16" /></a>
+              }
+              <button class="btn" type="button" (click)="reset()">Analyze another</button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <section class="card enter" style="--i: 2">
+        <div class="card-head">
+          <h2>Recent videos</h2>
+          <a routerLink="/videos" class="btn btn-ghost btn-sm">View all <y-icon name="arrowRight" [size]="14" /></a>
+        </div>
+        @if (videos() === null) {
+          <div class="card-body stack">@for (i of [1, 2, 3]; track i) { <div class="skeleton" style="height: 52px"></div> }</div>
+        } @else if (recentVideos().length === 0) {
+          <div class="empty">
+            <div class="empty-icon"><y-icon name="video" [size]="20" /></div>
+            <h3>No videos analyzed yet</h3>
+            <p>Your truth reports will appear here. Start with a video that's getting a lot of comments.</p>
+          </div>
+        } @else {
+          <div class="vtable" role="table" aria-label="Recent videos">
+            <div class="vrow vhead" role="row">
+              <span role="columnheader">Video</span><span role="columnheader">Claims</span>
+              <span role="columnheader" class="hide-mobile">Comments</span><span role="columnheader" class="num">Accuracy</span>
+            </div>
+            @for (v of recentVideos(); track v.id; let i = $index) {
+              <a class="vrow enter" [style.--i]="i + 3" role="row" [routerLink]="['/videos', v.videoId]">
+                <span class="vcell video" role="cell">
+                  <img [src]="v.thumbnailUrl" alt="" loading="lazy" />
+                  <span class="vtitle"><strong class="truncate">{{ v.title }}</strong><small class="truncate">{{ v.channel }}</small></span>
+                </span>
+                <span role="cell">
+                  @if (v.misleadingClaims) { <span class="chip chip-warn">{{ v.misleadingClaims }} disputed</span> }
+                  @else { <span class="chip chip-ok">All accurate</span> }
+                </span>
+                <span role="cell" class="hide-mobile subtle-num">{{ v.comments | compact }}</span>
+                <span role="cell" class="num"><y-ring [value]="v.factualAccuracy" [size]="34" label="Accuracy" /></span>
+              </a>
+            }
+          </div>
+        }
+      </section>
+    </div>
+
+    <!-- ===================== Side column ===================== -->
+    <aside class="side-col">
+      @if (showChecklist()) {
+        @let o = onboarding()!;
+        <section class="card enter" style="--i: 1">
+          <div class="card-head">
+            <div>
+              <h2>Get started</h2>
+              <p class="subtle">{{ o.completed }} of {{ o.total }} done</p>
+            </div>
+            <button class="btn btn-ghost btn-icon btn-sm" type="button" (click)="hideChecklist()" aria-label="Hide checklist"><y-icon name="x" [size]="15" /></button>
+          </div>
+          <div class="card-body">
+            <div class="bar thin"><span class="bar-brand" [style.width.%]="(o.completed / o.total) * 100"></span></div>
+            <ul class="checklist">
+              @for (s of o.steps; track s.key) {
+                <li [class.done]="s.done">
+                  <span class="tick">@if (s.done) { <y-icon name="check" [size]="11" [stroke]="3" /> }</span>
+                  @if (s.done) { <span>{{ s.label }}</span> } @else { <a [routerLink]="s.link">{{ s.label }}</a> }
+                </li>
+              }
+            </ul>
+          </div>
+        </section>
+      }
+
+      <section class="card how-card enter" style="--i: 2">
+        <div class="card-head"><h2>How it works</h2></div>
+        <ol class="how">
+          <li><span class="n">1</span><div><strong>Decode</strong><span>Transcript → timestamped claims</span></div></li>
+          <li><span class="n">2</span><div><strong>Fact-check</strong><span>Against your knowledge base</span></div></li>
+          <li><span class="n">3</span><div><strong>Trace reactions</strong><span>Which claim caused which comments</span></div></li>
+          <li><span class="n">4</span><div><strong>Respond & track</strong><span>Approved replies, measured outcomes</span></div></li>
+        </ol>
+      </section>
+
+      @if (jobs().length) {
+        <section class="card enter" style="--i: 3">
+          <div class="card-head"><h2>Recent runs</h2></div>
+          <ul class="runs">
+            @for (j of jobs().slice(0, 5); track j.id) {
+              <li>
+                <i class="dot" [style.background]="j.status === 'COMPLETED' ? 'var(--ok)' : j.status === 'FAILED' ? 'var(--danger)' : 'var(--brand)'"></i>
+                <div class="grow">
+                  @if (j.status === 'COMPLETED' && j.kind === 'AMAZON') { <a class="truncate" [routerLink]="['/products', j.productId]" [queryParams]="{ channel: 'AMAZON' }">Amazon {{ j.videoId }}</a> }
+                  @else if (j.status === 'COMPLETED') { <a class="truncate" [routerLink]="['/videos', j.videoId]">{{ j.videoId }}</a> }
+                  @else { <span class="truncate">{{ j.videoId }}</span> }
+                  <small>@if (j.kind === 'COMMENTS') { New comments: {{ j.result ? j.result.newComments : '…' }} · } @if (j.kind === 'FACTS') { Claims re-checked · } {{ j.status === 'FAILED' ? 'Failed' : j.status === 'COMPLETED' ? 'Completed' : 'Running' }} · {{ j.createdAt | ago }}</small>
+                </div>
+              </li>
+            }
+          </ul>
+        </section>
+      }
+    </aside>
+  </div>
+</div>

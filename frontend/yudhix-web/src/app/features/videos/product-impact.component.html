@@ -1,0 +1,220 @@
+@if (error()) {
+  <div class="callout callout-danger">{{ error() }}</div>
+} @else if (!data()) {
+  <div class="skeleton" style="height: 420px"></div>
+} @else {
+  @let d = data()!;
+  <section class="pi card card-pad enter" aria-label="Product impact">
+    @if (!d.totals.comments) {
+      <div class="row-wrap subtle"><y-icon name="info" [size]="16" /> Product impact appears once this video has comments.</div>
+    } @else {
+      <!-- Headline -->
+      <div class="pi-head">
+        <div class="pi-score" role="img" [attr.aria-label]="'Impact score ' + d.score + ' out of 100, ' + levelMeta[d.level].label">
+          <span class="eyebrow">Product impact</span>
+          <div class="pi-score-num">{{ d.score }}<span>/100</span></div>
+          <span class="chip {{ levelMeta[d.level].chip }}"><y-icon [name]="levelMeta[d.level].icon" [size]="13" /> {{ levelMeta[d.level].label }}</span>
+        </div>
+        <div class="pi-head-text">
+          <p class="pi-headline">{{ d.headline }}</p>
+          <div class="row-wrap subtle pi-meta">
+            <span class="row"><y-icon [name]="trendMeta[d.trend].icon" [size]="15" /> {{ trendMeta[d.trend].label }}</span>
+            <span>· {{ d.totals.comments | compact }} comments</span>
+            <span>· {{ d.totals.reach | compact }} reach</span>
+            @if (d.coverage.aiComments) { <span>· AI read {{ pct(d.coverage.aiShareOfReach) }} of the reach</span> }
+          </div>
+          @if (!d.coverage.aiComments) {
+            <div class="subtle pi-note"><y-icon name="sparkles" [size]="14" /> Classified with keyword rules. Analyze the video again to let the AI read the comments.</div>
+          }
+          <details class="pi-how">
+            <summary>How is this calculated?</summary>
+            <p>
+              <strong>Reach</strong> weights each comment by how many people engaged with it: 1 + likes + 2 × replies.
+              The <strong>impact score</strong> is the negative share of reach, scaled by audience size (about 10,000 reach is the maximum):
+              100 × (negative share)<sup>0.75</sup> × size. High is 60 or more, medium 35 or more.
+              Sentiment and topics come from the local AI model for the most-liked comments, and from keyword rules for the rest.
+            </p>
+          </details>
+        </div>
+      </div>
+
+      <!-- Legend shared by the sentiment, topic and timeline charts -->
+      <div class="pi-legend" aria-hidden="true">
+        @for (s of sentimentSeries; track s.key) { <span><i class="sw" [style.background]="s.color"></i>{{ s.label }}</span> }
+      </div>
+
+      <div class="pi-grid">
+        <!-- Sentiment: comments vs reach -->
+        <div class="pi-block">
+          <h3>Sentiment</h3>
+          @for (row of sentimentRows(); track row.label) {
+            <div class="pi-row">
+              <div class="row pi-row-label"><strong>{{ row.label }}</strong><span class="subtle">{{ row.hint }}</span></div>
+              <div class="pi-bar" role="img" [attr.aria-label]="row.label + ': ' + pct(row.segments[0].share) + ' negative, ' + pct(row.segments[1].share) + ' neutral, ' + pct(row.segments[2].share) + ' positive'">
+                @for (s of row.segments; track s.key) {
+                  @if (s.value) {
+                    <span class="seg" tabindex="0" [style.flex-grow]="s.share" [style.background]="s.color"
+                          (mouseenter)="showTip($event, s.label + ' · ' + row.label.toLowerCase(), [pct(s.share) + ' (' + num(s.value) + ')'])"
+                          (focus)="showTip($event, s.label + ' · ' + row.label.toLowerCase(), [pct(s.share) + ' (' + num(s.value) + ')'])"
+                          (mouseleave)="hideTip()" (blur)="hideTip()"></span>
+                  }
+                }
+              </div>
+              <div class="pi-values subtle">
+                <span><strong>{{ pct(row.segments[0].share) }}</strong> negative</span>
+                <span>{{ pct(row.segments[1].share) }} neutral</span>
+                <span>{{ pct(row.segments[2].share) }} positive</span>
+              </div>
+            </div>
+          }
+        </div>
+
+        <!-- Negative reach split by what can fix it -->
+        <div class="pi-block">
+          <h3>Negative reach: what can fix it</h3>
+          @if (d.sentiment.byComments.negative) {
+            <div class="pi-bar" role="img" aria-label="Negative reach by root cause">
+              @for (s of causeSegments(); track s.key) {
+                @if (s.value) {
+                  <span class="seg" tabindex="0" [style.flex-grow]="s.share" [style.background]="s.color"
+                        (mouseenter)="showTip($event, s.label, [pct(s.share) + ' of negative reach', s.comments + ' comments'])"
+                        (focus)="showTip($event, s.label, [pct(s.share) + ' of negative reach', s.comments + ' comments'])"
+                        (mouseleave)="hideTip()" (blur)="hideTip()"></span>
+                }
+              }
+            </div>
+            <ul class="causes">
+              @for (s of causeSegments(); track s.key) {
+                <li>
+                  <i class="sw" [style.background]="s.color"></i>
+                  <div class="pi-fill">
+                    <div class="row"><strong>{{ s.label }}</strong><span class="spacer"></span><strong class="num">{{ pct(s.share) }}</strong></div>
+                    <div class="subtle">{{ s.fix }} · {{ s.comments | compact }} comments</div>
+                  </div>
+                  @if (s.cause !== 'UNLINKED' && s.comments) {
+                    <a class="btn btn-sm btn-ghost" routerLink="/inbox" [queryParams]="{ video: videoId(), cause: s.cause }" [attr.aria-label]="'Open ' + s.label + ' in the inbox'">
+                      <y-icon name="inbox" [size]="15" />
+                    </a>
+                  }
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="subtle">No negative comments.</p>
+          }
+        </div>
+      </div>
+
+      <!-- Topics -->
+      @if (topicRows().length) {
+        <div class="pi-block">
+          <div class="row"><h3>What people talk about</h3><span class="spacer"></span><span class="subtle hide-mobile">Most negative reach first · bar length = comments</span></div>
+          <div class="topics">
+            @for (t of topicRows(); track t.topic) {
+              <div class="topic">
+                <span class="topic-label">{{ t.label }}</span>
+                <div class="topic-track">
+                  <div class="pi-bar thin" [style.width.%]="t.width">
+                    @for (s of t.segments; track s.key) {
+                      @if (s.value) {
+                        <span class="seg" tabindex="0" [style.flex-grow]="s.share" [style.background]="s.color"
+                              (mouseenter)="showTip($event, t.label, [s.label + ': ' + s.value + ' of ' + t.comments + ' comments'])"
+                              (focus)="showTip($event, t.label, [s.label + ': ' + s.value + ' of ' + t.comments + ' comments'])"
+                              (mouseleave)="hideTip()" (blur)="hideTip()"></span>
+                      }
+                    }
+                  </div>
+                </div>
+                <span class="topic-num subtle"><strong>{{ t.negative | compact }}</strong> neg · {{ t.comments | compact }}</span>
+              </div>
+            }
+          </div>
+        </div>
+      }
+
+      <!-- Over time -->
+      @if (timeline(); as tl) {
+        <div class="pi-block">
+          <div class="row"><h3>Comments over time</h3><span class="spacer"></span><span class="subtle">per {{ tl.bucket }}</span></div>
+          <div class="tl">
+            <div class="tl-axis" aria-hidden="true">
+              @for (t of tl.ticks; track t) { <span [style.bottom.%]="(t / tl.top) * 100">{{ t | compact }}</span> }
+            </div>
+            <div class="tl-plot" role="img" [attr.aria-label]="'Comments per ' + tl.bucket + ', ' + tl.columns.length + ' ' + tl.bucket + 's'">
+              @for (t of tl.ticks; track t) { <i class="tl-grid" [style.bottom.%]="(t / tl.top) * 100"></i> }
+              @for (c of tl.columns; track c.date; let i = $index) {
+                <div class="tl-col" tabindex="0"
+                     (mouseenter)="showTip($event, c.label, [c.total + ' comments', c.segments[0].value + ' negative · ' + c.segments[2].value + ' positive'])"
+                     (focus)="showTip($event, c.label, [c.total + ' comments', c.segments[0].value + ' negative · ' + c.segments[2].value + ' positive'])"
+                     (mouseleave)="hideTip()" (blur)="hideTip()">
+                  <div class="tl-bar" [style.height.%]="c.height">
+                    @for (s of c.segments; track s.key) {
+                      @if (s.value) { <span [style.flex-grow]="s.share" [style.background]="s.color"></span> }
+                    }
+                  </div>
+                  @if ((i % tl.labelEvery === 0 && tl.columns.length - 1 - i >= tl.labelEvery / 2) || i === tl.columns.length - 1) {
+                    <span class="tl-x" [class.last]="i === tl.columns.length - 1 && i > 0" [class.minor]="i !== 0 && i !== tl.columns.length - 1">{{ c.label }}</span>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Most-liked negative comments -->
+      @if (d.topNegative.length) {
+        <div class="pi-block">
+          <h3>Most-liked negative comments</h3>
+          <ul class="top">
+            @for (c of d.topNegative; track c.id) {
+              <li>
+                <span class="likes"><y-icon name="thumbsUp" [size]="14" /> {{ c.likes | compact }}</span>
+                <div class="pi-fill">
+                  <p class="clamp-2">{{ c.text }}</p>
+                  <div class="row-wrap subtle tags">
+                    <span>{{ causeSeries[c.cause].label }}</span>
+                    @if (c.claimTimestamp) { <span>· claim at {{ c.claimTimestamp }}</span> }
+                    @for (t of c.topics; track t) { <span>· {{ t }}</span> }
+                    @if (c.replies) { <span>· {{ c.replies | compact }} replies</span> }
+                  </div>
+                </div>
+                <a class="btn btn-sm" routerLink="/inbox" [queryParams]="{ video: videoId(), comment: c.id }">Reply</a>
+              </li>
+            }
+          </ul>
+        </div>
+      }
+
+      <!-- Same data as tables -->
+      <details class="pi-tables">
+        <summary>View the data as tables</summary>
+        <table>
+          <caption>Topics</caption>
+          <thead><tr><th>Topic</th><th>Comments</th><th>Negative</th><th>Neutral</th><th>Positive</th><th>Negative reach</th></tr></thead>
+          <tbody>
+            @for (t of d.topics; track t.topic) {
+              <tr><td>{{ t.label }}</td><td>{{ t.comments }}</td><td>{{ t.negative }}</td><td>{{ t.neutral }}</td><td>{{ t.positive }}</td><td>{{ t.negativeReach }}</td></tr>
+            }
+          </tbody>
+        </table>
+        <table>
+          <caption>Comments per {{ d.timeline.bucket }}</caption>
+          <thead><tr><th>Date</th><th>Negative</th><th>Neutral</th><th>Positive</th></tr></thead>
+          <tbody>
+            @for (p of d.timeline.points; track p.date) {
+              <tr><td>{{ p.date }}</td><td>{{ p.negative }}</td><td>{{ p.neutral }}</td><td>{{ p.positive }}</td></tr>
+            }
+          </tbody>
+        </table>
+      </details>
+
+      @if (tip(); as t) {
+        <div class="pi-tip" role="tooltip" [style.left.px]="t.x" [style.top.px]="t.y">
+          <strong>{{ t.title }}</strong>
+          @for (l of t.lines; track $index) { <span>{{ l }}</span> }
+        </div>
+      }
+    }
+  </section>
+}

@@ -1,0 +1,18 @@
+# Keep build contexts small and secret-free
+**/.git
+**/node_modules
+**/.venv
+**/__pycache__
+**/*.pyc
+**/dist
+**/.angular
+**/target
+**/.idea
+**/.vscode
+.logs
+.pids
+secrets
+airflow
+**/.DS_Store
+**/*.log
+**/.env

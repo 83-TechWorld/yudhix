@@ -51,7 +51,9 @@ def persist_comment_and_analysis(data: Dict[str, Any]) -> Dict[str, Any]:
     # Generate deterministic UUID for comment id
     comment_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{tenant_id}:{platform}:{platform_comment_id}"))
     source_id = data.get("source_id") or DEFAULT_SOURCE_ID
-    product_id = data.get("product_id") or DEFAULT_PRODUCT_ID
+    # An explicit product_id (even None: "not linked to a product") is kept; only legacy callers that
+    # don't pass one fall back to the demo product.
+    product_id = data["product_id"] if "product_id" in data else (DEFAULT_PRODUCT_ID if tenant_id == DEFAULT_TENANT_ID else None)
     
     raw_text = data.get("raw_text") or data.get("masked_text") or ""
     masked_text = data.get("masked_text") or raw_text
@@ -166,23 +168,11 @@ def persist_comment_and_analysis(data: Dict[str, Any]) -> Dict[str, Any]:
                     ) VALUES (%s, %s, %s, %s, %s, %s);
                 """, (tenant_id, actual_comment_id, asp_name, asp_sent, asp_score, asp_evidence))
 
-            # 4. Insert cryptographic audit ledger entry
-            row_hash = hashlib.sha256(f"{tenant_id}:{actual_comment_id}:{content_hash}".encode()).hexdigest()
-            cur.execute("""
-                INSERT INTO audit_event (
-                    tenant_id, actor_id, actor_type, action, entity_type,
-                    entity_id, before_state, after_state, prev_hash, row_hash
-                ) VALUES (
-                    %s, 'system-ai-pipeline', 'SYSTEM', 'INGEST_AND_ANALYZE', 'COMMENT',
-                    %s, '{}'::jsonb, %s::jsonb,
-                    '0000000000000000000000000000000000000000000000000000000000000000',
-                    %s
-                );
-            """, (
-                tenant_id, actual_comment_id,
-                json.dumps({"sentiment": sentiment, "priority": priority, "content_hash": content_hash}),
-                row_hash
-            ))
+            # 4. Append to the tenant's hash-chained audit ledger
+            from app.core.database import append_audit  # local import avoids a circular import
+            append_audit(cur, tenant_id, "system-ai-pipeline", "SYSTEM", "INGEST_AND_ANALYZE", "COMMENT",
+                         actual_comment_id,
+                         {"sentiment": sentiment, "priority": priority, "content_hash": content_hash})
 
         conn.commit()
         logger.info(f"Successfully persisted comment {actual_comment_id} ({platform}:{platform_comment_id}) into database.")

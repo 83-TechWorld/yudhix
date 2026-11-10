@@ -1,0 +1,36 @@
+# One-off, idempotent: applies sign-up, PKCE, SMTP and allowed origins to the yudhix realm.
+# Re-run after changing PUBLIC_URL or SMTP:  kubectl -n yudhix delete job keycloak-setup && kubectl apply -k <overlay>
+apiVersion: batch/v1
+kind: Job
+metadata: { name: keycloak-setup }
+spec:
+  backoffLimit: 6
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata: { labels: { app: keycloak-setup } }
+    spec:
+      restartPolicy: OnFailure
+      securityContext: { runAsNonRoot: true, runAsUser: 10001, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: setup
+          image: yudhix/api:local
+          command: ["python", "tools/configure_realm.py"]
+          envFrom:
+            - configMapRef: { name: yudhix-config }
+          env:
+            - { name: KC_URL, value: "http://keycloak:8080/auth" }
+            - { name: KC_WAIT_SECONDS, value: "600" }
+            - { name: APP_ORIGINS, value: "$(PUBLIC_URL),capacitor://localhost,http://localhost" }
+            - { name: KC_SMTP_HOST, value: "$(SMTP_HOST)" }
+            - { name: KC_SMTP_PORT, value: "$(SMTP_PORT)" }
+            - { name: KC_SMTP_STARTTLS, value: "$(SMTP_STARTTLS)" }
+            - name: KC_ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: yudhix-secrets, key: KEYCLOAK_ADMIN_PASSWORD } }
+            - name: KC_SMTP_USER
+              valueFrom: { secretKeyRef: { name: yudhix-secrets, key: SMTP_USER, optional: true } }
+            - name: KC_SMTP_PASSWORD
+              valueFrom: { secretKeyRef: { name: yudhix-secrets, key: SMTP_PASSWORD, optional: true } }
+          resources:
+            requests: { cpu: 20m, memory: 64Mi }
+            limits: { cpu: 200m, memory: 128Mi }
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }

@@ -1,0 +1,162 @@
+<div class="onboard">
+  <header class="top">
+    <a routerLink="/" class="logo"><span class="mark">Y</span><strong>Yudhix</strong></a>
+    <span class="spacer"></span>
+    @if (new() && session.workspaces().length) { <a class="btn btn-ghost btn-sm" routerLink="/analyze">Cancel</a> }
+    <button class="btn btn-ghost btn-sm" type="button" (click)="auth.logout()">Sign out</button>
+  </header>
+
+  <main class="body">
+    <ol class="progress" aria-label="Setup progress">
+      @for (s of [1, 2, 3]; track s) {
+        <li [class.done]="step() > s" [class.current]="step() === s">
+          <span class="dot">@if (step() > s) { <y-icon name="check" [size]="13" [stroke]="3" /> } @else { {{ s }} }</span>
+          <span class="lbl">{{ s === 1 ? 'Workspace' : s === 2 ? 'Product' : 'First video' }}</span>
+        </li>
+      }
+    </ol>
+
+    @if (error()) { <div class="callout callout-danger"><y-icon name="alert" [size]="16" />{{ error() }}</div> }
+
+    <!-- Step 1: workspace -->
+    @if (step() === 1) {
+      <section class="card card-pad panel enter">
+        <div>
+          <h1>@if (firstName() && !new()) { Welcome, {{ firstName() }}. } Create your workspace</h1>
+          <p class="muted">A workspace holds one brand: its team, knowledge base, reports and billing. Agencies create one per client.</p>
+        </div>
+        @if (me()?.pendingInvitations?.length) {
+          <div class="callout callout-info">
+            <y-icon name="mail" [size]="16" />
+            <span>You've been invited to <strong>{{ me()!.pendingInvitations[0].workspace }}</strong>@if (me()!.pendingInvitations.length > 1) { and {{ me()!.pendingInvitations.length - 1 }} more }. Open the link in your invitation email to join.</span>
+          </div>
+        }
+        <form class="stack" (ngSubmit)="createWorkspace()">
+          <div class="field">
+            <label for="wsn">Company or brand name</label>
+            <input id="wsn" name="name" class="input" [(ngModel)]="ws.name" placeholder="e.g. Northwind Audio" autocomplete="organization" required />
+          </div>
+          <div class="grid-2">
+            <div class="field">
+              <label for="wsc">Headquarters</label>
+              <select id="wsc" name="country" class="select input" [(ngModel)]="ws.country" required>
+                @for (c of countries(); track c.code) { <option [value]="c.code">{{ c.name }}</option> }
+              </select>
+              <span class="hint">Sets data region, tax and privacy policy pack.</span>
+            </div>
+            <div class="field">
+              <label for="wst">Team size</label>
+              <select id="wst" name="teamSize" class="select input" [(ngModel)]="ws.teamSize">
+                <option value="">Choose…</option>
+                @for (t of teamSizes; track t) { <option [value]="t">{{ t }} people</option> }
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label for="wsi">Industry</label>
+            <select id="wsi" name="industry" class="select input" [(ngModel)]="ws.industry">
+              <option value="">Choose…</option>
+              @for (i of industries; track i) { <option [value]="i">{{ i }}</option> }
+            </select>
+          </div>
+          <button class="btn btn-primary btn-lg" type="submit" [disabled]="busy()">{{ busy() ? 'Creating…' : 'Create workspace' }}</button>
+          <p class="subtle center">Starts a 14-day Professional trial. No credit card.</p>
+        </form>
+        @if (me()?.demoAvailable && !new()) {
+          <div class="or"><span>or</span></div>
+          <button class="btn btn-block" type="button" (click)="joinDemo()" [disabled]="busy()"><y-icon name="play" [size]="16" /> Explore the demo workspace first</button>
+        }
+      </section>
+    }
+
+    <!-- Step 2: product -->
+    @if (step() === 2) {
+      <section class="card card-pad panel enter">
+        <div>
+          <h1>What do people talk about?</h1>
+          <p class="muted">Add the product you want to monitor first. You can add more later.</p>
+        </div>
+        <form class="stack" (ngSubmit)="saveProduct()">
+          <div class="grid-2">
+            <div class="field">
+              <label for="pn">Product name</label>
+              <input id="pn" name="pname" class="input" [(ngModel)]="product.name" placeholder="e.g. SoundMax Pro Headphones" required />
+            </div>
+            <div class="field">
+              <label for="pc">Category</label>
+              <input id="pc" name="pcat" class="input" [(ngModel)]="product.category" placeholder="e.g. Audio" />
+            </div>
+          </div>
+
+          <label class="toggle">
+            <input type="checkbox" [checked]="addFact()" (change)="addFact.set(!addFact())" />
+            <span><strong>Add one official fact now</strong> <span class="subtle">(recommended)</span><br />
+              <span class="subtle">Claims are checked against your official facts: specs, policies, prices, warranty terms.</span></span>
+          </label>
+          @if (addFact()) {
+            <div class="fact stack enter-fade">
+              <div class="field">
+                <label for="ft">Fact title</label>
+                <input id="ft" name="ftitle" class="input" [(ngModel)]="fact.title" placeholder="e.g. Battery life" />
+              </div>
+              <div class="field">
+                <label for="fs">Official statement</label>
+                <textarea id="fs" name="fstatement" class="textarea" rows="3" [(ngModel)]="fact.statement"
+                  placeholder="e.g. SoundMax Pro battery lasts up to 40 hours with noise cancelling off, and 30 hours with it on."></textarea>
+              </div>
+            </div>
+          }
+          <div class="row-wrap">
+            <button class="btn btn-primary btn-lg grow" type="submit" [disabled]="busy()">{{ busy() ? 'Saving…' : 'Continue' }}</button>
+            <button class="btn btn-ghost" type="button" (click)="step.set(3)">Skip</button>
+          </div>
+        </form>
+      </section>
+    }
+
+    <!-- Step 3: first video -->
+    @if (step() === 3) {
+      <section class="card card-pad panel enter">
+        @if (!job()) {
+          <div>
+            <h1>Analyze your first video</h1>
+            <p class="muted">Paste a YouTube video about {{ product.name || workspaceName() || 'your product' }}: a review, an unboxing or a rant. You'll get a truth report in a minute or two.</p>
+          </div>
+          <form class="stack" (ngSubmit)="analyze()">
+            <div class="search">
+              <y-icon name="video" />
+              <input class="input input-lg" name="url" [(ngModel)]="video.url" placeholder="https://www.youtube.com/watch?v=…" inputmode="url" />
+            </div>
+            <button type="button" class="link-btn" (click)="showTranscript.set(!showTranscript())">
+              <y-icon [name]="showTranscript() ? 'chevronDown' : 'chevronRight'" [size]="16" /> Paste a transcript instead (optional)
+            </button>
+            @if (showTranscript()) {
+              <textarea class="textarea mono" name="transcript" rows="5" [(ngModel)]="video.transcript" placeholder="[00:42] What the creator says…"></textarea>
+            }
+            <div class="row-wrap">
+              <button class="btn btn-primary btn-lg grow" type="submit" [disabled]="busy()"><y-icon name="scan" /> {{ busy() ? 'Starting…' : 'Analyze video' }}</button>
+              <button class="btn btn-ghost" type="button" (click)="finish()">Skip for now</button>
+            </div>
+          </form>
+        } @else {
+          @let j = job()!;
+          <div>
+            <h1>@if (j.status === 'COMPLETED') { Your first truth report is ready } @else if (j.status === 'FAILED') { That didn't work } @else { Reading the video… }</h1>
+            <p class="muted">{{ j.message }}</p>
+          </div>
+          <div class="bar big"><span class="bar-brand" [style.width.%]="j.progress"></span></div>
+          @if (j.status === 'COMPLETED') {
+            <button class="btn btn-primary btn-lg" type="button" (click)="finish('/videos/' + j.videoId)">Open the truth report <y-icon name="arrowRight" /></button>
+          } @else if (j.status === 'FAILED') {
+            <div class="row-wrap">
+              <button class="btn btn-primary" type="button" (click)="job.set(null)">Try another video</button>
+              <button class="btn btn-ghost" type="button" (click)="finish()">Go to the app</button>
+            </div>
+          } @else {
+            <button class="btn btn-ghost" type="button" (click)="finish()">Continue to the app; we'll notify you when it's done</button>
+          }
+        }
+      </section>
+    }
+  </main>
+</div>

@@ -1,0 +1,53 @@
+# Keycloak: identity (sign-in, sign-up, tokens). Served under /auth behind the gateway.
+# More than one replica needs clustering: the production overlay sets KC_CACHE_STACK=kubernetes.
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: keycloak, labels: { app: keycloak } }
+spec:
+  replicas: 1
+  strategy: { rollingUpdate: { maxUnavailable: 0, maxSurge: 1 } }
+  selector: { matchLabels: { app: keycloak } }
+  template:
+    metadata: { labels: { app: keycloak } }
+    spec:
+      securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: keycloak
+          image: yudhix/keycloak:local
+          ports:
+            - { name: http, containerPort: 8080 }
+            - { name: management, containerPort: 9000 }
+            - { name: jgroups, containerPort: 7800 }
+          envFrom:
+            - configMapRef: { name: yudhix-config }
+          env:
+            - { name: KC_HOSTNAME, value: "$(PUBLIC_URL)/auth" }
+            - { name: KC_DB_USERNAME, value: "$(PG_USER)" }
+            - name: KC_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: yudhix-secrets, key: POSTGRES_PASSWORD } }
+            - { name: KEYCLOAK_ADMIN, value: admin }
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: yudhix-secrets, key: KEYCLOAK_ADMIN_PASSWORD } }
+          startupProbe: { httpGet: { path: /auth/health/started, port: management }, periodSeconds: 5, failureThreshold: 60 }
+          readinessProbe: { httpGet: { path: /auth/health/ready, port: management }, periodSeconds: 10 }
+          livenessProbe: { httpGet: { path: /auth/health/live, port: management }, periodSeconds: 20 }
+          resources:
+            requests: { cpu: 250m, memory: 640Mi }
+            limits: { cpu: "2", memory: 1280Mi }
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: keycloak, labels: { app: keycloak } }
+spec:
+  selector: { app: keycloak }
+  ports: [{ name: http, port: 8080, targetPort: http }]
+---
+# Headless service: lets Keycloak replicas find each other (JGroups DNS discovery)
+apiVersion: v1
+kind: Service
+metadata: { name: keycloak-headless, labels: { app: keycloak } }
+spec:
+  clusterIP: None
+  selector: { app: keycloak }
+  ports: [{ name: jgroups, port: 7800, targetPort: jgroups }]

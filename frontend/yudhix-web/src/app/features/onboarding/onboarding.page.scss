@@ -1,0 +1,32 @@
+.onboard { min-height: 100vh; min-height: 100dvh; background: radial-gradient(1200px 500px at 50% -10%, var(--brand-soft), transparent), var(--bg); }
+.top { display: flex; align-items: center; gap: 8px; padding: calc(14px + var(--safe-top)) var(--gutter) 14px; max-width: 960px; margin: 0 auto; }
+.logo { display: flex; align-items: center; gap: 10px; color: var(--text); font-size: 18px; }
+.logo:hover { text-decoration: none; }
+.mark { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; background: linear-gradient(135deg, var(--brand), #7c3aed); color: #fff; font-weight: 800; }
+.body { max-width: 620px; margin: 0 auto; padding: 16px var(--gutter) calc(48px + var(--safe-bottom)); display: flex; flex-direction: column; gap: 16px; }
+.panel { display: flex; flex-direction: column; gap: 20px; }
+.panel h1 { font-size: 24px; letter-spacing: -0.02em; margin-bottom: 6px; }
+@media (max-width: 639px) { .panel h1 { font-size: 21px; } }
+.grow { flex: 1; }
+.center { text-align: center; }
+.input-lg { height: 50px; font-size: 16px; }
+select.input { padding: 0 12px; }
+
+.progress { list-style: none; margin: 0 0 4px; padding: 0; display: flex; gap: 8px; }
+.progress li { flex: 1; display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--text-3); }
+.progress li:not(:last-child)::after { content: ""; flex: 1; height: 2px; background: var(--border); border-radius: 2px; }
+.progress li.done:not(:last-child)::after { background: var(--ok); }
+.dot { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-3); flex: none; font-size: 12px;
+  transition: background var(--dur-2) ease, color var(--dur-2) ease; }
+.current { color: var(--brand-text); }
+.current .dot { background: var(--brand); color: #fff; }
+.done .dot { background: var(--ok); color: #fff; }
+@media (max-width: 480px) { .lbl { display: none; } .progress li { flex: 0 1 auto; } .progress li:not(:last-child) { flex: 1; } }
+
+.toggle { display: flex; gap: 12px; align-items: flex-start; padding: 14px; border: 1px solid var(--border); border-radius: 12px; cursor: pointer; font-size: 14.5px; }
+.toggle input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--brand); }
+.fact { padding: 0 2px; }
+.or { display: flex; align-items: center; gap: 12px; color: var(--text-3); font-size: 13px; }
+.or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+.link-btn { border: 0; background: none; padding: 0; color: var(--text-2); font-weight: 600; font-size: 13.5px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; align-self: flex-start; }
+.big { height: 10px; }

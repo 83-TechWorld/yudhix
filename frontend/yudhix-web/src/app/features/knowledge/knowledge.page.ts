@@ -1,0 +1,364 @@
+import { ChangeDetectionStrategy, Component, computed, inject, signal, viewChild } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { ApiService, errorMessage } from '../../core/api.service';
+import { Knowledge, KnowledgeDocument } from '../../core/models';
+import { AiSyncComponent } from '../../shared/ai-sync.component';
+import { SessionService } from '../../core/session.service';
+import { IconComponent } from '../../shared/icon.component';
+import { AgoPipe, EmptyStateComponent, ToastService } from '../../shared/ui';
+
+@Component({
+  selector: 'y-knowledge',
+  imports: [FormsModule, IconComponent, EmptyStateComponent, AgoPipe, AiSyncComponent],
+  template: `
+    <div class="page page-narrow">
+      <header class="page-head">
+        <div>
+          <h1>Knowledge base</h1>
+          <p>The official facts Yudhix checks creator claims against. Better sources mean better verdicts.</p>
+        </div>
+        @if (session.can('content.write')) {
+          <div class="row-wrap head-actions">
+            <input #file type="file" hidden accept=".pdf,.docx,.txt,.md,.csv" (change)="upload(file)" />
+            <button class="btn" type="button" (click)="file.click()" [disabled]="uploading()">
+              <y-icon [name]="uploading() ? 'loader' : 'download'" [size]="16" [class.spin]="uploading()" class="up" />
+              {{ uploading() ? 'Reading ' + uploading() + '…' : 'Upload document' }}
+            </button>
+            <button class="btn btn-primary" type="button" (click)="openForm()"><y-icon name="plus" /> Add a fact</button>
+          </div>
+        }
+      </header>
+      <p class="subtle formats">Upload PDF, Word (.docx), text, Markdown or CSV (columns: title, statement, category, clause), up to 10 MB.
+        Documents are split into clause-sized facts and stay in your database.</p>
+
+      <y-ai-sync [compact]="true" class="sync-card" />
+
+      @if (staleVideos() > 0 && session.can('content.write')) {
+        <div class="callout callout-info stale enter">
+          <y-icon name="refresh" [size]="16" />
+          <span class="grow">
+            <strong>{{ staleVideos() }} video{{ staleVideos() === 1 ? ' was' : 's were' }} checked against older facts.</strong>
+            Re-check their claims against the knowledge base as it is now. Only the fact-check runs again, one video at a time
+            in the background; you'll get a notification for each.
+          </span>
+          <button class="btn btn-sm btn-primary" type="button" (click)="recheckAll()" [disabled]="rechecking()">
+            {{ rechecking() ? 'Starting…' : 'Re-check claims' }}
+          </button>
+        </div>
+      }
+
+      @if (docs().length) {
+        <section class="group enter">
+          <h2 class="eyebrow">Documents · {{ docs().length }}</h2>
+          <div class="card docs">
+            @for (d of docs(); track d.id) {
+              <div class="doc-row">
+                <button type="button" class="doc-main" (click)="toggleDoc(d.id)" [attr.aria-expanded]="openDoc() === d.id">
+                  <span class="chip chip-outline mono ftype">{{ d.fileType }}</span>
+                  <span class="doc-name"><strong>{{ d.title }}</strong>
+                    <span class="subtle">{{ d.facts }} facts · {{ d.category }}@if (d.pages) { · {{ d.pages }} pages } · {{ size(d.sizeBytes) }} · added {{ d.createdAt | ago }}</span></span>
+                  <y-icon [name]="openDoc() === d.id ? 'chevronDown' : 'chevronRight'" [size]="16" />
+                </button>
+                @if (session.can('content.write')) {
+                  <button class="btn btn-ghost btn-icon btn-sm" type="button" (click)="removeDoc(d)" [attr.aria-label]="'Delete ' + d.filename"><y-icon name="trash" [size]="16" /></button>
+                }
+              </div>
+              @if (openDoc() === d.id) {
+                <ol class="doc-facts">
+                  @for (k of docFacts(d.id); track k.id) {
+                    <li><span class="mono subtle">{{ k.clauseRef }}</span> {{ k.statement }}</li>
+                  }
+                </ol>
+              }
+            }
+          </div>
+        </section>
+      }
+
+      <div class="search toolbar">
+        <y-icon name="search" />
+        <input class="input" [ngModel]="q()" (ngModelChange)="q.set($event)" placeholder="Search policies, specs, clauses" aria-label="Search knowledge" />
+      </div>
+
+      @if (items() === null) {
+        <div class="stack">@for (i of [1, 2, 3]; track i) { <div class="skeleton" style="height: 120px"></div> }</div>
+      } @else if (!groups().length) {
+        <div class="card">
+          <y-empty icon="book" title="No facts yet"
+                   text="Each workspace has its own facts. Add your product specs, prices, policies and FAQs: claims are checked against them, and a claim with no matching fact stays unverified.">
+            @if (session.can('content.write')) {
+              <button class="btn btn-primary" type="button" (click)="openForm()">Add the first fact</button>
+            }
+          </y-empty>
+        </div>
+      } @else {
+        @for (g of groups(); track g.category; let gi = $index) {
+          <section class="group enter" [style.--i]="gi">
+            <h2 class="eyebrow">{{ g.category }} · {{ g.items.length }}</h2>
+            <div class="stack">
+              @for (k of g.items; track k.id; let ki = $index) {
+                <article class="card card-pad doc card-lift enter" [style.--i]="gi + ki + 1">
+                  <div class="row-wrap">
+                    <h3>{{ k.title }}</h3>
+                    @if (k.clauseRef) { <span class="chip chip-outline mono">{{ k.clauseRef }}</span> }
+                    <span class="spacer"></span>
+                    @if (k.usedByClaims) { <span class="chip chip-brand">Cited by {{ k.usedByClaims }} claims</span> }
+                    @if (session.can('content.write')) {
+                    <button class="btn btn-ghost btn-icon btn-sm" type="button" (click)="remove(k)" [attr.aria-label]="'Delete ' + k.title"><y-icon name="trash" [size]="16" /></button>
+                    }
+                  </div>
+                  <p class="statement">{{ k.statement }}</p>
+                  <div class="subtle">
+                    @if (k.productName) { {{ k.productName }} · }
+                    @if (k.source) { Source: {{ k.source }} · }
+                    Verified {{ k.verifiedAt | ago }}
+                  </div>
+                </article>
+              }
+            </div>
+          </section>
+        }
+      }
+    </div>
+
+    @if (formOpen()) {
+      <div class="sheet-backdrop" (click)="formOpen.set(false)"></div>
+      <aside class="sheet" role="dialog" aria-modal="true" aria-labelledby="kf-title">
+        <div class="sheet-head">
+          <h2 id="kf-title" style="flex: 1">Add an official fact</h2>
+          <button class="btn btn-ghost btn-icon" type="button" (click)="formOpen.set(false)" aria-label="Close"><y-icon name="x" /></button>
+        </div>
+        <form class="sheet-body stack" id="kform" (ngSubmit)="save()">
+          <div class="field">
+            <label for="kt">Title</label>
+            <input id="kt" name="title" class="input" [(ngModel)]="form.title" required placeholder="e.g. PS5 Disc Drive Offline Policy" />
+          </div>
+          <div class="field">
+            <label for="ks">Official statement</label>
+            <textarea id="ks" name="statement" class="textarea" rows="6" [(ngModel)]="form.statement" required
+              placeholder="Write exactly what your company officially states. Be specific: numbers, conditions, dates."></textarea>
+            <span class="hint">Write one clear fact per entry. The fact-checker quotes this text back to creators and commenters.</span>
+          </div>
+          <div class="grid-2">
+            <div class="field">
+              <label for="kc">Category</label>
+              <input id="kc" name="category" class="input" [(ngModel)]="form.category" placeholder="Hardware, Policy, Pricing…" list="cats" />
+              <datalist id="cats">@for (g of groups(); track g.category) { <option [value]="g.category"></option> }</datalist>
+            </div>
+            <div class="field">
+              <label for="kr">Clause / reference</label>
+              <input id="kr" name="clauseRef" class="input" [(ngModel)]="form.clauseRef" placeholder="e.g. HW-DISC-01" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="ksrc">Source</label>
+            <input id="ksrc" name="source" class="input" [(ngModel)]="form.source" placeholder="URL or document name" />
+          </div>
+          @if (formError()) { <div class="callout callout-danger">{{ formError() }}</div> }
+        </form>
+        <div class="sheet-foot">
+          <button class="btn" type="button" (click)="formOpen.set(false)">Cancel</button>
+          <button class="btn btn-primary" type="submit" form="kform" [disabled]="saving()" style="flex: 1">{{ saving() ? 'Saving…' : 'Add fact' }}</button>
+        </div>
+      </aside>
+    }
+  `,
+  styles: `
+    .head-actions { gap: 8px; }
+    .formats { font-size: 12.5px; margin: -6px 0 14px; }
+    .sync-card { display: block; margin-bottom: 16px; }
+    .docs { padding: 4px 0; }
+    .doc-row { display: flex; align-items: center; gap: 6px; padding: 0 10px 0 0; border-top: 1px solid var(--border);
+      &:first-child { border-top: 0; } }
+    .doc-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 12px 16px; text-align: left;
+      background: none; border: 0; color: inherit; font: inherit; cursor: pointer; }
+    .doc-name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;
+      .subtle { font-size: 12.5px; } }
+    .ftype { text-transform: uppercase; font-size: 11px; }
+    .doc-facts { margin: 0; padding: 4px 20px 14px 52px; display: flex; flex-direction: column; gap: 8px; font-size: 13.5px;
+      color: var(--text-2); max-height: 360px; overflow-y: auto; .mono { margin-right: 6px; } }
+    .stale { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; .grow { flex: 1 1 300px; } }
+    .toolbar { margin-bottom: 20px; }
+    .group { margin-bottom: 24px; }
+    .group h2 { margin-bottom: 10px; }
+    .doc { display: flex; flex-direction: column; gap: 8px; }
+    .statement { color: var(--text-2); }
+    .card-lift { transition: transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out); }
+    @media (hover: hover) { .card-lift:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); } }
+  `,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class KnowledgePage {
+  private api = inject(ApiService);
+  private toast = inject(ToastService);
+  protected session = inject(SessionService);
+
+  protected readonly items = signal<Knowledge[] | null>(null);
+  protected readonly q = signal('');
+  protected readonly formOpen = signal(false);
+  protected readonly saving = signal(false);
+  protected readonly formError = signal('');
+  protected form = { title: '', statement: '', category: '', clauseRef: '', source: '' };
+
+  protected readonly docs = signal<KnowledgeDocument[]>([]);
+  protected readonly openDoc = signal<string | null>(null);
+  protected readonly uploading = signal('');
+  private readonly syncCard = viewChild(AiSyncComponent);
+
+  /** Facts by category. Facts from documents appear under their document, and here only when searching. */
+  protected readonly groups = computed(() => {
+    const q = this.q().trim().toLowerCase();
+    const map = new Map<string, Knowledge[]>();
+    for (const k of this.items() ?? []) {
+      if (k.documentId && !q) continue;
+      const hay = `${k.title} ${k.statement} ${k.clauseRef ?? ''} ${k.category}`.toLowerCase();
+      if (q && !hay.includes(q)) continue;
+      map.set(k.category, [...(map.get(k.category) ?? []), k]);
+    }
+    return [...map.entries()].map(([category, items]) => ({ category, items }));
+  });
+
+  /** Videos whose claims were checked before the facts last changed. */
+  protected readonly staleVideos = signal(0);
+  protected readonly rechecking = signal(false);
+
+  constructor() {
+    this.load();
+  }
+
+  private load(): void {
+    this.api.knowledgeDocuments().subscribe({ next: (r) => this.docs.set(r.documents), error: () => {} });
+    this.api.knowledge().subscribe({
+      next: (r) => {
+        this.items.set(r.knowledge);
+        this.staleVideos.set(r.staleVideos ?? 0);
+      },
+      error: (e) => {
+        this.items.set([]);
+        this.toast.error(errorMessage(e));
+      },
+    });
+  }
+
+  protected openForm(): void {
+    this.form = { title: '', statement: '', category: '', clauseRef: '', source: '' };
+    this.formError.set('');
+    this.formOpen.set(true);
+  }
+
+  protected save(): void {
+    if (this.form.title.trim().length < 3 || this.form.statement.trim().length < 10) {
+      this.formError.set('Add a title and an official statement (at least a full sentence).');
+      return;
+    }
+    this.saving.set(true);
+    this.api
+      .addKnowledge({
+        title: this.form.title.trim(),
+        statement: this.form.statement.trim(),
+        category: this.form.category.trim() || 'General',
+        clauseRef: this.form.clauseRef.trim() || undefined,
+        source: this.form.source.trim() || undefined,
+      })
+      .subscribe({
+        next: (k) => {
+          this.saving.set(false);
+          this.formOpen.set(false);
+          this.items.update((list) => [...(list ?? []), k]);
+          this.toast.show('Fact added. New checks use it straight away; re-check existing videos above.');
+          this.load();
+          this.syncCard()?.refresh(1000);
+        },
+        error: (e) => {
+          this.saving.set(false);
+          this.formError.set(errorMessage(e));
+        },
+      });
+  }
+
+  protected docFacts(id: string): Knowledge[] {
+    return (this.items() ?? []).filter((k) => k.documentId === id);
+  }
+
+  protected toggleDoc(id: string): void {
+    this.openDoc.update((o) => (o === id ? null : id));
+  }
+
+  protected size(bytes: number): string {
+    return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  }
+
+  /** Read the file in the browser, send it as base64; the server splits it into facts. */
+  protected upload(input: HTMLInputElement): void {
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      this.toast.error('Files up to 10 MB. Split larger documents.');
+      return;
+    }
+    this.uploading.set(file.name);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = String(reader.result).split(',', 2)[1] ?? '';
+      this.api.uploadDocument({ filename: file.name, content_base64: base64 }).subscribe({
+        next: (d) => {
+          this.uploading.set('');
+          this.toast.show(`Added ${d.facts} facts from ${d.filename}.`);
+          this.openDoc.set(d.id);
+          this.load();
+          this.syncCard()?.refresh(1000);
+        },
+        error: (e) => {
+          this.uploading.set('');
+          this.toast.error(errorMessage(e));
+        },
+      });
+    };
+    reader.onerror = () => {
+      this.uploading.set('');
+      this.toast.error("Couldn't read that file.");
+    };
+    reader.readAsDataURL(file);
+  }
+
+  protected removeDoc(d: KnowledgeDocument): void {
+    if (!confirm(`Delete "${d.filename}" and its ${d.facts} facts? Claims citing them lose their source until re-checked.`)) return;
+    this.api.deleteDocument(d.id).subscribe({
+      next: () => {
+        this.toast.show('Document deleted.');
+        this.load();
+        this.syncCard()?.refresh(500);
+      },
+      error: (e) => this.toast.error(errorMessage(e)),
+    });
+  }
+
+  protected recheckAll(): void {
+    this.rechecking.set(true);
+    this.api.recheckAll().subscribe({
+      next: (r) => {
+        this.rechecking.set(false);
+        this.staleVideos.set(0);
+        this.toast.show(r.queued ? `Re-checking ${r.queued} video${r.queued === 1 ? '' : 's'} in the background.` : 'Already re-checking.');
+      },
+      error: (e) => {
+        this.rechecking.set(false);
+        this.toast.error(errorMessage(e));
+      },
+    });
+  }
+
+  protected remove(k: Knowledge): void {
+    const warn = k.usedByClaims ? ` It's cited by ${k.usedByClaims} claims, which will lose their source.` : '';
+    if (!confirm(`Delete "${k.title}"?${warn}`)) return;
+    this.api.deleteKnowledge(k.id).subscribe({
+      next: () => {
+        this.items.update((list) => (list ?? []).filter((x) => x.id !== k.id));
+        this.toast.show('Deleted.');
+        this.load();
+      },
+      error: (e) => this.toast.error(errorMessage(e)),
+    });
+  }
+}

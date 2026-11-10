@@ -52,19 +52,25 @@ start_sense() {
     cd "$SCRIPT_DIR/services/yudhix-sense"
     if [ ! -d ".venv" ]; then
         python3 -m venv .venv
-        ./.venv/bin/pip install --upgrade pip fastapi uvicorn httpx pydantic > /dev/null 2>&1
     fi
-    OLLAMA_MODEL="llama3.1:latest" nohup ./.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 > "$LOG_DIR/sense.log" 2>&1 &
+    ./.venv/bin/pip install -q -r requirements.txt > /dev/null 2>&1
+    # Optional: export YOUTUBE_API_KEY=... before starting to pull comments for new videos.
+    OLLAMA_MODEL="${OLLAMA_MODEL:-llama3.1:latest}" nohup ./.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 > "$LOG_DIR/sense.log" 2>&1 &
     echo $! > "$PID_DIR/sense.pid"
     cd "$SCRIPT_DIR"
     echo -e "    ${GREEN}✔ yudhix-sense running on http://localhost:8000${NC}"
 }
 
 start_frontend() {
-    echo -e "${ORANGE}[+]${WHITE} Starting yudhix-web (Frontend on :3000)...${NC}"
-    nohup python3 -m http.server 3000 --directory "$SCRIPT_DIR/frontend/yudhix-web" > "$LOG_DIR/frontend.log" 2>&1 &
+    echo -e "${ORANGE}[+]${WHITE} Starting yudhix-web (Angular on :4200)...${NC}"
+    cd "$SCRIPT_DIR/frontend/yudhix-web"
+    if [ ! -d "node_modules" ]; then
+        npm install --no-audit --no-fund > /dev/null 2>&1
+    fi
+    nohup npx ng serve --port 4200 > "$LOG_DIR/frontend.log" 2>&1 &
     echo $! > "$PID_DIR/frontend.pid"
-    echo -e "    ${GREEN}✔ yudhix-web running on http://localhost:3000${NC}"
+    cd "$SCRIPT_DIR"
+    echo -e "    ${GREEN}✔ yudhix-web starting on http://localhost:4200${NC}"
 }
 
 start_config() {
@@ -80,7 +86,7 @@ start_all() {
     start_sense
     start_frontend
     echo -e "\n${ORANGE}All core servers initiated!${NC}"
-    echo -e "${WHITE}Open Dashboard: ${ORANGE}http://localhost:3000${NC}\n"
+    echo -e "${WHITE}Open the app: ${ORANGE}http://localhost:4200${NC}\n"
 }
 
 stop_all() {
@@ -97,8 +103,8 @@ stop_all() {
             rm -f "$pidfile"
         fi
     done
-    # Kill any dangling python http.server on 3000 or uvicorn on 8000
-    pkill -f "http.server 3000" 2>/dev/null || true
+    # Kill any dangling ng serve on 4200 or uvicorn on 8000
+    pkill -f "ng serve --port 4200" 2>/dev/null || true
     pkill -f "uvicorn app.main:app" 2>/dev/null || true
     echo -e "${GREEN}✔ All processes stopped.${NC}"
 }
@@ -123,10 +129,10 @@ status_all() {
     fi
 
     # Frontend
-    if curl -s -I http://localhost:3000 > /dev/null 2>&1; then
-        echo -e "${WHITE}yudhix-web (Frontend)  ${ORANGE}3000     ${GREEN}ONLINE${NC}"
+    if curl -s -I http://localhost:4200 > /dev/null 2>&1; then
+        echo -e "${WHITE}yudhix-web (Frontend)  ${ORANGE}4200     ${GREEN}ONLINE${NC}"
     else
-        echo -e "${WHITE}yudhix-web (Frontend)  ${ORANGE}3000     ${RED}OFFLINE${NC}"
+        echo -e "${WHITE}yudhix-web (Frontend)  ${ORANGE}4200     ${RED}OFFLINE${NC}"
     fi
 }
 
@@ -198,12 +204,14 @@ init_db() {
         services/yudhix-resolve/src/main/resources/db/migration/V1__init_resolve_schema.sql \
         services/yudhix-loop/src/main/resources/db/migration/V1__init_loop_schema.sql \
         services/yudhix-notify/src/main/resources/db/migration/V1__init_notify_schema.sql \
-        services/yudhix-meter/src/main/resources/db/migration/V1__init_meter_schema.sql; do
+        services/yudhix-meter/src/main/resources/db/migration/V1__init_meter_schema.sql \
+        services/yudhix-sense/app/migrations/V2__truth_first.sql \
+        services/yudhix-sense/app/migrations/V3__saas.sql; do
         if [ -f "$f" ]; then
             psql -h localhost -U postgres -d yudhix -f "$f" >/dev/null 2>&1
         fi
     done
-    echo -e "${GREEN}✔ All 31 tables verified and initialized in PostgreSQL!${NC}"
+    echo -e "${GREEN}✔ All 37 tables verified and initialized in PostgreSQL!${NC}"
 }
 
 case "$1" in
@@ -224,6 +232,32 @@ case "$1" in
     test)
         run_test
         ;;
+    docker-up)
+        ./deploy/scripts/docker-up.sh
+        ;;
+    docker-down)
+        ./deploy/scripts/docker-down.sh "${2:-}"
+        ;;
+    k8s-up|k8s-down|k8s-status|k8s-wipe)
+        ./deploy/scripts/k8s-local.sh "${1#k8s-}"
+        ;;
+    keycloak)
+        print_banner
+        echo -e "${ORANGE}[+] Applying SaaS sign-in settings to Keycloak (realm yudhix)...${NC}"
+        python3 keycloak/configure_realm.py
+        ;;
+    e2e)
+        print_banner
+        echo -e "${ORANGE}[+] End-to-end SaaS test (needs Keycloak, Mailpit and yudhix-sense running)${NC}"
+        (cd services/yudhix-sense && ./.venv/bin/python tests/e2e_saas.py)
+        ;;
+    unit)
+        print_banner
+        echo -e "${ORANGE}[+] Backend unit tests (yudhix-sense)${NC}"
+        (cd services/yudhix-sense && ./.venv/bin/python -m pytest -q tests)
+        echo -e "${ORANGE}[+] Frontend unit tests (yudhix-web)${NC}"
+        (cd frontend/yudhix-web && npm test --silent)
+        ;;
     db)
         show_db_comments
         ;;
@@ -231,18 +265,23 @@ case "$1" in
         init_db
         ;;
     ui)
-        open "http://localhost:3000" || echo "Visit http://localhost:3000"
+        open "http://localhost:4200" || echo "Visit http://localhost:4200"
         ;;
     *)
         print_banner
-        echo -e "${WHITE}Usage:${NC} ./yudhix.sh {start|stop|restart|status|test|db|init-db|ui}"
+        echo -e "${WHITE}Usage:${NC} ./yudhix.sh {start|stop|restart|status|test|unit|e2e|keycloak|docker-up|docker-down|k8s-up|k8s-down|k8s-status|db|init-db|ui}"
         echo ""
         echo -e "  ${ORANGE}start${NC}    - Launch Ollama, yudhix-sense AI engine, and yudhix-web frontend"
         echo -e "  ${ORANGE}stop${NC}     - Stop all background running services"
         echo -e "  ${ORANGE}status${NC}   - Display health and ports of all services"
         echo -e "  ${ORANGE}test${NC}     - Run live end-to-end PII masking & AI analysis test"
+        echo -e "  ${ORANGE}unit${NC}     - Run backend (pytest) and frontend (Karma) unit tests"
+        echo -e "  ${ORANGE}e2e${NC}      - End-to-end SaaS test through the real Keycloak (creates + removes test users)"
+        echo -e "  ${ORANGE}docker-up${NC}   - Whole stack in Docker behind the gateway (http://localhost:8080); docker-down [--wipe]"
+        echo -e "  ${ORANGE}k8s-up${NC}      - Whole stack on the current Kubernetes context (http://localhost:8081); k8s-status / k8s-down / k8s-wipe"
+        echo -e "  ${ORANGE}keycloak${NC} - Apply sign-up, PKCE, SMTP and theme settings to the running Keycloak"
         echo -e "  ${ORANGE}db${NC}       - Query and display comments and AI sentiment from PostgreSQL"
-        echo -e "  ${ORANGE}init-db${NC}  - Create DB yudhix, enable extensions, and run all 31 table migrations"
-        echo -e "  ${ORANGE}ui${NC}       - Open the white/orange/black frontend in your default browser"
+        echo -e "  ${ORANGE}init-db${NC}  - Create DB yudhix, enable extensions, and run all 37 table migrations"
+        echo -e "  ${ORANGE}ui${NC}       - Open the Yudhix web app in your default browser"
         ;;
 esac

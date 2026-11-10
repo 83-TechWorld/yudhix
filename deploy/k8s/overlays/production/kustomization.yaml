@@ -1,0 +1,49 @@
+# Production on any managed Kubernetes (EKS, GKE, AKS, DigitalOcean, Linode, OVH, k3s on VMs…).
+# Before applying:
+#   1. Set PUBLIC_URL, the database host and SMTP below; set your registry + TAG under `images`.
+#   2. Create the secret (never commit it):
+#        kubectl create namespace yudhix
+#        kubectl -n yudhix create secret generic yudhix-secrets \
+#          --from-literal=POSTGRES_PASSWORD=... --from-literal=KEYCLOAK_ADMIN_PASSWORD=... \
+#          --from-literal=AUTHOR_HMAC_KEY="$(openssl rand -hex 32)" \
+#          --from-literal=SMTP_USER=... --from-literal=SMTP_PASSWORD=... --from-literal=YOUTUBE_API_KEY=...
+#   3. In the managed Postgres, create databases `yudhix` and `keycloak` owned by PG_USER.
+#   4. Install ingress-nginx and cert-manager (with a ClusterIssuer named letsencrypt).
+#   5. kubectl apply -k deploy/k8s/overlays/production
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: yudhix
+resources:
+  - ../../base
+  - ingress.yaml
+configMapGenerator:
+  - name: yudhix-config
+    behavior: merge
+    literals:
+      - PUBLIC_URL=https://app.example.com              # CHANGE
+      - PG_HOST=your-managed-postgres.example.com       # CHANGE
+      - PG_USER=yudhix
+      - KC_DB_URL=jdbc:postgresql://your-managed-postgres.example.com:5432/keycloak?sslmode=require   # CHANGE
+      - SMTP_HOST=smtp.zeptomail.in                     # Zoho ZeptoMail (or any SMTP provider)
+      - SMTP_PORT=587
+      - SMTP_STARTTLS=true
+      - OLLAMA_URL=http://ollama.ai.svc:11434           # optional GPU node / AI host; rule-based if unreachable
+      - SALES_EMAIL=sales@your-domain.com               # CHANGE
+images:                                                 # CHANGE registry + tag (see deploy/scripts/push-images.sh)
+  - { name: yudhix/api,      newName: ghcr.io/83-techworld/yudhix-api,      newTag: v1.0.0 }
+  - { name: yudhix/web,      newName: ghcr.io/83-techworld/yudhix-web,      newTag: v1.0.0 }
+  - { name: yudhix/gateway,  newName: ghcr.io/83-techworld/yudhix-gateway,  newTag: v1.0.0 }
+  - { name: yudhix/keycloak, newName: ghcr.io/83-techworld/yudhix-keycloak, newTag: v1.0.0 }
+patches:
+  # Two Keycloak replicas, clustered over JGroups (DNS discovery via the headless service)
+  - target: { kind: Deployment, name: keycloak }
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value: { name: KC_CACHE_STACK, value: kubernetes }
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value: { name: JAVA_OPTS_APPEND, value: "-Djgroups.dns.query=keycloak-headless.yudhix.svc.cluster.local" }

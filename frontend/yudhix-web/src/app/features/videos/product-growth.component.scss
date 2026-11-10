@@ -1,0 +1,34 @@
+/* Growth-only pieces; headline, grid, lists, tables and tooltip come from product-impact.component.scss. */
+
+/* Single-series horizontal bars: label | bar | value. Rows are links or focusable for the tooltip. */
+.g-bars { display: flex; flex-direction: column; gap: 4px; }
+.g-row { display: grid; grid-template-columns: minmax(0, 190px) minmax(0, 1fr) 40px; gap: 12px; align-items: center;
+  padding: 5px 6px; margin: 0 -6px; border-radius: 8px; font-size: 13px; color: var(--text); text-decoration: none;
+  outline-offset: 2px;
+  &:hover, &:focus-visible { background: var(--surface-2, var(--hover)); } }
+.g-label { display: flex; flex-direction: column; min-width: 0; line-height: 1.3;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.g-hint { font-size: 11px; overflow: hidden; text-overflow: ellipsis; }
+.g-track { display: block; height: 10px; }
+.g-fill { display: block; height: 100%; min-width: 4px; border-radius: 0 4px 4px 0; }
+.g-fill.want { background: var(--chart-valid); }
+.g-fill.love { background: var(--chart-pos); }
+.g-num { text-align: right; font-variant-numeric: tabular-nums; }
+.g-foot { font-size: 12px; margin: 10px 0 0; }
+.g-sub { margin-top: 20px; }
+
+/* Ideas */
+.ideas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.idea { padding: 12px 0; border-top: 1px solid var(--border);
+  &:first-child { border-top: 0; padding-top: 0; } }
+.idea-top { gap: 8px; align-items: center; }
+.idea-title { font-size: 14px; }
+.idea-top .num { font-size: 12px; font-variant-numeric: tabular-nums; }
+.idea-quote { margin: 6px 0 0; font-size: 13px; color: var(--muted-text); line-height: 1.5;
+  y-icon { vertical-align: -1px; } }
+
+@media (max-width: 639px) {
+  .g-row { grid-template-columns: minmax(0, 1fr) 36px; row-gap: 4px; }
+  .g-track { grid-column: 1 / -1; grid-row: 2; }
+  .g-num { grid-row: 1; grid-column: 2; }
+}

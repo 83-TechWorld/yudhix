@@ -51,7 +51,9 @@ def persist_comment_and_analysis(data: Dict[str, Any]) -> Dict[str, Any]:
     # Generate deterministic UUID for comment id
     comment_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{tenant_id}:{platform}:{platform_comment_id}"))
     source_id = data.get("source_id") or DEFAULT_SOURCE_ID
-    product_id = data.get("product_id") or (DEFAULT_PRODUCT_ID if tenant_id == DEFAULT_TENANT_ID else None)
+    # An explicit product_id (even None: "not linked to a product") is kept; only legacy callers that
+    # don't pass one fall back to the demo product.
+    product_id = data["product_id"] if "product_id" in data else (DEFAULT_PRODUCT_ID if tenant_id == DEFAULT_TENANT_ID else None)
     
     raw_text = data.get("raw_text") or data.get("masked_text") or ""
     masked_text = data.get("masked_text") or raw_text

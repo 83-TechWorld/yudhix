@@ -29,6 +29,16 @@
         <div class="row-wrap">
           <a class="btn btn-sm" [href]="v.url" target="_blank" rel="noopener"><y-icon name="external" [size]="15" /> YouTube</a>
           <a class="btn btn-sm" routerLink="/inbox" [queryParams]="{ video: v.videoId }"><y-icon name="inbox" [size]="15" /> Respond to comments</a>
+          @if (products().length) {
+            <label class="product-pick">
+              <span class="subtle">Product</span>
+              <select class="select input" [ngModel]="v.productId ?? ''" (ngModelChange)="setProduct($event)"
+                      [disabled]="!session.can('content.write')" aria-label="Product this video is about">
+                <option value="">Not linked</option>
+                @for (p of products(); track p.id) { <option [value]="p.id">{{ p.name }}</option> }
+              </select>
+            </label>
+          }
           <button type="button" class="btn btn-sm" (click)="checkComments()" [disabled]="!!checkJob()"
                   title="Fetch comments posted since the last check. The transcript and fact-check stay as they are.">
             <y-icon name="refresh" [size]="15" [class.spin]="checkJob()?.kind === 'COMMENTS'" />

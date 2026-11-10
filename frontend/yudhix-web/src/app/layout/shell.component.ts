@@ -15,6 +15,17 @@ interface NavItem { path: string; label: string; icon: string; mobile: boolean; 
 interface NavGroup { label: string; items: NavItem[]; }
 type Menu = 'workspace' | 'user' | 'notifications' | null;
 
+/**
+ * After a workspace switch, IDs in the URL (a video, product, idea, invoice, an inbox filter) belong to the
+ * old workspace. Go to the same section without them, so the page never shows "not found" or empty filters.
+ */
+export function workspaceSafeUrl(url: string): string {
+  const path = url.split(/[?#]/)[0];
+  const parts = path.split('/').filter(Boolean);
+  if (parts[0] === 'settings') return parts[1] === 'billing' ? '/settings/billing' : path;
+  return parts.length ? `/${parts[0]}` : '/';
+}
+
 @Component({
   selector: 'y-shell',
   imports: [RouterOutlet, RouterLink, RouterLinkActive, NgTemplateOutlet, IconComponent, BotStatusComponent, AgoPipe],
@@ -153,10 +164,15 @@ export class ShellComponent {
   protected switchTo(ws: WorkspaceSummary): void {
     this.menu.set(null);
     if (ws.id === this.session.workspaceId()) return;
-    this.session.select(ws.id);
-    this.toasts.show(`Switched to ${ws.name}.`);
-    this.refreshCounts();
-    if (/^\/videos\/./.test(this.router.url)) this.router.navigateByUrl('/videos');
+    // Leave pages tied to the old workspace first, so they never load with the new workspace's data.
+    const next = workspaceSafeUrl(this.router.url);
+    const go = next !== this.router.url ? this.router.navigateByUrl(next) : Promise.resolve(true);
+    go.then(() => {
+      this.session.select(ws.id);
+      this.toasts.show(`Switched to ${ws.name}.`);
+      this.refreshCounts();
+      this.refreshHealth(); // the AI engine is chosen per workspace
+    });
   }
 
   protected joinDemo(): void {

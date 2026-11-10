@@ -78,6 +78,23 @@ def product_impact_view(video_id: str, tenant: str = Depends(tenant_id)):
     return product_impact.load(tenant, video_id)
 
 
+class VideoProduct(BaseModel):
+    product_id: Optional[str] = None
+
+
+@router.put("/videos/{video_id}/product")
+def set_video_product(video_id: str, body: VideoProduct, tenant: str = Depends(tenant_id),
+                      member: Membership = Depends(require("content.write"))):
+    """Link the video and its comments to a product (or unlink with null)."""
+    try:
+        found = repository.set_video_product(tenant, member.user_id, video_id, body.product_id or None)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if not found:
+        raise HTTPException(404, "Video not found")
+    return found
+
+
 @router.post("/videos/{video_id}/check-comments", status_code=202)
 def check_comments(video_id: str, background: BackgroundTasks, tenant: str = Depends(tenant_id),
                    user: Actor = Depends(actor)):

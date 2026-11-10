@@ -58,6 +58,9 @@ WHISPER_MODEL = os.getenv("WHISPER_MODEL", "small")
 LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "60"))
 # Time the AI may spend reading comments per analysis; the rest fall back to rules.
 LLM_COMMENT_BUDGET_SECONDS = float(os.getenv("LLM_COMMENT_BUDGET_SECONDS", "240"))
+# Time the AI gets to fact-check a video's claims; claims left after that use the rule-based check
+# (marked "Rule-based"), so a slow local model can't hold an analysis for many minutes.
+LLM_FACTCHECK_BUDGET_SECONDS = float(os.getenv("LLM_FACTCHECK_BUDGET_SECONDS", "180"))
 
 # How many comments a single "Analyze video" job keeps.
 MAX_COMMENTS_PER_VIDEO = int(os.getenv("MAX_COMMENTS_PER_VIDEO", "100"))

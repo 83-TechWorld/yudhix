@@ -6,7 +6,7 @@ import { Observable } from 'rxjs';
 import { ApiService, errorMessage } from '../../core/api.service';
 import { ProductImpactComponent } from './product-impact.component';
 import { ProductGrowthComponent } from './product-growth.component';
-import { Claim, ClaimComment, Health, Impact, Job, OutreachNote, RootCause, Verdict, Video } from '../../core/models';
+import { Claim, ClaimComment, Health, Impact, Job, OutreachNote, Product, RootCause, Verdict, Video } from '../../core/models';
 import { SessionService } from '../../core/session.service';
 import { IconComponent } from '../../shared/icon.component';
 import {
@@ -53,6 +53,7 @@ export class VideoReportPage {
   protected readonly recomputing = signal(false);
   /** Bumped after "Re-link" so the Product impact panel reloads. */
   protected readonly impactVersion = signal(0);
+  protected readonly products = signal<Product[]>([]);
   /** The running "Fetch new comments" job, polled until it finishes. */
   protected readonly checkJob = signal<Job | null>(null);
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
@@ -87,6 +88,7 @@ export class VideoReportPage {
 
   constructor() {
     this.api.health().subscribe({ next: (h) => this.health.set(h), error: () => {} });
+    this.api.products().subscribe({ next: (r) => this.products.set(r.products), error: () => {} });
     effect(() => {
       const id = this.videoId();
       this.video.set(null);
@@ -107,6 +109,18 @@ export class VideoReportPage {
       if (t === 'claims' || t === 'impact' || t === 'growth' || t === 'outreach') untracked(() => this.setTab(t));
     });
     inject(DestroyRef).onDestroy(() => this.stopPolling());
+  }
+
+  /** Link the video (and its comments) to a product, so they count on that product's page. */
+  protected setProduct(productId: string): void {
+    this.api.setVideoProduct(this.videoId(), productId || null).subscribe({
+      next: (v) => {
+        this.video.set(v);
+        const name = this.products().find((p) => p.id === productId)?.name;
+        this.toast.show(name ? `Linked to ${name}.` : 'Unlinked from its product.');
+      },
+      error: (e) => this.toast.error(errorMessage(e)),
+    });
   }
 
   /** Pull comments posted since the last check; the AI reads them and the report refreshes. */

@@ -95,6 +95,21 @@ def get_video(tenant_id: str, video_id: str) -> Optional[Dict]:
     return video
 
 
+def set_video_product(tenant_id: str, actor: str, video_id: str, product_id: Optional[str]) -> Optional[Dict]:
+    """Link a video (and its comments) to a product of this workspace, or unlink it (None)."""
+    if product_id and not fetch_one("SELECT 1 FROM product WHERE tenant_id = %s AND id = %s", (tenant_id, product_id)):
+        raise ValueError("That product isn't in this workspace.")
+    with cursor(commit=True) as cur:
+        cur.execute("UPDATE video_truth_analysis SET product_id = %s WHERE tenant_id = %s AND video_id = %s RETURNING id",
+                    (product_id, tenant_id, video_id))
+        if not cur.fetchone():
+            return None
+        cur.execute("""UPDATE comment SET product_id = %s WHERE tenant_id = %s AND platform = 'YOUTUBE'
+                       AND custom_attributes->>'video_id' = %s""", (product_id, tenant_id, video_id))
+        append_audit(cur, tenant_id, actor, "USER", "VIDEO_PRODUCT_CHANGED", "VIDEO", video_id, {"product_id": product_id})
+    return get_video(tenant_id, video_id)
+
+
 def override_claim(tenant_id: str, actor: str, claim_id: str, verdict: str, note: Optional[str]) -> Optional[Dict]:
     """A person sets the verdict. Kept through re-checks; comments are re-linked by the caller."""
     if verdict not in VERDICTS:

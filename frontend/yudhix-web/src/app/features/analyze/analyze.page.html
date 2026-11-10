@@ -32,13 +32,15 @@
                 <y-icon name="card" [size]="15" /> Amazon reviews
               </button>
             </div>
-            @if (channel() === 'AMAZON') {
+            @if (products().length) {
               <div class="field">
                 <label for="product">Product</label>
                 <select id="product" name="product" class="select input" [(ngModel)]="productId">
+                  @if (channel() === 'YOUTUBE') { <option value="">Not about one product</option> }
                   @for (p of products(); track p.id) { <option [value]="p.id">{{ p.name }}</option> }
                 </select>
-                <span class="hint">The reviews are added to this product, next to its YouTube comments.</span>
+                <span class="hint">{{ channel() === 'AMAZON' ? 'The reviews are added to this product, next to its YouTube comments.'
+                  : 'The comments count toward this product on the Products page. You can change it later on the video.' }}</span>
               </div>
             }
             <div class="field">
@@ -112,7 +114,14 @@
                 </li>
               }
             </ol>
-            <p class="muted">{{ job()!.message }}</p>
+            <p class="muted">{{ job()!.message }}@if (job()!.status === 'RUNNING' && elapsed()) { <span class="subtle"> · {{ duration(elapsed()) }}</span> }</p>
+            @if (slowHint()) {
+              <div class="callout callout-info"><y-icon name="clock" [size]="15" />
+                <span>The AI runs on this machine ({{ ai()?.model || 'local model' }}), about 30-60 seconds per claim and per batch of comments.
+                  It's still working; each step has a time limit, so it won't hang. For runs in about a minute,
+                  connect Claude, ChatGPT or Gemini in <a routerLink="/settings/ai">Settings → AI</a>.</span>
+              </div>
+            }
             <div class="row-wrap">
               @if (job()!.status === 'COMPLETED' && job()!.kind === 'AMAZON') {
                 <a class="btn btn-primary" [routerLink]="['/products', job()!.productId]" [queryParams]="{ channel: 'AMAZON' }">Open product <y-icon name="arrowRight" [size]="16" /></a>
@@ -207,7 +216,8 @@
               <li>
                 <i class="dot" [style.background]="j.status === 'COMPLETED' ? 'var(--ok)' : j.status === 'FAILED' ? 'var(--danger)' : 'var(--brand)'"></i>
                 <div class="grow">
-                  @if (j.status === 'COMPLETED') { <a class="truncate" [routerLink]="['/videos', j.videoId]">{{ j.videoId }}</a> }
+                  @if (j.status === 'COMPLETED' && j.kind === 'AMAZON') { <a class="truncate" [routerLink]="['/products', j.productId]" [queryParams]="{ channel: 'AMAZON' }">Amazon {{ j.videoId }}</a> }
+                  @else if (j.status === 'COMPLETED') { <a class="truncate" [routerLink]="['/videos', j.videoId]">{{ j.videoId }}</a> }
                   @else { <span class="truncate">{{ j.videoId }}</span> }
                   <small>@if (j.kind === 'COMMENTS') { New comments: {{ j.result ? j.result.newComments : '…' }} · } @if (j.kind === 'FACTS') { Claims re-checked · } {{ j.status === 'FAILED' ? 'Failed' : j.status === 'COMPLETED' ? 'Completed' : 'Running' }} · {{ j.createdAt | ago }}</small>
                 </div>

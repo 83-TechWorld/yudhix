@@ -19,6 +19,16 @@ import { CompactPipe, EmptyStateComponent, ToastService } from '../../shared/ui'
         <a class="btn btn-primary" routerLink="/analyze"><y-icon name="plus" /> Add a video or listing</a>
       </header>
 
+      @if (unassigned().length) {
+        <div class="callout callout-info unassigned">
+          <y-icon name="info" [size]="16" />
+          <span>{{ unassigned().length }} analyzed video{{ unassigned().length === 1 ? '' : 's' }} not linked to a product, so their comments
+            don't count here: @for (v of unassigned().slice(0, 3); track v.videoId; let last = $last) {
+              <a [routerLink]="['/videos', v.videoId]">{{ v.title || v.videoId }}</a>{{ last ? '' : ', ' }} }{{ unassigned().length > 3 ? '…' : '' }}.
+            Open a video and pick its product.</span>
+        </div>
+      }
+
       <div class="legend" aria-hidden="true">
         <span><i style="background: var(--chart-neg)"></i>Negative</span>
         <span><i style="background: var(--chart-neu)"></i>Neutral</span>
@@ -67,6 +77,7 @@ import { CompactPipe, EmptyStateComponent, ToastService } from '../../shared/ui'
     </div>
   `,
   styles: `
+    .unassigned { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 14px; }
     .legend { display: flex; gap: 16px; font-size: 12px; color: var(--muted-text); margin: -4px 0 14px;
       span { display: inline-flex; align-items: center; gap: 6px; } i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; } }
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
@@ -88,11 +99,15 @@ export class ProductsPage {
   private api = inject(ApiService);
   private toast = inject(ToastService);
   protected readonly items = signal<ProductSummary[] | null>(null);
+  protected readonly unassigned = signal<{ videoId: string; title: string | null }[]>([]);
   protected readonly channels: Channel[] = ['YOUTUBE', 'AMAZON'];
 
   constructor() {
     this.api.catalogProducts().subscribe({
-      next: (r) => this.items.set(r.products),
+      next: (r) => {
+        this.items.set(r.products);
+        this.unassigned.set(r.unassignedVideos ?? []);
+      },
       error: (e) => {
         this.items.set([]);
         this.toast.error(errorMessage(e));

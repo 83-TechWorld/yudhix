@@ -138,6 +138,9 @@ export class ApiService {
   recheckAll(): Observable<{ queued: number; jobs: Job[] }> {
     return this.http.post<{ queued: number; jobs: Job[] }>(`${this.v1}/truth/knowledge/recheck`, {});
   }
+  setVideoProduct(videoId: string, productId: string | null): Observable<Video & { claims: Claim[] }> {
+    return this.http.put<Video & { claims: Claim[] }>(`${this.v1}/truth/videos/${videoId}/product`, { product_id: productId });
+  }
   growth(videoId: string): Observable<Growth> {
     return this.http.get<Growth>(`${this.v1}/truth/videos/${videoId}/growth`);
   }
@@ -197,8 +200,8 @@ export class ApiService {
   }
 
   // --- Products across channels (YouTube + Amazon) -------------------------------------
-  catalogProducts(): Observable<{ products: ProductSummary[] }> {
-    return this.http.get<{ products: ProductSummary[] }>(`${this.v1}/catalog/products`);
+  catalogProducts(): Observable<{ products: ProductSummary[]; unassignedVideos: { videoId: string; title: string | null }[] }> {
+    return this.http.get<{ products: ProductSummary[]; unassignedVideos: { videoId: string; title: string | null }[] }>(`${this.v1}/catalog/products`);
   }
   productOverview(id: string): Observable<ProductOverview> {
     return this.http.get<ProductOverview>(`${this.v1}/catalog/products/${id}`);

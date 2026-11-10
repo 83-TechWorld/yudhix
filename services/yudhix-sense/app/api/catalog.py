@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api/v1/catalog", tags=["catalog"])
 
 @router.get("/products")
 def products(tenant: str = Depends(tenant_id)):
-    return {"products": product_view.list_products(tenant)}
+    return {"products": product_view.list_products(tenant), "unassignedVideos": product_view.unassigned_videos(tenant)}
 
 
 @router.get("/products/{product_id}")

@@ -327,6 +327,8 @@ def analyze_video(tenant_id: str, video_id: str, video_url: str, product_id: Opt
                   manual_transcript: Optional[str], progress) -> Dict:
     existing = fetch_one("SELECT * FROM video_truth_analysis WHERE tenant_id = %s AND video_id = %s",
                          (tenant_id, video_id))
+    if not product_id and existing and existing.get("product_id"):  # re-analysis keeps the video's product
+        product_id = str(existing["product_id"])
 
     # 1. Metadata
     progress("FETCHING_VIDEO", 8, "Reading video details")
@@ -352,10 +354,8 @@ def analyze_video(tenant_id: str, video_id: str, video_url: str, product_id: Opt
 
         # 4. Fact-check
         progress("FACT_CHECKING", 55, f"Checking {len(extracted)} claims against your knowledge base")
-        checked = []
-        for c in extracted:
-            v = verify(c.quote, index.search(f"{c.topic} {c.quote}", k=3))
-            checked.append((c, v))
+        checked = fact_check(extracted, index, lambda done, total, note: progress(
+            "FACT_CHECKING", 55 + int(14 * done / max(1, total)), f"Checked {done} of {total} claims{note}"))
         analysis_id = _save_video_and_claims(tenant_id, meta, video_url, product_id, transcript.source, checked)
     elif existing:
         # Seeded / previously analyzed video with no transcript available now: keep its claims.
@@ -392,6 +392,34 @@ def analyze_video(tenant_id: str, video_id: str, video_url: str, product_id: Opt
         append_audit(cur, tenant_id, "system-truth-pipeline", "SYSTEM", "VIDEO_ANALYZED", "VIDEO", video_id,
                      {"analysis_id": analysis_id, "comments_ingested": ingested, **stats})
     return {"analysisId": analysis_id, "commentsIngested": ingested, **stats}
+
+
+def fact_check(extracted: List, index: KnowledgeIndex, on_progress=None) -> List:
+    """Verify every claim, reporting progress per claim. Cloud AI checks 4 claims at a time; the local
+    model one at a time within LLM_FACTCHECK_BUDGET_SECONDS, after which the rest use the rule-based check."""
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+    import contextvars
+    total = len(extracted)
+    hits = [index.search(f"{c.topic} {c.quote}", k=3) for c in extracted]
+    if llm.is_cloud():
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            futures = [pool.submit(contextvars.copy_context().run, verify, c.quote, h) for c, h in zip(extracted, hits)]
+            results = []
+            for i, f in enumerate(futures, start=1):
+                results.append((extracted[i - 1], f.result()))
+                if on_progress:
+                    on_progress(i, total, "")
+        return results
+    deadline = time.time() + config.LLM_FACTCHECK_BUDGET_SECONDS
+    results, ruled = [], 0
+    for i, (c, h) in enumerate(zip(extracted, hits), start=1):
+        use_ai = time.time() < deadline
+        ruled += not use_ai
+        results.append((c, verify(c.quote, h, use_ai=use_ai)))
+        if on_progress:
+            on_progress(i, total, f" ({ruled} by rules: AI time limit reached)" if ruled else "")
+    return results
 
 
 def _oembed_metadata(video_id: str, existing: Optional[Dict]) -> youtube.VideoMeta:
@@ -484,10 +512,11 @@ def _ingest_comments(tenant_id: str, video_id: str, meta: youtube.VideoMeta, pro
 
 def _persist(tenant_id: str, video_id: str, meta: youtube.VideoMeta, product_id: Optional[str], raw: List[Dict],
              extra: Optional[Dict] = None) -> None:
-    if raw and not product_id:  # attach to this workspace's own product, never another tenant's
-        first = fetch_one("SELECT id FROM product WHERE tenant_id = %s AND active ORDER BY created_at LIMIT 1",
-                          (tenant_id,))
-        product_id = str(first["id"]) if first else None
+    if raw and not product_id:
+        # No product chosen: use the workspace's only product if it has exactly one. Never guess between
+        # several (that put unrelated videos under the first product); the video can be linked later.
+        rows = fetch_all("SELECT id FROM product WHERE tenant_id = %s AND active LIMIT 2", (tenant_id,))
+        product_id = str(rows[0]["id"]) if len(rows) == 1 else None
     for c in raw:
         masked, _ = _masker.mask(c["text"])
         sentiment, score = _classifier.classify(masked)

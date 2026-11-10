@@ -94,6 +94,8 @@ export interface Video {
   /** Comments added by "Fetch new comments" or the schedule since the last full analysis. */
   newComments: number;
   commentsCheckedAt: string | null;
+  /** The product this video is about (its comments count toward it), or null. */
+  productId: string | null;
   /** The knowledge base changed after these claims were checked. */
   factsStale: boolean;
   factsCheckedAt: string | null;

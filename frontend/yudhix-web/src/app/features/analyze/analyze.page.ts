@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { Subscription, switchMap, takeWhile, timer } from 'rxjs';
 import { ApiService, errorMessage } from '../../core/api.service';
-import { Channel, Health, Job, Onboarding, Product, Video } from '../../core/models';
+import { AiStatus, Channel, Health, Job, Onboarding, Product, Video } from '../../core/models';
 import { SessionService } from '../../core/session.service';
 import { IconComponent } from '../../shared/icon.component';
 import { AgoPipe, CompactPipe, RingComponent, ToastService } from '../../shared/ui';
@@ -61,6 +61,15 @@ export class AnalyzePage {
     return !!o && o.completed < o.total && !this.session.workspace()?.isDemo && !this.checklistHidden();
   });
   private poll?: Subscription;
+  protected readonly ai = signal<AiStatus | null>(null);
+  /** Seconds since the running job started (ticks with each poll). */
+  protected readonly elapsed = signal(0);
+  /** The local model is slow on this machine: say so, and point to cloud AI. */
+  protected readonly slowHint = computed(() => {
+    const j = this.job();
+    return !!j && (j.status === 'RUNNING' || j.status === 'QUEUED') && this.ai()?.mode !== 'CLOUD'
+      && (j.stage === 'FACT_CHECKING' || j.stage === 'UNDERSTANDING') && this.elapsed() > 45;
+  });
 
   protected readonly stageIndex = computed(() => {
     const j = this.job();
@@ -74,11 +83,13 @@ export class AnalyzePage {
 
   constructor() {
     this.api.health().subscribe({ next: (h) => this.health.set(h), error: () => {} });
+    this.api.aiStatus().subscribe({ next: (a) => this.ai.set(a), error: () => {} });
     this.api.onboarding().subscribe({ next: (o) => this.onboarding.set(o), error: () => {} });
     this.api.products().subscribe({
       next: (r) => {
         this.products.set(r.products);
-        if (!this.productId && r.products.length) this.productId = r.products[0].id;
+        // One product: pick it. Several: the YouTube form starts at "Not about one product" (no guessing).
+        if (!this.productId && r.products.length === 1) this.productId = r.products[0].id;
       },
       error: () => {},
     });
@@ -96,6 +107,7 @@ export class AnalyzePage {
 
   protected setChannel(c: Channel): void {
     this.channel.set(c);
+    if (c === 'AMAZON' && !this.productId && this.products().length) this.productId = this.products()[0].id;
     this.url = '';
     this.formError.set('');
   }
@@ -109,7 +121,7 @@ export class AnalyzePage {
     }
     this.formError.set('');
     this.submitting.set(true);
-    this.api.analyze({ video_url: url, transcript: this.transcript.trim() || null }).subscribe({
+    this.api.analyze({ video_url: url, transcript: this.transcript.trim() || null, product_id: this.productId || null }).subscribe({
       next: (job) => {
         this.submitting.set(false);
         this.track(job);
@@ -154,6 +166,7 @@ export class AnalyzePage {
       .subscribe({
         next: (j) => {
           this.job.set(j);
+          this.elapsed.set(Math.max(0, Math.round((Date.now() - new Date(j.createdAt).getTime()) / 1000)));
           if (j.status === 'COMPLETED' && j.kind === 'AMAZON') {
             this.toast.show(j.message ? `${j.message}. Opening the product.` : 'Reviews collected.');
             setTimeout(() => this.router.navigate(['/products', j.productId], { queryParams: { channel: 'AMAZON' } }), 900);
@@ -164,6 +177,10 @@ export class AnalyzePage {
         },
         error: (e) => this.toast.error(errorMessage(e)),
       });
+  }
+
+  protected duration(s: number): string {
+    return s < 60 ? `${s}s` : `${Math.floor(s / 60)} min ${s % 60}s`;
   }
 
   protected hideChecklist(): void {

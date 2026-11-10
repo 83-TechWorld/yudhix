@@ -402,6 +402,7 @@ For local secrets, copy `services/yudhix-sense/.env.example` to `.env` in the sa
 | `SECOND_OPINION` | `cloud` | Read each claim twice and flag disagreements: `cloud` (only with cloud AI), `always`, `off`. |
 | `AMAZON_REVIEWS_API_KEY` | (empty) | Rainforest API key: collect all Amazon reviews through the provider instead of reading the product page. |
 | `AMAZON_MAX_REVIEWS` | `100` | Most reviews read per check with the provider. |
+| `LLM_FACTCHECK_BUDGET_SECONDS` | `180` | Time the AI gets to fact-check a video's claims; the rest use the rule-based check (marked "Rule-based"). Cloud AI checks 4 claims at a time. |
 | `NEW_COMMENTS_MAX` | `100` | Most comments one "Fetch new comments" check adds. |
 | `SCHEDULER_ENABLED` | `true` | Background checks for new comments on this server. Workspaces set their own interval. |
 | `SCHEDULER_TICK_SECONDS` | `300` | How often the scheduler looks for videos that are due. |

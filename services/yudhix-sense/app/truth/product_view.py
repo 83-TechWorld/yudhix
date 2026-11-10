@@ -66,6 +66,15 @@ def split(rows: List[Dict]) -> Dict[str, Dict]:
     return result
 
 
+def unassigned_videos(tenant_id: str) -> List[Dict]:
+    """Analyzed videos not linked to any product (their comments are missing from every product)."""
+    return [{"videoId": r["video_id"], "title": r["video_title"]} for r in fetch_all(
+        """SELECT video_id, video_title FROM video_truth_analysis WHERE tenant_id = %s AND product_id IS NULL
+           AND EXISTS (SELECT 1 FROM comment c WHERE c.tenant_id = %s AND c.platform = 'YOUTUBE'
+                       AND c.custom_attributes->>'video_id' = video_truth_analysis.video_id AND c.product_id IS NULL)
+           ORDER BY analyzed_at DESC NULLS LAST""", (tenant_id, tenant_id))]
+
+
 def list_products(tenant_id: str) -> List[Dict]:
     products = fetch_all("SELECT * FROM product WHERE tenant_id = %s AND active ORDER BY name", (tenant_id,))
     by_product: Dict[str, List[Dict]] = defaultdict(list)

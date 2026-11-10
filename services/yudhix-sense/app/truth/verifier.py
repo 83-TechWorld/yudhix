@@ -57,7 +57,10 @@ def has_evidence(hits: List[Hit]) -> bool:
     return any(h.overlap >= MIN_OVERLAP or h.similarity >= MIN_SIMILARITY for h in hits)
 
 
-def verify(claim: str, hits: List[Hit]) -> Verdict:
+def verify(claim: str, hits: List[Hit], use_ai: bool = True) -> Verdict:
+    """use_ai=False: rule-based check only (e.g. when the analysis ran out of AI time)."""
+    if not use_ai:
+        return _verify_heuristic(claim, hits)
     if not hits or not has_evidence(hits):
         return _verify_heuristic(claim, hits)               # guard 1: no evidence, no AI
     first = _verify_with_llm(claim, hits)
@@ -152,7 +155,7 @@ Steps:
 Return JSON: {{"source_index": 0, "source_says": "...", "relation": "...", "is_prediction": false,
 "confidence": 0.0-1.0, "analysis": "2 short sentences in plain English for a brand manager"}}
 """
-    data = llm.generate_json(prompt)
+    data = llm.generate_json(prompt, max_tokens=320)  # a short answer: relation, quote, two sentences
     if not isinstance(data, dict):
         return None
     relation = str(data.get("relation", "")).upper().strip().replace(" ", "_")

@@ -13,3 +13,4 @@ pytest>=8.3.0
 pyjwt[crypto]>=2.9
 cryptography>=42  # encrypts workspace AI keys
 pypdf>=4.2  # reads uploaded PDF documents for the knowledge base
+beautifulsoup4>=4.12  # reads Amazon product pages (reviews shown on the page)

@@ -1,4 +1,4 @@
-"""Background schedule: checks every analyzed video for new comments.
+"""Background schedule: checks every analyzed video for new comments, and every Amazon listing for new reviews.
 
 Each workspace picks an interval (default every 6 hours) or turns it off. Every few minutes the
 scheduler finds videos whose last check is older than their workspace's interval and runs a
@@ -47,8 +47,6 @@ def _loop(stop: threading.Event) -> None:
 
 def run_round() -> int:
     """Check every due video once. Returns how many were checked (0 if another replica holds the lock)."""
-    if not youtube.has_api_key():
-        return 0
     conn = get_db_connection()
     try:
         conn.autocommit = True
@@ -58,7 +56,14 @@ def run_round() -> int:
                 return 0
             try:
                 checked = 0
-                for v in due_videos():
+                from app.truth import listings
+                for l in listings.due_listings():  # Amazon listings: new reviews
+                    listing = listings.get_listing(l["tenant_id"], l["id"])
+                    job = listings.start_check(l["tenant_id"], listing, ACTOR, trigger="SCHEDULE") if listing else None
+                    if job and job["kind"] == "AMAZON" and job["status"] == "QUEUED":
+                        pipeline.run_job(job["id"], l["tenant_id"])
+                        checked += 1
+                for v in (due_videos() if youtube.has_api_key() else []):
                     job = pipeline.start_comment_check(v["tenant_id"], v["video_id"], ACTOR, trigger="SCHEDULE")
                     if job["kind"] == "COMMENTS" and job["status"] == "QUEUED":
                         pipeline.run_job(job["id"], v["tenant_id"])

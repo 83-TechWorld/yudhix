@@ -27,7 +27,8 @@ INBOX_SELECT = """
            c.platform_created_at, c.author_hash, c.custom_attributes->>'video_id' AS video_id,
            c.custom_attributes->>'video_title' AS video_title,
            ca.sentiment, ca.impact_score, ca.priority, ca.churn_risk, ca.suggested_reply, ca.intent,
-           c.custom_attributes->>'new_at' AS new_at,
+           c.custom_attributes->>'new_at' AS new_at, (c.custom_attributes->>'rating')::float AS rating,
+           c.custom_attributes->>'listing_title' AS listing_title,
            l.claim_id, l.evidence, vc.verdict, vc.topic AS claim_topic, vc.timestamp_start AS claim_timestamp,
            r.id AS reply_id, r.status AS reply_status,
            CASE WHEN vc.verdict IS NULL THEN 'UNLINKED'
@@ -54,13 +55,14 @@ def _inbox_item(r: Dict) -> Dict:
                   "timestamp": r["claim_timestamp"], "evidence": r["evidence"]} if r["claim_id"] else None,
         "replyId": str(r["reply_id"]) if r["reply_id"] else None, "replyStatus": r["reply_status"],
         "intent": r.get("intent"), "isNew": bool(r.get("new_at")),
+        "rating": r.get("rating"), "listingTitle": r.get("listing_title"),
     }
 
 
 def inbox(tenant_id: str, video_id: Optional[str] = None, priority: Optional[str] = None,
           sentiment: Optional[str] = None, cause: Optional[str] = None, status: str = "OPEN",
           q: Optional[str] = None, limit: int = 50, offset: int = 0, intent: Optional[str] = None,
-          fresh: bool = False) -> Dict:
+          fresh: bool = False, platform: Optional[str] = None) -> Dict:
     where, params = ["c.tenant_id = %s", "c.status = 'ACTIVE'"], [tenant_id]
     if video_id:
         where.append("c.custom_attributes->>'video_id' = %s"); params.append(video_id)
@@ -75,6 +77,8 @@ def inbox(tenant_id: str, video_id: Optional[str] = None, priority: Optional[str
     elif intent:  # praise / complaint / other follow the current sentiment (see app/truth/growth.py)
         where.append("COALESCE(ca.intent, '') NOT IN ('IDEA', 'BUY', 'LEAVE', 'QUESTION') AND ca.sentiment = %s")
         params.append({"PRAISE": "POSITIVE", "COMPLAINT": "NEGATIVE"}.get(intent, "NEUTRAL"))
+    if platform:  # YOUTUBE | AMAZON
+        where.append("c.platform = %s"); params.append(platform.upper())
     if fresh:  # added by "Fetch new comments" or the schedule since the last full analysis
         where.append("c.custom_attributes ? 'new_at'")
     if status == "OPEN":

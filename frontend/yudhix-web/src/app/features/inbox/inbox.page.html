@@ -36,6 +36,11 @@
         <button type="button" [class.active]="priorityFilter() === 'P2'" (click)="setFilter('priority', 'P2')">P2</button>
         <button type="button" [class.active]="priorityFilter() === 'P3'" (click)="setFilter('priority', 'P3')">P3</button>
       </div>
+      <div class="segmented" aria-label="Channel">
+        <button type="button" [class.active]="!channelFilter()" (click)="setFilter('channel', '')">All channels</button>
+        <button type="button" [class.active]="channelFilter() === 'YOUTUBE'" (click)="setFilter('channel', 'YOUTUBE')">YouTube</button>
+        <button type="button" [class.active]="channelFilter() === 'AMAZON'" (click)="setFilter('channel', 'AMAZON')">Amazon</button>
+      </div>
       <select class="select intent-select" [ngModel]="intentFilter()" (ngModelChange)="setFilter('intent', $event)" aria-label="Filter by what the commenter wants">
         <option value="">Any intent</option>
         @for (i of intentOptions; track i) { <option [value]="i">{{ intentLabels[i] }}</option> }
@@ -70,6 +75,7 @@
                 <p class="clamp-2">{{ it.text }}</p>
                 <div class="row-wrap meta">
                   <span class="chip" [class]="causeMeta[it.rootCause].chip">{{ causeMeta[it.rootCause].short }}</span>
+                  @if (it.platform === 'AMAZON') { <span class="chip chip-outline" [attr.title]="it.listingTitle">Amazon{{ it.rating ? ' · ★' + it.rating : '' }}</span> }
                   @if (it.isNew) { <span class="chip chip-brand">New</span> }
                   @if (it.intent === 'IDEA' || it.intent === 'BUY' || it.intent === 'LEAVE') { <span class="chip chip-outline">{{ intentLabels[it.intent] }}</span> }
                   @if (it.claim) { <span class="subtle truncate claim-ref">{{ it.claim.timestamp }} · {{ it.claim.topic }}</span> }

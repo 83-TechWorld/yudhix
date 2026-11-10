@@ -7,6 +7,10 @@ import {
   AiSettings,
   AiStatus,
   AiSync,
+  Listing,
+  ProductComment,
+  ProductOverview,
+  ProductSummary,
   KnowledgeDocument,
   Claim,
   ClaimComment,
@@ -192,6 +196,27 @@ export class ApiService {
     return this.http.delete<void>(`${this.v1}/truth/knowledge/${id}`);
   }
 
+  // --- Products across channels (YouTube + Amazon) -------------------------------------
+  catalogProducts(): Observable<{ products: ProductSummary[] }> {
+    return this.http.get<{ products: ProductSummary[] }>(`${this.v1}/catalog/products`);
+  }
+  productOverview(id: string): Observable<ProductOverview> {
+    return this.http.get<ProductOverview>(`${this.v1}/catalog/products/${id}`);
+  }
+  productComments(id: string, filters: { channel?: string | null; sentiment?: string | null; limit?: number; offset?: number }): Observable<{ items: ProductComment[]; total: number }> {
+    return this.http.get<{ items: ProductComment[]; total: number }>(`${this.v1}/catalog/products/${id}/comments`, { params: params(filters) });
+  }
+  /** Track an Amazon listing for a product and collect its reviews. Returns the job to poll. */
+  analyzeAmazon(body: { url: string; product_id: string }): Observable<Job & { listing: Listing }> {
+    return this.http.post<Job & { listing: Listing }>(`${this.v1}/catalog/amazon`, body);
+  }
+  checkListing(id: string): Observable<Job> {
+    return this.http.post<Job>(`${this.v1}/catalog/listings/${id}/check`, {});
+  }
+  removeListing(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.v1}/catalog/listings/${id}`);
+  }
+
   // --- AI settings ---------------------------------------------------------------
   aiStatus(): Observable<AiStatus> {
     return this.http.get<AiStatus>(`${this.v1}/ai/status`);
@@ -227,6 +252,7 @@ export class ApiService {
     q?: string | null;
     intent?: string | null;
     fresh?: number | null;
+    platform?: string | null;
     limit?: number;
     offset?: number;
   }): Observable<InboxPage> {

@@ -58,8 +58,9 @@ STALE_JOB_MINUTES = 30  # a RUNNING job older than this was cut off by a restart
 
 
 def create_job(tenant_id: str, video_url: str, product_id: Optional[str], actor: str,
-               kind: str = "ANALYZE", trigger: str = "USER") -> Dict:
-    video_id = youtube.parse_video_id(video_url)
+               kind: str = "ANALYZE", trigger: str = "USER", video_id: Optional[str] = None) -> Dict:
+    """video_id is the YouTube id, or for kind AMAZON the listing's ASIN."""
+    video_id = video_id or youtube.parse_video_id(video_url)
     with cursor(commit=True) as cur:
         cur.execute(
             """INSERT INTO video_analysis_job (tenant_id, video_url, video_id, product_id, created_by, message,
@@ -145,6 +146,10 @@ def _run_job(job_id: str, tenant_id: str, manual_transcript: Optional[str] = Non
         return _run_comment_check(job_id, tenant_id, job, creator)
     if job["kind"] == "FACTS":
         return _run_fact_check(job_id, tenant_id, job, creator)
+    if job["kind"] == "AMAZON":
+        from app.truth import listings
+        return listings.run_check(job_id, tenant_id, job, creator,
+                                  lambda stage, pct, msg, **kw: _update(job_id, stage, pct, msg, **kw))
     try:
         result = analyze_video(tenant_id, job["videoId"], job["videoUrl"], job.get("productId"), manual_transcript,
                                progress=lambda stage, pct, msg: _update(job_id, stage, pct, msg))

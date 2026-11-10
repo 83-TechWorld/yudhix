@@ -68,3 +68,47 @@ class DocumentTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AmazonTest(unittest.TestCase):
+    def test_parse_url(self):
+        from app.truth import amazon
+        self.assertEqual(amazon.parse_url("https://www.amazon.in/Sony-PS5/dp/B08FV5GC28/ref=sr_1_1?x=1"),
+                         ("amazon.in", "B08FV5GC28", "https://www.amazon.in/dp/B08FV5GC28"))
+        self.assertEqual(amazon.parse_url("amazon.co.uk/gp/product/b08h97nyb9")[1], "B08H97NYB9")
+        self.assertEqual(amazon.parse_url("https://www.amazon.com/product-reviews/B0CL5KNB9M/")[0], "amazon.com")
+        for bad in ("https://www.flipkart.com/dp/B08FV5GC28", "https://www.amazon.in/s?k=ps5", ""):
+            with self.assertRaises(amazon.AmazonError):
+                amazon.parse_url(bad)
+
+    def test_parse_product_page(self):
+        from app.truth import amazon
+        html = open(os.path.join(os.path.dirname(__file__), "fixtures", "amazon_in_product.html")).read()
+        listing = amazon.parse_page(html, "amazon.in", "B08FV5GC28", "u")
+        self.assertEqual((listing.title, listing.rating, listing.ratings_count), ("PlayStation 5 console", 4.5, 715))
+        self.assertEqual(len(listing.reviews), 3)
+        r = listing.reviews[0]
+        self.assertEqual((r.review_id, r.rating, r.date, r.helpful_votes, r.verified, r.country),
+                         ("R1L6QTXL1JHBOL", 5.0, "2021-02-09", 2, True, "India"))
+        self.assertTrue(r.title.startswith("One of the Best Consoles"))
+        self.assertTrue(r.body.startswith("First of all"))
+        self.assertNotIn("double tap", r.body)
+
+    def test_small_parsers(self):
+        from app.truth import amazon
+        self.assertEqual(amazon._date("Reviewed in the United States on March 3, 2025"), "2025-03-03")
+        self.assertEqual(amazon._helpful("One person found this helpful"), 1)
+        self.assertEqual(amazon._helpful("1,234 people found this helpful"), 1234)
+        self.assertEqual([amazon.sentiment_for(x) for x in (5, 3, 1.0, None)], ["POSITIVE", "NEUTRAL", "NEGATIVE", None])
+        self.assertTrue(amazon.is_robot_check("<html>Enter the characters you see below. Sorry, we just need to make sure you're not a robot. captcha</html>"))
+
+    def test_channel_split(self):
+        from app.truth import product_view
+        rows = [{"platform": "YOUTUBE", "like_count": 10, "reply_count": 0, "sentiment": "NEGATIVE", "topics": ["PRICE"]},
+                {"platform": "YOUTUBE", "like_count": 0, "reply_count": 0, "sentiment": "POSITIVE", "topics": []},
+                {"platform": "AMAZON", "like_count": 3, "reply_count": 0, "sentiment": "POSITIVE", "topics": ["QUALITY"]}]
+        out = product_view.split(rows)
+        self.assertEqual(out["YOUTUBE"]["sentiment"], {"positive": 1, "neutral": 0, "negative": 1})
+        self.assertEqual((out["AMAZON"]["comments"], out["AMAZON"]["positiveShare"]), (1, 1.0))
+        self.assertEqual(out["YOUTUBE"]["topics"][0]["topic"], "PRICE")
+        self.assertIn("Amazon", product_view._headline(out))

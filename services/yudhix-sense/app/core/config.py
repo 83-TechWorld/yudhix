@@ -71,6 +71,11 @@ COMMENT_POOL_MAX = int(os.getenv("COMMENT_POOL_MAX", "2000"))
 # "Fetch new comments" (button and schedule) adds at most this many per check, newest first.
 NEW_COMMENTS_MAX = int(os.getenv("NEW_COMMENTS_MAX", "100"))
 
+# Amazon reviews (Analyze > Amazon product). Without a key, the public product page is read (the reviews shown
+# on it, about 8-13 per check). With a Rainforest API key, reviews come from that provider, newest first.
+AMAZON_REVIEWS_API_KEY = os.getenv("AMAZON_REVIEWS_API_KEY", "")
+AMAZON_MAX_REVIEWS = int(os.getenv("AMAZON_MAX_REVIEWS", "100"))
+
 # Background schedule that checks analyzed videos for new comments. Each workspace sets its own
 # interval (Settings > Workspace); this switch turns the whole schedule off for this server.
 SCHEDULER_ENABLED = os.getenv("SCHEDULER_ENABLED", "true").lower() == "true"

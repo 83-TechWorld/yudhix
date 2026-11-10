@@ -17,20 +17,42 @@
           <div class="card-head">
             <div>
               <h2>New analysis</h2>
-              <p class="subtle">Paste a YouTube link: a review, unboxing or opinion video.</p>
+              <p class="subtle">
+                @if (channel() === 'AMAZON') { Paste an Amazon product link: Yudhix collects its reviews and keeps checking for new ones. }
+                @else { Paste a YouTube link: a review, unboxing or opinion video. }
+              </p>
             </div>
           </div>
           <div class="card-body stack">
+            <div class="segmented channel-pick" role="radiogroup" aria-label="Channel">
+              <button type="button" role="radio" [attr.aria-checked]="channel() === 'YOUTUBE'" [class.active]="channel() === 'YOUTUBE'" (click)="setChannel('YOUTUBE')">
+                <y-icon name="play" [size]="15" /> YouTube video
+              </button>
+              <button type="button" role="radio" [attr.aria-checked]="channel() === 'AMAZON'" [class.active]="channel() === 'AMAZON'" (click)="setChannel('AMAZON')">
+                <y-icon name="card" [size]="15" /> Amazon reviews
+              </button>
+            </div>
+            @if (channel() === 'AMAZON') {
+              <div class="field">
+                <label for="product">Product</label>
+                <select id="product" name="product" class="select input" [(ngModel)]="productId">
+                  @for (p of products(); track p.id) { <option [value]="p.id">{{ p.name }}</option> }
+                </select>
+                <span class="hint">The reviews are added to this product, next to its YouTube comments.</span>
+              </div>
+            }
             <div class="field">
-              <label for="url">Video URL</label>
+              <label for="url">{{ channel() === 'AMAZON' ? 'Amazon product URL' : 'Video URL' }}</label>
               <div class="url-row">
                 <div class="search grow">
                   <y-icon name="link" [size]="16" />
-                  <input id="url" name="url" class="input" [(ngModel)]="url" placeholder="https://www.youtube.com/watch?v=…"
+                  <input id="url" name="url" class="input" [(ngModel)]="url"
+                    [placeholder]="channel() === 'AMAZON' ? 'https://www.amazon.in/dp/B08FV5GC28' : 'https://www.youtube.com/watch?v=…'"
                     autocomplete="off" inputmode="url" enterkeyhint="go" />
                 </div>
                 <button class="btn btn-primary" type="submit" [disabled]="submitting()">
-                  @if (submitting()) { <y-icon name="loader" class="spin" [size]="16" /> Starting… } @else { Analyze video }
+                  @if (submitting()) { <y-icon name="loader" class="spin" [size]="16" /> Starting… }
+                  @else { {{ channel() === 'AMAZON' ? 'Collect reviews' : 'Analyze video' }} }
                 </button>
               </div>
             </div>
@@ -40,6 +62,10 @@
             @if (job()?.status === 'FAILED') {
               <div class="callout callout-danger"><y-icon name="alert" [size]="16" /><span><strong>Analysis failed.</strong> {{ job()!.message }}</span></div>
             }
+            @if (channel() === 'AMAZON') {
+              <p class="hint">Reads the reviews shown on the product page (about 8-13 per check) and checks again on your schedule,
+                so new reviews keep arriving. With a review-data provider key on the server, all reviews are collected.</p>
+            } @else {
             <button type="button" class="link-btn" (click)="showTranscript.set(!showTranscript())" [attr.aria-expanded]="showTranscript()">
               <y-icon [name]="showTranscript() ? 'chevronDown' : 'chevronRight'" [size]="15" />
               Paste a transcript instead
@@ -50,6 +76,7 @@
                   placeholder="[00:42] Sony is forcing an online check on disc drives…&#10;[01:14] …"></textarea>
                 <span class="hint">For videos without captions. Start lines with [mm:ss] so claims link to the right moment.</span>
               </div>
+            }
             }
           </div>
           @if (health(); as h) {
@@ -66,7 +93,8 @@
         <div class="card progress-card enter-fade" aria-live="polite">
           <div class="card-head">
             <div class="grow">
-              <h2>{{ job()!.status === 'COMPLETED' ? 'Analysis complete' : 'Analyzing video' }}</h2>
+              <h2>{{ job()!.kind === 'AMAZON' ? (job()!.status === 'COMPLETED' ? 'Reviews collected' : 'Collecting Amazon reviews')
+                     : job()!.status === 'COMPLETED' ? 'Analysis complete' : 'Analyzing video' }}</h2>
               <p class="subtle truncate">{{ job()!.videoUrl }}</p>
             </div>
             <span class="pct">{{ job()!.progress }}%</span>
@@ -74,7 +102,7 @@
           <div class="card-body stack">
             <div class="bar progress"><span class="bar-brand" [style.width.%]="job()!.progress"></span></div>
             <ol class="steps">
-              @for (s of stages; track s.key; let i = $index) {
+              @for (s of stages(); track s.key; let i = $index) {
                 <li [class.done]="i < stageIndex()" [class.current]="i === stageIndex()">
                   <span class="step-dot">
                     @if (i < stageIndex()) { <y-icon name="check" [size]="12" [stroke]="3" /> }
@@ -86,10 +114,12 @@
             </ol>
             <p class="muted">{{ job()!.message }}</p>
             <div class="row-wrap">
-              @if (job()!.status === 'COMPLETED') {
+              @if (job()!.status === 'COMPLETED' && job()!.kind === 'AMAZON') {
+                <a class="btn btn-primary" [routerLink]="['/products', job()!.productId]" [queryParams]="{ channel: 'AMAZON' }">Open product <y-icon name="arrowRight" [size]="16" /></a>
+              } @else if (job()!.status === 'COMPLETED') {
                 <a class="btn btn-primary" [routerLink]="['/videos', job()!.videoId]">Open truth report <y-icon name="arrowRight" [size]="16" /></a>
               }
-              <button class="btn" type="button" (click)="reset()">Analyze another video</button>
+              <button class="btn" type="button" (click)="reset()">Analyze another</button>
             </div>
           </div>
         </div>

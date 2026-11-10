@@ -122,6 +122,22 @@ Every AI call goes through one layer (`app/core/llm.py`, providers in `app/core/
 6. **Second opinion** (`SECOND_OPINION=cloud|always|off`): with cloud AI each claim is read twice with the sources reordered. Disagreement means **Needs review**.
 7. **Human verdict:** anyone who can edit content can set a claim's verdict. Re-checks keep it, and comments are re-linked.
 
+### Amazon reviews and the product view
+
+**Analyze → Amazon reviews:** pick the product, paste its Amazon link (any marketplace: amazon.com, .in, .co.uk, …; short `amzn.to` links work too). Yudhix tracks that listing and collects its reviews (`app/truth/amazon.py`, `app/truth/listings.py`):
+
+| Mode | What it reads | When |
+|---|---|---|
+| **Direct** (default) | The public product page: listing title, average stars, rating count and the reviews shown on it (about 8–13 per check) | No setup. One ordinary page request per check; no proxies or CAPTCHA solving. If Amazon shows a robot check, the check stops, the listing is marked *blocked*, and the next scheduled check tries again. |
+| **Provider** | All reviews, newest first, through a review-data API (Rainforest API) | Set `AMAZON_REVIEWS_API_KEY`. Use this for complete collection in production. |
+
+Amazon's Conditions of Use restrict automated access; the provider route is the one meant for production use.
+
+- Reviews are stored as comments with platform `AMAZON` (PII masked, author pseudonymized). The AI reads them like YouTube comments (topics, intent, feature requests), and **sentiment follows the stars**: 4–5 positive, 3 neutral, 1–2 negative. Helpful votes count as reach.
+- The scheduler re-checks every listing on the workspace's interval, so new reviews keep arriving, and notifies the team about new negative reviews.
+- **Products** page: every product with its sentiment split by channel. A product's page shows sentiment by channel (by count or reach), what each channel talks about, the **positive and negative voices** filtered by channel (YouTube / Amazon, with stars and "verified purchase" for reviews), and its sources: videos and Amazon listings with **Check now**.
+- The Inbox has a channel filter (All / YouTube / Amazon).
+
 ### Uploading documents and syncing the knowledge base with AI
 
 **Upload document** on the Knowledge page takes PDF, Word (.docx), text, Markdown or CSV files up to 10 MB (`app/truth/documents.py`). Each document is split into clause-sized facts (a section's paragraphs, up to ~700 characters) titled with the document and section or page, so a verdict can cite and quote the exact clause. A CSV with the columns `title, statement` (optional `category, clause, source`) is read as ready-made facts. The same file can't be uploaded twice, and deleting a document deletes its facts.
@@ -384,6 +400,8 @@ For local secrets, copy `services/yudhix-sense/.env.example` to `.env` in the sa
 | `OLLAMA_EMBED_MODEL` | `nomic-embed-text` | Local embedding model for meaning-based fact search (used when the cloud provider has no embeddings). Optional. |
 | `AI_KEY_SECRET` | `AUTHOR_HMAC_KEY` | Encrypts workspace AI keys. Set a long random value in production; changing it makes saved keys unreadable. |
 | `SECOND_OPINION` | `cloud` | Read each claim twice and flag disagreements: `cloud` (only with cloud AI), `always`, `off`. |
+| `AMAZON_REVIEWS_API_KEY` | (empty) | Rainforest API key: collect all Amazon reviews through the provider instead of reading the product page. |
+| `AMAZON_MAX_REVIEWS` | `100` | Most reviews read per check with the provider. |
 | `NEW_COMMENTS_MAX` | `100` | Most comments one "Fetch new comments" check adds. |
 | `SCHEDULER_ENABLED` | `true` | Background checks for new comments on this server. Workspaces set their own interval. |
 | `SCHEDULER_TICK_SECONDS` | `300` | How often the scheduler looks for videos that are due. |
@@ -432,7 +450,8 @@ yudhix/
 | Products & facts | `product`, `product_knowledge`, `knowledge_document`, `knowledge_embedding`, `ai_sync_run` |
 | AI | `ai_setting` (provider, model, encrypted key per workspace) |
 | Videos & claims | `video_truth_analysis`, `video_claim`, `video_analysis_job`, `creator_outreach` |
-| Comments | `comment`, `comment_analysis`, `comment_claim_link`, `comment_watch` (schedule) |
+| Comments | `comment` (YouTube comments and Amazon reviews), `comment_analysis`, `comment_claim_link`, `comment_watch` (schedule) |
+| Channels | `product_listing` (Amazon listings per product) |
 | Product ideas | `product_idea`, `product_idea_comment` |
 | Replies | `reply`, `approval_step`, `reply_outcome` |
 | Billing | `plan`, `plan_price`, `subscription`, `usage_event`, `invoice`, `invoice_line` |

@@ -34,6 +34,8 @@ export class InboxPage {
   /** ?intent=IDEA|PRAISE|BUY|… and ?fresh=1 (only comments added since the last full analysis). */
   readonly intent = input<string | undefined>();
   readonly fresh = input<string | undefined>();
+  /** ?channel=YOUTUBE|AMAZON */
+  readonly channel = input<string | undefined>();
   /** ?comment=<id> opens that comment (used by "Reply" on the Product impact panel). */
   readonly comment = input<string | undefined>();
   private deepLinkId: string | null = null;
@@ -49,6 +51,7 @@ export class InboxPage {
   protected readonly causeFilter = signal<RootCause | ''>('');
   protected readonly intentFilter = signal<Intent | ''>('');
   protected readonly freshFilter = signal(false);
+  protected readonly channelFilter = signal<'' | 'YOUTUBE' | 'AMAZON'>('');
   protected readonly intentLabels = INTENT_LABEL;
   protected readonly intentOptions = Object.keys(INTENT_LABEL) as Intent[];
   protected readonly priorityFilter = signal<Priority | ''>('');
@@ -87,12 +90,14 @@ export class InboxPage {
       const comment = this.comment() ?? null;
       const intent = (this.intent() ?? '') as Intent | '';
       const fresh = this.fresh() === '1' || this.fresh() === 'true';
+      const channel = (this.channel() ?? '').toUpperCase();
       untracked(() => {
         this.deepLinkId = comment;
         this.videoFilter.set(video);
         this.causeFilter.set(cause);
         this.intentFilter.set(intent in INTENT_LABEL ? intent : '');
         this.freshFilter.set(fresh);
+        this.channelFilter.set(channel === 'YOUTUBE' || channel === 'AMAZON' ? channel : '');
         this.load();
       });
     });
@@ -113,6 +118,7 @@ export class InboxPage {
       cause: this.causeFilter() || null,
       intent: this.intentFilter() || null,
       fresh: this.freshFilter() ? 1 : null,
+      platform: this.channelFilter() || null,
       priority: this.priorityFilter() || null,
       status: this.statusFilter(),
       q: this.q() || null,
@@ -162,7 +168,7 @@ export class InboxPage {
   }
 
   /** Filter changes are mirrored into the URL so links and the back button work. */
-  protected setFilter(kind: 'video' | 'cause' | 'priority' | 'status' | 'intent' | 'fresh', value: string): void {
+  protected setFilter(kind: 'video' | 'cause' | 'priority' | 'status' | 'intent' | 'fresh' | 'channel', value: string): void {
     if (kind === 'priority') {
       this.priorityFilter.set(value as Priority | '');
       this.load();

@@ -20,6 +20,8 @@ export const routes: Routes = [
       { path: 'analyze', title: 'Analyze · Yudhix', loadComponent: () => import('./features/analyze/analyze.page').then((m) => m.AnalyzePage) },
       { path: 'videos', title: 'Videos · Yudhix', loadComponent: () => import('./features/videos/videos.page').then((m) => m.VideosPage) },
       { path: 'videos/:videoId', title: 'Truth report · Yudhix', loadComponent: () => import('./features/videos/video-report.page').then((m) => m.VideoReportPage) },
+      { path: 'products', title: 'Products · Yudhix', loadComponent: () => import('./features/products/products.page').then((m) => m.ProductsPage) },
+      { path: 'products/:productId', title: 'Product · Yudhix', loadComponent: () => import('./features/products/product.page').then((m) => m.ProductPage) },
       { path: 'inbox', title: 'Inbox · Yudhix', loadComponent: () => import('./features/inbox/inbox.page').then((m) => m.InboxPage) },
       { path: 'approvals', title: 'Approvals · Yudhix', loadComponent: () => import('./features/approvals/approvals.page').then((m) => m.ApprovalsPage) },
       { path: 'track', title: 'Track · Yudhix', loadComponent: () => import('./features/track/track.page').then((m) => m.TrackPage) },

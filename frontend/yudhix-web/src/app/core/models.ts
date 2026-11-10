@@ -33,7 +33,7 @@ export interface Job {
   createdAt: string;
   finishedAt: string | null;
   /** ANALYZE = full analysis, COMMENTS = "fetch new comments" only. */
-  kind: 'ANALYZE' | 'COMMENTS' | 'FACTS';
+  kind: 'ANALYZE' | 'COMMENTS' | 'FACTS' | 'AMAZON';
   trigger: 'USER' | 'SCHEDULE';
   /** COMMENTS: newComments / negative / ideas. FACTS: claims / changed. */
   result: { videoTitle: string; newComments?: number; negative?: number; ideas?: number; claims?: number; changed?: number } | null;
@@ -307,6 +307,9 @@ export interface InboxItem {
   replyId: string | null;
   intent: Intent | null;
   isNew: boolean;
+  /** Amazon reviews: stars and the listing they belong to. */
+  rating?: number | null;
+  listingTitle?: string | null;
   replyStatus: ReplyStatus | null;
   churnRisk?: number;
   replyHistory?: Reply[];
@@ -503,3 +506,76 @@ export interface AppNotification { id: number; kind: string; title: string; body
 export interface Onboarding { steps: { key: string; label: string; done: boolean; link: string }[]; completed: number; total: number; }
 
 export interface Product { id: string; name: string; code: string; category: string | null; }
+
+/** Where a comment came from. */
+export type Channel = 'YOUTUBE' | 'AMAZON';
+
+export interface ChannelStats {
+  channel: Channel;
+  label: string;
+  comments: number;
+  reach: number;
+  sentiment: SentimentSplit;
+  sentimentByReach: SentimentSplit;
+  positiveShare: number;
+  negativeShare: number;
+  topics: { topic: string; label: string; positive: number; neutral: number; negative: number; comments: number }[];
+}
+
+/** An Amazon product page tracked for reviews. */
+export interface Listing {
+  id: string;
+  productId: string;
+  channel: 'AMAZON';
+  marketplace: string;
+  asin: string;
+  url: string;
+  title: string | null;
+  imageUrl: string | null;
+  rating: number | null;
+  ratingsCount: number | null;
+  reviewsStored: number;
+  status: 'NEW' | 'OK' | 'BLOCKED' | 'FAILED';
+  lastError: string | null;
+  checkedAt: string | null;
+  createdAt: string;
+}
+
+export interface ProductSummary {
+  id: string;
+  name: string;
+  category: string | null;
+  channels: Record<Channel, ChannelStats>;
+  videos: number;
+  listings: number;
+  amazonRating: number | null;
+}
+
+export interface ProductOverview {
+  id: string;
+  name: string;
+  category: string | null;
+  headline: string;
+  totals: { comments: number; positive: number; negative: number; neutral: number };
+  channels: Record<Channel, ChannelStats>;
+  videos: { videoId: string; title: string | null; channel: string | null; comments: number; thumbnailUrl: string }[];
+  listings: Listing[];
+}
+
+export interface ProductComment {
+  id: string;
+  channel: Channel;
+  text: string;
+  likes: number;
+  replies: number;
+  sentiment: Sentiment;
+  priority: Priority;
+  createdAt: string | null;
+  rating: number | null;
+  verified: boolean | null;
+  source: string | null;
+  sourceId: string | null;
+  url: string | null;
+  isNew: boolean;
+  topics: string[];
+}

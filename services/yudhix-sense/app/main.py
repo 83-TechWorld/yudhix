@@ -23,7 +23,7 @@ from app.db import (
     tag_comment_product,
     get_video_truth_analysis
 )
-from app.api import ai as ai_api, platform as platform_api, truth as truth_api, workflow as workflow_api
+from app.api import ai as ai_api, catalog as catalog_api, platform as platform_api, truth as truth_api, workflow as workflow_api
 from app.core import config, llm
 from app.core.database import run_migrations
 from app.truth import scheduler, youtube
@@ -46,6 +46,7 @@ app.add_middleware(
 )
 app.include_router(platform_api.router)
 app.include_router(ai_api.router)
+app.include_router(catalog_api.router)
 app.include_router(truth_api.router)
 app.include_router(workflow_api.router)
 

@@ -26,9 +26,10 @@ def _run(fn, *args, **kwargs):
 def inbox(tenant: str = Depends(tenant_id), video_id: Optional[str] = None, priority: Optional[str] = None,
           sentiment: Optional[str] = None, cause: Optional[str] = None, status: str = "OPEN",
           q: Optional[str] = None, limit: int = 50, offset: int = 0, intent: Optional[str] = None,
-          fresh: bool = False):
+          fresh: bool = False, platform: Optional[str] = None):
     return service.inbox(tenant, video_id, priority, sentiment, cause, status, q, min(max(limit, 1), 200),
-                         max(offset, 0), intent=intent, fresh=fresh)
+                         max(offset, 0), intent=intent, fresh=fresh,
+                         platform=platform)
 
 
 @router.get("/inbox/{comment_id}")

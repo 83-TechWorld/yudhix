@@ -4,13 +4,15 @@
 
 When a creator's video about your product goes viral and the comments turn angry, Yudhix answers one question before anyone replies: **is the anger caused by a real product problem, or by something the creator got wrong?** It checks the video's claims against your official facts, links each comment to the claim that triggered it, and runs a reviewed reply workflow.
 
+It listens on two channels: **YouTube** (creator videos and their comments) and **Amazon** (product listings and their reviews). Every comment and review belongs to a product, so each product gets one view of what people say on each channel, positive and negative, with the product ideas hidden in them.
+
 Built as a multi-tenant SaaS: companies sign up, create a workspace per brand, invite their team and pick a plan. Works on desktop, tablet and phone, and is ready to ship to the App Store and Play Store.
 
 ---
 
 ## Contents
 
-1. [How it works](#1-how-it-works)
+1. [How it works](#1-how-it-works): screens, the analysis pipeline, YouTube + Amazon, products, AI, knowledge base
 2. [Architecture](#2-architecture) (with the tech used in each part)
 3. [Run it locally](#3-run-it-locally)
 4. [Configuration](#4-configuration)
@@ -21,19 +23,30 @@ Built as a multi-tenant SaaS: companies sign up, create a workspace per brand, i
 9. [Deployment](#9-deployment)
 10. [Status and roadmap](#10-status-and-roadmap)
 
+Also: [Demo kit](#demo-kit) (script, narrated video and slide deck in `docs/demo/`).
+
 ---
 
 ## 1. How it works
 
-The product follows five steps, each with its own screen:
+The core flow has five steps, each with its own screen:
 
 | Step | Screen | What happens |
 |---|---|---|
-| **1. Analyze** | `/analyze` | Paste a YouTube link (or a transcript). Yudhix reads the transcript and pulls out timestamped claims. |
-| **2. Truth report** | `/videos/:id` → Claims | Each claim is checked against the brand's official facts: **Accurate**, **Misleading**, **False** or **Unverified**, with the cited source. |
-| **3. Audience impact** | `/videos/:id` → Audience impact | Each comment is linked to the claim that triggered it and gets a root cause: **misinformation**, **valid concern** or **unlinked**. |
-| **4. Respond** | `/inbox`, `/approvals` | Agents draft replies (AI drafts cite the official fact), an approver signs off (nobody approves their own reply), and the team can send the creator a polite clarification note. |
+| **1. Analyze** | `/analyze` | Choose **YouTube video** (paste a link or a transcript, and optionally the product it's about) or **Amazon reviews** (pick the product, paste its Amazon link). |
+| **2. Truth report** | `/videos/:id` → Claims | Each claim is checked against the brand's official facts: **Accurate**, **Misleading**, **False** or **Unverified**, quoting the source sentence. Uncertain verdicts are flagged **Needs review**; a person can set any verdict. |
+| **3. Audience impact** | `/videos/:id` → Audience impact · Product growth | Each comment is linked to the claim that triggered it and gets a root cause: **misinformation**, **valid concern** or **unlinked**. Charts show sentiment, topics, trend, praise, buying signals and feature requests. |
+| **4. Respond** | `/inbox`, `/approvals` | Agents draft replies (AI drafts cite the official fact), an approver signs off (nobody approves their own reply), and the team can send the creator a polite clarification note. Filters by channel, cause, priority, intent and "new". |
 | **5. Track** | `/track` | Turnaround rate, reply pipeline, SLA breaches, misinformation share and sentiment over time. |
+
+Around it:
+
+| Screen | What it's for |
+|---|---|
+| **Products** `/products`, `/products/:id` | Each product across channels: sentiment by channel (YouTube vs Amazon), what each channel talks about, positive and negative comments filtered by channel, and its sources (videos, Amazon listings). |
+| **Ideas** `/ideas` | Feature requests from every video and listing, grouped by theme, with a status (New → Reviewing → Planned → Shipped / Declined) and a note. |
+| **Knowledge** `/knowledge` | The official facts claims are checked against: add facts, upload documents (PDF, Word, text, Markdown, CSV), see the AI sync status, re-check claims after changes. |
+| **Settings** `/settings/...` | Workspace (incl. the schedule for new comments and reviews), **AI** (local or cloud provider with your own key), team, plan and billing. |
 
 ### What happens when you analyze a video
 
@@ -56,10 +69,12 @@ flowchart LR
 | Fetch video | `youtube.py` | YouTube Data API | YouTube oEmbed (no key needed) |
 | Transcribe | `youtube.py` | YouTube captions, else Whisper (`faster-whisper` + `yt-dlp`) | Pasted transcript (`[mm:ss] text` lines) |
 | Extract claims | `claims.py` | Local LLM (Ollama, `llama3.1`) | Rules: sentences with numbers, prices, absolutes, policy verbs |
-| Fact-check | `retrieval.py`, `verifier.py` | BM25 search over `product_knowledge`, then the LLM says whether the source *supports* or *contradicts* the claim; code maps that to a verdict | Rules: matching figures, absolutes the source negates, predictions → Unverified |
-| Ingest comments | `pipeline.py` | YouTube Data API (needs `YOUTUBE_API_KEY`), regex PII masking, keyed HMAC-SHA256 author hash | Uses comments already stored for the video |
-| Read comments | `audience.py` | Local LLM reads comments in batches of 20, **most-liked first**, within a time budget (`LLM_COMMENT_BUDGET_SECONDS`, default 240 s): sentiment, up to 2 topics, and which claim (if any) the comment responds to | Keyword sentiment and keyword topics |
+| Fact-check | `retrieval.py`, `verifier.py` | Hybrid search (keywords + meaning) over the knowledge base, then the AI says whether the source *supports* or *contradicts* the claim, quoting it; code maps that to a verdict and checks the quote and figures. Progress per claim; time limit `LLM_FACTCHECK_BUDGET_SECONDS` (180 s); cloud AI checks 4 claims at a time | Rules: matching figures, absolutes the source negates, predictions → Unverified |
+| Ingest comments | `pipeline.py`, `youtube.py` | YouTube Data API (needs `YOUTUBE_API_KEY`): a sample of 100 (40 newest, 40 oldest, 20 random middle), regex PII masking, keyed HMAC-SHA256 author hash | Uses comments already stored for the video |
+| Read comments | `audience.py` | AI reads comments in batches of 10, **most-liked first**, within `LLM_COMMENT_BUDGET_SECONDS` (240 s): sentiment, up to 2 topics, intent (feature request, praise, buying, leaving, question, complaint), a short name for feature requests, and which claim (if any) the comment responds to. Cloud AI reads 4 batches at a time | Keyword sentiment, topics and intent |
 | Attribute | `attribution.py`, `scoring.py` | Uses the AI's claim decision where it read the comment; otherwise needs two specific words shared with the claim (or one plus a related concept or a timestamp pointing at it). Stores "why linked" evidence | – |
+
+**Product:** a video's comments count toward the product chosen when analyzing it. If none is chosen, a workspace with exactly one product uses that one; with several, the video stays unlinked (never guessed) until someone picks its product on the video page. The Products page lists unlinked videos.
 
 **Root cause:** `MISINFORMATION` (reacts to a misleading, false or unverified claim), `VALID_CONCERN` (reacts to an accurate claim), or `UNLINKED`.
 
@@ -124,7 +139,17 @@ Every AI call goes through one layer (`app/core/llm.py`, providers in `app/core/
 
 ### Amazon reviews and the product view
 
-**Analyze → Amazon reviews:** pick the product, paste its Amazon link (any marketplace: amazon.com, .in, .co.uk, …; short `amzn.to` links work too). Yudhix tracks that listing and collects its reviews (`app/truth/amazon.py`, `app/truth/listings.py`):
+**Analyze → Amazon reviews:** pick the product, paste its Amazon link (any marketplace: amazon.com, .in, .co.uk, …; short `amzn.to` / `amzn.in` links work too). Yudhix tracks that listing and collects its reviews (`app/truth/amazon.py`, `app/truth/listings.py`). A product's page can also add listings (**Add listing**) and re-check them (**Check now**).
+
+```mermaid
+flowchart LR
+    A[Amazon link<br/>+ product] --> B[1. Read listing<br/>title, stars, ratings]
+    B --> C[2. Store reviews<br/>new ones, PII masked]
+    C --> D[3. Read reviews<br/>AI: topics, intent, ideas]
+    D --> E[4. Score by stars<br/>sentiment, impact, priority]
+    E --> F[Products page<br/>+ inbox + ideas]
+    S[Scheduler<br/>every N hours] -.-> B
+```
 
 | Mode | What it reads | When |
 |---|---|---|
@@ -133,10 +158,24 @@ Every AI call goes through one layer (`app/core/llm.py`, providers in `app/core/
 
 Amazon's Conditions of Use restrict automated access; the provider route is the one meant for production use.
 
-- Reviews are stored as comments with platform `AMAZON` (PII masked, author pseudonymized). The AI reads them like YouTube comments (topics, intent, feature requests), and **sentiment follows the stars**: 4–5 positive, 3 neutral, 1–2 negative. Helpful votes count as reach.
-- The scheduler re-checks every listing on the workspace's interval, so new reviews keep arriving, and notifies the team about new negative reviews.
-- **Products** page: every product with its sentiment split by channel. A product's page shows sentiment by channel (by count or reach), what each channel talks about, the **positive and negative voices** filtered by channel (YouTube / Amazon, with stars and "verified purchase" for reviews), and its sources: videos and Amazon listings with **Check now**.
-- The Inbox has a channel filter (All / YouTube / Amazon).
+- **Stored as comments** with platform `AMAZON` in the same `comment` table as YouTube comments (PII masked, author pseudonymized). Each keeps its stars, title, verified-purchase flag, country and a link to the review (`custom_attributes`), and belongs to the listing's product.
+- **Read like YouTube comments:** the AI tags topics, intent and feature requests (which join the same product ideas). **Sentiment follows the stars**: 4–5 positive, 3 neutral, 1–2 negative. Helpful votes count as reach, so the most helpful reviews rank first.
+- **Only new reviews are read** on each check; reviews seen before keep their reading and get fresh helpful-vote counts.
+- **Automatic:** the scheduler re-checks every listing on the workspace's interval (Settings → Workspace), so new reviews keep arriving, and notifies admins, approvers and agents about new negative reviews.
+- **Listing status:** *OK*, *blocked* (Amazon showed a robot check; tried again next round) or *failed*, with the reason shown on the product page.
+- **Removing a listing** stops tracking it; its reviews are hidden, not deleted.
+
+**Products page** (`app/truth/product_view.py`, `GET /api/v1/catalog/products`): every product with its sentiment split by channel and its average Amazon rating. A product's page (`/products/:id`) shows:
+
+| Part | What it shows |
+|---|---|
+| Headline and totals | Positive and negative share per channel, and which channel is more negative ("Viewers on YouTube are 21 points more negative"). Total comments and reviews, positive, negative, Amazon rating. |
+| Sentiment by channel | YouTube and Amazon side by side, by count or by reach. |
+| What each channel talks about | Top topics per channel, split by sentiment. |
+| What people say | **Positive and negative** comments in two columns, filtered by All / YouTube / Amazon. Reviews show stars and "Verified purchase"; each links to its video or Amazon review and opens in the inbox. |
+| Sources | The product's videos and Amazon listings (stars, rating count, reviews stored, last check, status), with **Check now**, **Add listing** and remove. |
+
+The Inbox has a channel filter (All / YouTube / Amazon) and marks reviews with their stars. API: `GET /api/v1/catalog/products/{id}`, `GET …/comments?channel=&sentiment=`, `POST /api/v1/catalog/amazon`, `POST /api/v1/catalog/listings/{id}/check`, `DELETE /api/v1/catalog/listings/{id}`.
 
 ### Uploading documents and syncing the knowledge base with AI
 
@@ -168,7 +207,7 @@ There is no separate index to build: the search index (BM25 over title, category
 - **The schedule** does the same for every analyzed video. Each workspace picks the interval in **Settings → Workspace** (default every 6 hours, or off). Admins, approvers and agents get a notification when new negative comments or product ideas arrive. With several API copies running, a database lock lets only one of them run each round.
 - New comments are marked **New** in the inbox (filter: **New only**) until the next full analysis.
 
-Every verdict shows how it was made (`LLM`, `HEURISTIC` or `SEEDED`). The app works without the AI model; it switches to rules, and the robot in the top bar goes to sleep.
+Every verdict shows how it was made (`LLM`, `HEURISTIC`, `HUMAN` or `SEEDED`). The app works without the AI model; it switches to rules, and the robot in the top bar goes to sleep.
 
 ### Reply workflow
 
@@ -209,7 +248,9 @@ flowchart TB
     subgraph EXT ["Data and external"]
         DB[(PostgreSQL 16)]
         LLM[Ollama<br/>local AI model]
+        CLOUD[Cloud AI, optional<br/>Claude · ChatGPT · Gemini · …]
         YT[YouTube<br/>Data API · captions]
+        AMZ[Amazon<br/>product pages · review API]
         MAIL[SMTP<br/>Mailpit / ZeptoMail]
     end
 
@@ -222,7 +263,9 @@ flowchart TB
     API --> DB
     KC --> DB
     API --> LLM
+    API -.-> CLOUD
     API --> YT
+    API --> AMZ
     API --> MAIL
     KC --> MAIL
 ```
@@ -232,10 +275,11 @@ flowchart TB
 | **Web app** (`frontend/yudhix-web`) | Angular 20 (standalone components, signals, lazy routes), TypeScript, SCSS design tokens, Inter font, hand-built SVG charts, PWA service worker | All screens: public site, onboarding, Analyze → Track, settings. Responsive: sidebar on desktop, icon rail on tablet, bottom tabs on phone. Light/dark theme. |
 | **Mobile** | Capacitor 8 | Wraps the same Angular build as iOS and Android apps. |
 | **Gateway** (`deploy/gateway`) | nginx | One public address. Routes `/` → web, `/api` → API, `/auth` → Keycloak. Rate limits, security headers, gzip. Used in Docker, Kubernetes and Zoho; not in hot-reload dev. |
-| **API** (`services/yudhix-sense`) | Python 3.12, FastAPI, Uvicorn, psycopg2, PyJWT | Truth pipeline, inbox and reply workflow, insights, workspaces, team, billing, notifications. Stateless, so it scales out. Creates and migrates the database schema on start. |
+| **API** (`services/yudhix-sense`) | Python 3.12, FastAPI, Uvicorn, psycopg2, PyJWT, httpx, BeautifulSoup (Amazon pages), pypdf (documents), cryptography (AI keys) | Truth pipeline, Amazon reviews, products view, inbox and reply workflow, ideas, knowledge base and AI sync, insights, workspaces, team, billing, notifications, background scheduler. Stateless, so it scales out (the scheduler takes a database lock). Creates and migrates the database schema on start. |
 | **Identity** (`keycloak/`) | Keycloak 25, OpenID Connect, PKCE | Sign-up, sign-in, email verification, password reset, brute-force protection, enterprise SSO. Branded `yudhix` login theme. |
 | **Database** | PostgreSQL 16 (pgvector image) | All app data. Every row carries `tenant_id` (the workspace). |
-| **AI model** | Ollama with `llama3.1` | Claim extraction, fact-check reasoning, reply drafts. Optional. |
+| **AI** | Ollama with `llama3.1` and `nomic-embed-text` locally; or per workspace Claude, ChatGPT, Gemini, Mistral, Groq, DeepSeek, OpenRouter, any OpenAI-compatible API | Claim extraction, fact-checking, reading comments and reviews, reply drafts, embeddings for fact search. Optional: without it, rules and keyword search. |
+| **Amazon** | Public product pages (httpx + BeautifulSoup), or Rainforest API with `AMAZON_REVIEWS_API_KEY` | Listing details and reviews. |
 | **Email** | SMTP: Mailpit locally, Zoho ZeptoMail (or any SMTP) in production | Verification and invitation emails. |
 
 ### 2.2 Sign-in and request flow
@@ -304,7 +348,7 @@ Two ways to run it. For daily development use **A** (hot reload, your sample dat
 | PostgreSQL | 16 | `brew install postgresql@16 && brew services start postgresql@16` |
 | Python | 3.11+ | `brew install python` |
 | Node.js | 22 (or 20.19+) | `brew install node@22` |
-| Ollama + model (optional) | latest | `brew install ollama && ollama pull llama3.1` |
+| Ollama + models (optional) | latest | `brew install ollama && ollama pull llama3.1 && ollama pull nomic-embed-text` |
 
 ### A. Development mode (hot reload)
 
@@ -338,7 +382,7 @@ Open **http://localhost:4200**.
 | Emails (Mailpit) | http://localhost:8025 | – (verification and invite emails land here) |
 | AI model | localhost:11434 | – |
 
-Try it: **Videos → "PlayStation Explains Why it's Ending Physical Discs"** shows a full report built from 2,662 stored comments. From the workspace menu you can also **Explore the demo workspace**.
+Try it in the **PlayStation (Demo)** workspace: **Videos → "PlayStation Explains Why it's Ending Physical Discs"** shows a full report, and **Products → "PlayStation 5 Physical Discs & Drive"** compares its YouTube comments with Amazon reviews of the PS5. From the workspace menu you can also **Explore the demo workspace**.
 
 **Stop:**
 
@@ -367,6 +411,10 @@ It reads `YOUTUBE_API_KEY` from the same `services/yudhix-sense/.env` file as de
 | Sign-in page doesn't load | Keycloak takes ~30 s to start. `docker compose ps` should show `yudhix-keycloak` up. |
 | No verification email | Check http://localhost:8025. Re-run `./yudhix.sh keycloak` if SMTP settings were lost. |
 | Video report shows **0 comments** | The API has no YouTube API key. Put `YOUTUBE_API_KEY=...` in `services/yudhix-sense/.env`, run `./yudhix.sh restart`, then analyze the link again. |
+| Analysis sits on **Fact-check** or **Read comments** for minutes | The local AI is slow on this machine (about 30–60 s per claim or batch). It isn't stuck: progress updates per claim and each step has a time limit (3 min fact-check, 4 min comments), after which rules take over. For runs in about a minute, connect a cloud AI in **Settings → AI**. |
+| Amazon listing shows **blocked** | Amazon answered with a robot check. Nothing to do: the next scheduled check tries again. For reliable collection set `AMAZON_REVIEWS_API_KEY`. |
+| Amazon check finds only ~8–13 reviews | That's what Amazon shows on the product page; full review pages need sign-in. Each scheduled check adds new ones; the provider key collects all. |
+| Sign-in page doesn't load after a reboot | Docker Desktop isn't running, so Keycloak is down: `open -a Docker`, then `docker compose up -d keycloak mailpit`. The dev web app may need `./yudhix.sh start` again. |
 | Robot in the top bar is asleep | The AI model isn't reachable. Run `ollama serve` and `ollama pull llama3.1`. The app still works in rule-based mode. |
 | `./yudhix.sh k8s-up` can't find images | Docker Desktop's Kubernetes in **kind** mode doesn't share local images. Switch it to **kubeadm** (Settings → Kubernetes), or push to a registry: `REGISTRY=ghcr.io/<you> ./yudhix.sh k8s-up`. |
 | Old icon or old page after an update | Hard reload (Cmd+Shift+R). The PWA service worker caches the app. |
@@ -425,19 +473,22 @@ yudhix/
 │       ├── core/                # API client, auth (keycloak-js), session & roles, guards
 │       ├── layout/              # app shell: sidebar, top bar, bottom tabs
 │       ├── shared/              # icons, badges, charts, money formatting, AI status robot
-│       └── features/            # public, onboarding, analyze, videos, inbox, approvals, track, knowledge, settings
+│       └── features/            # public, onboarding, analyze, videos, products, inbox, approvals, track, ideas, knowledge, settings
 ├── services/yudhix-sense/       # Python API (FastAPI): everything the web app calls
 │   ├── app/
-│   │   ├── api/                 # HTTP routes
-│   │   ├── truth/               # video analysis pipeline
+│   │   ├── api/                 # HTTP routes: truth, catalog (products + Amazon), ai, workflow, platform
+│   │   ├── truth/               # pipeline, youtube, amazon, listings, product_view, audience, attribution,
+│   │   │                        #   retrieval, verifier, growth (ideas), documents, ai_sync, scheduler
 │   │   ├── workflow/            # inbox, reply state machine, outcomes, insights
 │   │   ├── platform/            # auth, workspaces, team, billing, notifications, email
 │   │   ├── pipeline/            # PII masking, sentiment, LLM enrichment
-│   │   ├── core/                # config, database, migrations runner, LLM client
-│   │   └── migrations/          # V2 truth-first · V3 SaaS · V4 regional pricing
-│   └── tests/                   # pytest unit tests + end-to-end SaaS test
+│   │   ├── core/                # config, database, migrations runner, AI layer (llm.py) and providers
+│   │   └── migrations/          # V2 truth-first · V3 SaaS · V4 regional pricing · V5 schedule, ideas, AI,
+│   │                            #   documents · V6 Amazon listings
+│   └── tests/                   # pytest unit tests (+ fixtures) + end-to-end SaaS test
 ├── keycloak/                    # realm file, configure_realm.py, login theme
 ├── deploy/                      # gateway, Dockerfiles, Compose stack, Kubernetes, Zoho, scripts
+├── docs/demo/                   # demo script, narrated video, slide deck and the tools that build them
 ├── services/yudhix-*/ (Java)    # planned Spring Boot services; their V1 SQL is the base schema
 ├── libs/                        # shared Java libraries for those services
 └── airflow/dags/                # planned scheduled jobs (ingestion, outcomes, retention)
@@ -466,12 +517,14 @@ The API creates every table on an empty database, then applies `app/migrations/V
 
 **Sign-up flow:** Landing → Start free trial → Keycloak sign-up → verify email → onboarding (workspace → product + one official fact → first video) → truth report. Agencies switch between client workspaces from one login.
 
+Everything is per workspace: products, videos, Amazon listings, comments, facts, ideas, AI settings and keys, and the schedule. Switching workspace leaves pages tied to the old one (a video, product, idea, invoice or inbox filter) and opens the same section in the new one; the AI indicator refreshes too.
+
 | Permission | Admin | Approver | Agent | Analyst |
 |---|:-:|:-:|:-:|:-:|
 | Read reports, inbox, insights | ✓ | ✓ | ✓ | ✓ |
-| Analyze videos, edit facts, draft and post replies | ✓ | ✓ | ✓ | |
+| Analyze videos and Amazon listings, edit facts and documents, manage ideas, draft and post replies | ✓ | ✓ | ✓ | |
 | Approve / reject replies (never their own) | ✓ | ✓ | | |
-| Workspace settings, team, billing | ✓ | | | |
+| Workspace settings, schedule, AI provider and key, team, billing | ✓ | | | |
 
 | Plan | India (INR + 18% GST) | Other countries (USD) | Video analyses | Comments | Team |
 |---|---|---|---|---|---|
@@ -494,9 +547,11 @@ The API creates every table on an empty database, then applies `app/migrations/V
 ## 7. Tests
 
 ```bash
-./yudhix.sh unit     # backend (34 pytest) + frontend (10 Karma) unit tests
+./yudhix.sh unit     # backend (71 pytest) + frontend (11 Karma) unit tests
 ./yudhix.sh e2e      # ~47 end-to-end checks through the real Keycloak (needs dev mode running)
 ```
+
+Backend unit tests cover the truth pipeline, attribution, AI providers and fallback, anti-hallucination guards, hybrid search, document parsing, the Amazon reader (against a saved product page) and the channel split. They need no database, AI model or network.
 
 The end-to-end test creates two throwaway users, signs in with the real PKCE flow, and checks workspaces, invitations (including the email), role permissions, workspace isolation, plan changes with invoices, notifications and deletion. It removes its users at the end.
 
@@ -540,11 +595,12 @@ Production checklist: strong `AUTHOR_HMAC_KEY` and database passwords, `DEMO_WOR
 |---|---|---|
 | Posting replies | Approved replies are recorded as `SIMULATED`; nothing is sent to YouTube. | YouTube OAuth connector, live posting, automatic +24h / +72h / +7d outcome checks. |
 | Payments | Plans, quotas and invoices work; no card is charged. | Stripe / Razorpay checkout and webhooks. |
-| Ingestion | On demand per video, plus scheduled checks for new comments on analyzed videos. | Channel watchers that pick up new uploads. |
+| Ingestion | YouTube videos on demand, plus scheduled checks for new comments; Amazon listings on demand and on schedule. | Channel watchers that pick up new uploads; more channels (Flipkart, Reddit, X, app stores). |
+| Amazon | Reviews shown on the product page (about 8–13 per check) or all reviews through a provider key. | Per-workspace provider key in Settings; link reviews to claims made in videos ("reviews repeating a false claim"). |
 | Attribution | Keyword matching with evidence; weak on sarcasm and memes. | Embedding similarity (pgvector) with LLM re-ranking. |
 | Fact-checking | Hybrid search (BM25 + embeddings) and local or cloud AI with quote, number and second-opinion checks. | Scanned PDFs (OCR); an evaluation set from human verdicts. |
-| Sentiment & topics | Local LLM for the most-liked comments, keyword rules for the rest. | Faster model or GPU so the AI reads every comment; agent corrections. |
-| Product impact & growth | Per video; product ideas across videos. | **Product health** across all videos of a product: trend, top issues, which creators drive negativity. |
+| Sentiment & topics | Local or cloud AI for comments and reviews (stars decide review sentiment), keyword rules as fallback. | Agent corrections that feed back into the model. |
+| Products | Per product across YouTube and Amazon: sentiment, topics, positive and negative voices, ideas. | Trend over time per channel; which creators and listings drive negativity; alerts per product. |
 | Services | One Python API does everything. | Split into the planned Java services (`services/yudhix-*`) as load requires. |
 | Mobile | Capacitor configured. | Generate native projects, icons, store listings, push alerts. |
 

@@ -549,3 +549,5 @@ Production checklist: strong `AUTHOR_HMAC_KEY` and database passwords, `DEMO_WOR
 | Mobile | Capacitor configured. | Generate native projects, icons, store listings, push alerts. |
 
 > **Security:** an old version of the web app had a YouTube API key in its code. It is still in git history, so **rotate that key in Google Cloud Console**. YouTube access now happens only on the server.
+>
+> AIzaSyCWGhmMjOdPlGkSjcaV4OKdvLSGIhvL3Uc>>>

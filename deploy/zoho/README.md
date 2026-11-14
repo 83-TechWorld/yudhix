@@ -51,11 +51,14 @@ email ─► Zoho ZeptoMail SMTP (smtp.zeptomail.in:587, STARTTLS)
    AUTHOR_HMAC_KEY=<openssl rand -hex 32>   DEMO_WORKSPACE_JOIN=false   WEB_CONCURRENCY=2
    OLLAMA_URL=<optional AI host>            YOUTUBE_API_KEY=<optional>
    ```
+   **yudhix-report** (512 MB): the same `PG_*`, `KEYCLOAK_ISSUER`, `KEYCLOAK_JWKS_URL` and `CORS_ORIGINS` values as
+   yudhix-api. It only reads the database (every session is read-only).
    **yudhix-web** (256 MB): `SALES_EMAIL=sales@your-domain.com`
    **yudhix-gateway** (512 MB)
    ```
    WEB_UPSTREAM=https://<yudhix-web-url>
    API_UPSTREAM=https://<yudhix-api-url>
+   REPORT_UPSTREAM=https://<yudhix-report-url>
    KEYCLOAK_UPSTREAM=https://<yudhix-keycloak-url>
    ```
 4. **Custom domain:** map `app.example.com` to **yudhix-gateway** in the Catalyst console, so TLS is handled by Catalyst.

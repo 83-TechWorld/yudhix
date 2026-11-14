@@ -3,6 +3,7 @@
 export PORT="${X_ZOHO_CATALYST_LISTEN_PORT:-${PORT:-8080}}"
 export WEB_UPSTREAM="${WEB_UPSTREAM:-http://web:8080}"
 export API_UPSTREAM="${API_UPSTREAM:-http://api:8000}"
+export REPORT_UPSTREAM="${REPORT_UPSTREAM:-http://report:8010}"
 export KEYCLOAK_UPSTREAM="${KEYCLOAK_UPSTREAM:-http://keycloak:8080}"
 export API_RATE_LIMIT="${API_RATE_LIMIT:-30r/s}"
 export API_RATE_BURST="${API_RATE_BURST:-60}"
@@ -23,11 +24,11 @@ fi
 RESOLVER="${RESOLVER:-$(awk '/^nameserver/ { print $2; exit }' /etc/resolv.conf 2>/dev/null)}"
 if [ "$GATEWAY_DNS" = "dynamic" ] && [ -n "$RESOLVER" ]; then
   case "$RESOLVER" in *:*) RESOLVER="[$RESOLVER]";; esac   # IPv6 nameserver
-  export UPSTREAM_DNS="resolver $RESOLVER valid=10s ipv6=off; set \$web_upstream $WEB_UPSTREAM; set \$api_upstream $API_UPSTREAM; set \$keycloak_upstream $KEYCLOAK_UPSTREAM;"
-  export WEB_PASS='$web_upstream' API_PASS='$api_upstream' KEYCLOAK_PASS='$keycloak_upstream'
+  export UPSTREAM_DNS="resolver $RESOLVER valid=10s ipv6=off; set \$web_upstream $WEB_UPSTREAM; set \$api_upstream $API_UPSTREAM; set \$report_upstream $REPORT_UPSTREAM; set \$keycloak_upstream $KEYCLOAK_UPSTREAM;"
+  export WEB_PASS='$web_upstream' API_PASS='$api_upstream' REPORT_PASS='$report_upstream' KEYCLOAK_PASS='$keycloak_upstream'
 else
   export UPSTREAM_DNS="# upstream DNS: resolved once at start"
-  export WEB_PASS="$WEB_UPSTREAM" API_PASS="$API_UPSTREAM" KEYCLOAK_PASS="$KEYCLOAK_UPSTREAM"
+  export WEB_PASS="$WEB_UPSTREAM" API_PASS="$API_UPSTREAM" REPORT_PASS="$REPORT_UPSTREAM" KEYCLOAK_PASS="$KEYCLOAK_UPSTREAM"
 fi
 # Only substitute our own variables (keep nginx's $uri, $host, ...).
 export NGINX_ENVSUBST_FILTER="^(PORT|API_RATE_LIMIT|API_RATE_BURST|LOGIN_RATE_LIMIT|MAX_BODY_SIZE|KEYCLOAK_ADMIN_ACCESS|UPSTREAM_DNS|WEB_PASS|API_PASS|KEYCLOAK_PASS)$"

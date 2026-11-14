@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy the four Yudhix containers to Zoho Catalyst AppSail (custom runtime).
+# Deploy the five Yudhix containers to Zoho Catalyst AppSail (custom runtime).
 # Catalyst needs linux/amd64 images and runs each one as its own AppSail app.
 #
 #   npm install -g zcatalyst-cli && catalyst login      # once
@@ -15,19 +15,19 @@ source "$HERE/../scripts/lib.sh"
 build_images
 OUT="${OUT:-$PWD/.yudhix-images}"
 mkdir -p "$OUT"
-for name in gateway web api keycloak; do
+for name in gateway web api report keycloak; do
   log "exporting yudhix/$name:$TAG -> $OUT/yudhix-$name.tar.gz"
   docker save "yudhix/$name:$TAG" | gzip > "$OUT/yudhix-$name.tar.gz"
 done
 
 if ! command -v catalyst >/dev/null 2>&1; then
   log "Catalyst CLI not found. Install it (npm i -g zcatalyst-cli), then run:"
-  for name in gateway web api keycloak; do
+  for name in gateway web api report keycloak; do
     echo "  catalyst deploy appsail --name yudhix-$name --source docker-archive://$OUT/yudhix-$name.tar.gz"
   done
   exit 0
 fi
-for name in keycloak api web gateway; do      # dependencies first
+for name in keycloak api report web gateway; do      # dependencies first
   log "deploying yudhix-$name to Catalyst AppSail"
   catalyst deploy appsail --name "yudhix-$name" --source "docker-archive://$OUT/yudhix-$name.tar.gz"
 done

@@ -12,7 +12,7 @@ Built as a multi-tenant SaaS: companies sign up, create a workspace per brand, i
 
 ## Contents
 
-1. [How it works](#1-how-it-works): screens, the analysis pipeline, YouTube + Amazon, products, AI, knowledge base
+1. [How it works](#1-how-it-works): screens, the analysis pipeline, YouTube + Amazon, products, AI, knowledge base, business reports
 2. [Architecture](#2-architecture) (with the tech used in each part)
 3. [Run it locally](#3-run-it-locally)
 4. [Configuration](#4-configuration)
@@ -44,6 +44,7 @@ Around it:
 | Screen | What it's for |
 |---|---|
 | **Products** `/products`, `/products/:id` | Each product across channels: sentiment by channel (YouTube vs Amazon), what each channel talks about, positive and negative comments filtered by channel, and its sources (videos, Amazon listings). |
+| **Reports** `/reports` | Business reports across the workspaces you choose, for a CEO, CTO, product or customer-care audience. Live preview, then **Download PDF**. Served by its own service, `yudhix-report`. |
 | **Ideas** `/ideas` | Feature requests from every video and listing, grouped by theme, with a status (New → Reviewing → Planned → Shipped / Declined) and a note. |
 | **Knowledge** `/knowledge` | The official facts claims are checked against: add facts, upload documents (PDF, Word, text, Markdown, CSV), see the AI sync status, re-check claims after changes. |
 | **Settings** `/settings/...` | Workspace (incl. the schedule for new comments and reviews), **AI** (local or cloud provider with your own key), team, plan and billing. |
@@ -224,6 +225,42 @@ stateDiagram-v2
 
 Every state change is written to a hash-chained audit log (`audit_event`: each row's hash includes the previous row's hash, so edits are detectable).
 
+### Business reports (Reports tab)
+
+**Reports** builds a report across any of your workspaces, previews it on screen and downloads it as an A4 PDF (cover page, contents, numbered sections, page numbers). It runs in a separate service, **`services/yudhix-report`**, so heavy reporting never slows down the main API.
+
+1. **Who is it for.** Pick a report type. Each one starts with the sections that audience cares about:
+
+   | Type | For | Starts with |
+   |---|---|---|
+   | **Executive** | CEO, leadership, board | Summary, risks, workspace comparison, sentiment, creator claims, products, customer response |
+   | **Technology** | CTO, engineering, IT | Summary (pipeline runs, AI coverage, accuracy guards), platform and AI operations, risks, team and plan, workspace comparison |
+   | **Product** | CPO, product managers | Summary, products across channels, product ideas, sentiment, creator claims |
+   | **Customer care** | Head of support, community | Summary, customer response, sentiment, workspace comparison, risks |
+
+2. **Workspaces.** Tick any workspaces you are a member of (all of them by default). Any role can run reports, including read-only analysts.
+3. **Period.** Last 30 days, last 90 days, last 12 months or all time. Headline numbers are compared with the previous period of the same length.
+4. **Sections.** Turn any of the 10 sections on or off: executive summary, risks and recommended actions, workspace comparison, audience sentiment, creator claims and misinformation, products across channels, customer response, product ideas, platform and AI operations, and team, plan and usage.
+
+**What's in it:**
+- Headline numbers: net sentiment (% positive minus % negative), share of wrong creator claims, how much negativity traces back to misinformation, and replies posted with their turnaround rate.
+- A ranked risk list with a recommended action for each. For example: scheduled checks failing (with the cause in plain words, never a raw error), replies past their deadline, verdicts waiting for a person, Amazon listings that can't be read, and a knowledge base that is missing or not synced.
+- Charts: sentiment over time and sentiment by workspace, channel and product.
+
+**No AI writes report text.** Every number is read straight from the database, and findings and risks are written by fixed rules from those numbers, so a report can't invent anything.
+
+**Access and safety:**
+- The report service checks the same Keycloak token as the API.
+- A request that names a workspace you don't belong to is refused (403).
+- The service opens every database session read-only.
+
+**API:**
+- `GET /api/v1/reports/options` returns the report types, sections, periods and your workspaces.
+- `POST /api/v1/reports/preview` returns the report as JSON.
+- `POST /api/v1/reports/pdf` returns the PDF.
+
+The request body is `{ "audience": "executive", "workspaceIds": [...], "period": "90d", "sections": null }`. Set `sections` to `null` to use the audience's defaults.
+
 ---
 
 ## 2. Architecture
@@ -237,11 +274,12 @@ flowchart TB
         APP[iOS / Android app]
     end
 
-    GW[Gateway<br/>/ · /api · /auth]
+    GW[Gateway<br/>/ · /api · /api/v1/reports · /auth]
 
     subgraph Services
         UI[Web app<br/>yudhix-web]
         API[API<br/>yudhix-sense]
+        REP[Reports<br/>yudhix-report]
         KC[Identity<br/>Keycloak]
     end
 
@@ -258,6 +296,9 @@ flowchart TB
     APP --> GW
     GW -->|/| UI
     GW -->|/api| API
+    GW -->|/api/v1/reports| REP
+    REP -->|read-only| DB
+    REP -->|verify tokens JWKS| KC
     GW -->|/auth| KC
     API -->|verify tokens JWKS| KC
     API --> DB
@@ -274,8 +315,9 @@ flowchart TB
 |---|---|---|
 | **Web app** (`frontend/yudhix-web`) | Angular 20 (standalone components, signals, lazy routes), TypeScript, SCSS design tokens, Inter font, hand-built SVG charts, PWA service worker | All screens: public site, onboarding, Analyze → Track, settings. Responsive: sidebar on desktop, icon rail on tablet, bottom tabs on phone. Light/dark theme. |
 | **Mobile** | Capacitor 8 | Wraps the same Angular build as iOS and Android apps. |
-| **Gateway** (`deploy/gateway`) | nginx | One public address. Routes `/` → web, `/api` → API, `/auth` → Keycloak. Rate limits, security headers, gzip. Used in Docker, Kubernetes and Zoho; not in hot-reload dev. |
+| **Gateway** (`deploy/gateway`) | nginx | One public address. Routes `/` → web, `/api/v1/reports` → reports, `/api` → API, `/auth` → Keycloak. Rate limits, security headers, gzip. Used in Docker, Kubernetes and Zoho; not in hot-reload dev. |
 | **API** (`services/yudhix-sense`) | Python 3.12, FastAPI, Uvicorn, psycopg2, PyJWT, httpx, BeautifulSoup (Amazon pages), pypdf (documents), cryptography (AI keys) | Truth pipeline, Amazon reviews, products view, inbox and reply workflow, ideas, knowledge base and AI sync, insights, workspaces, team, billing, notifications, background scheduler. Stateless, so it scales out (the scheduler takes a database lock). Creates and migrates the database schema on start. |
+| **Reports** (`services/yudhix-report`) | Python 3.12, FastAPI, ReportLab (PDF), psycopg2 (read-only sessions), PyJWT | Business reports across workspaces for CEO, CTO, product and care audiences: JSON preview and PDF download. Stateless; reads the shared database, never writes. |
 | **Identity** (`keycloak/`) | Keycloak 25, OpenID Connect, PKCE | Sign-up, sign-in, email verification, password reset, brute-force protection, enterprise SSO. Branded `yudhix` login theme. |
 | **Database** | PostgreSQL 16 (pgvector image) | All app data. Every row carries `tenant_id` (the workspace). |
 | **AI** | Ollama with `llama3.1` and `nomic-embed-text` locally; or per workspace Claude, ChatGPT, Gemini, Mistral, Groq, DeepSeek, OpenRouter, any OpenAI-compatible API | Claim extraction, fact-checking, reading comments and reviews, reply drafts, embeddings for fact search. Optional: without it, rules and keyword search. |
@@ -312,14 +354,16 @@ sequenceDiagram
 
 ### 2.3 Deployment
 
-The same four container images run everywhere.
+The same five container images run everywhere.
 
 ```mermaid
 flowchart LR
     U[Users] --> G[gateway<br/>2–10 pods]
     G --> W[web<br/>2–6 pods]
     G --> A[api<br/>2–10 pods, autoscaled]
+    G --> R[report<br/>1–4 pods]
     G --> K[keycloak<br/>1–2 pods]
+    R -->|read-only| P
     A --> P[(PostgreSQL<br/>in-cluster locally,<br/>managed in prod)]
     K --> P
     A --> O[Ollama<br/>GPU host, optional]
@@ -368,7 +412,7 @@ open -a Docker                            # 1. start Docker Desktop, wait until 
 brew services start postgresql@16         # 2. dev database (usually already up, it starts at login)
 cd ~/Desktop/code/yudhix
 docker compose up -d keycloak mailpit     # 3. sign-in + email catcher
-./yudhix.sh start                         # 4. API (:8000) + web app (:4200); installs dependencies on first run
+./yudhix.sh start                         # 4. API (:8000) + reports (:8010) + web app (:4200); installs dependencies on first run
 ./yudhix.sh status                        # 5. check everything is online
 ```
 
@@ -378,6 +422,7 @@ Open **http://localhost:4200**.
 |---|---|---|
 | Web app | http://localhost:4200 | `admin@sony.com` / `sony_admin_2026`, or **Start free trial** to sign up |
 | API docs | http://localhost:8000/docs | – |
+| Reports service docs | http://localhost:8010/api/v1/reports/docs | – |
 | Keycloak admin | http://localhost:8180 | `admin` / `admin_yudhix_2026` |
 | Emails (Mailpit) | http://localhost:8025 | – (verification and invite emails land here) |
 | AI model | localhost:11434 | – |
@@ -391,7 +436,7 @@ Try it in the **PlayStation (Demo)** workspace: **Videos → "PlayStation Explai
 docker compose stop                       # Keycloak + Mailpit
 ```
 
-Logs are in `.logs/` (`sense.log` for the API, `frontend.log` for the web app).
+Logs are in `.logs/` (`sense.log` for the API, `report.log` for the reports service, `frontend.log` for the web app).
 
 ### B. Whole stack in containers
 
@@ -458,7 +503,9 @@ For local secrets, copy `services/yudhix-sense/.env.example` to `.env` in the sa
 | `LLM_COMMENT_BUDGET_SECONDS` | `240` | Time the AI may spend reading comments per analysis (most-liked first); the rest use keyword rules. About 20 comments per 50 s on an M-series Mac with `llama3.1`. |
 | `INTERNAL_API_KEY` | empty (disabled) | Unlocks the old internal endpoints (`/api/v1/comments`, `/analyze`, `/scheduler/…`). |
 
-Web app settings: `frontend/yudhix-web/src/environments/` (`apiUrl`, `keycloak`, `salesEmail`). Container builds read `/config.json` at start instead, written from env vars. `GET /health` shows which optional features are active.
+The reports service uses the same `PG_*`, `KEYCLOAK_*` and `CORS_ORIGINS` variables (in dev it also reads `services/yudhix-sense/.env`), plus `REPORT_MAX_WORKSPACES` (25) and `REPORT_TABLE_ROWS` (10).
+
+Web app settings: `frontend/yudhix-web/src/environments/` (`apiUrl`, `reportsUrl`, `keycloak`, `salesEmail`). Container builds read `/config.json` at start instead, written from env vars. `GET /health` shows which optional features are active.
 
 ---
 
@@ -473,7 +520,7 @@ yudhix/
 │       ├── core/                # API client, auth (keycloak-js), session & roles, guards
 │       ├── layout/              # app shell: sidebar, top bar, bottom tabs
 │       ├── shared/              # icons, badges, charts, money formatting, AI status robot
-│       └── features/            # public, onboarding, analyze, videos, products, inbox, approvals, track, ideas, knowledge, settings
+│       └── features/            # public, onboarding, analyze, videos, products, inbox, approvals, track, reports, ideas, knowledge, settings
 ├── services/yudhix-sense/       # Python API (FastAPI): everything the web app calls
 │   ├── app/
 │   │   ├── api/                 # HTTP routes: truth, catalog (products + Amazon), ai, workflow, platform
@@ -486,6 +533,7 @@ yudhix/
 │   │   └── migrations/          # V2 truth-first · V3 SaaS · V4 regional pricing · V5 schedule, ideas, AI,
 │   │                            #   documents · V6 Amazon listings
 │   └── tests/                   # pytest unit tests (+ fixtures) + end-to-end SaaS test
+├── services/yudhix-report/      # Reports service (FastAPI + ReportLab): catalog, read-only queries, report builder, PDF
 ├── keycloak/                    # realm file, configure_realm.py, login theme
 ├── deploy/                      # gateway, Dockerfiles, Compose stack, Kubernetes, Zoho, scripts
 ├── docs/demo/                   # demo script, narrated video, slide deck and the tools that build them
@@ -547,11 +595,11 @@ Everything is per workspace: products, videos, Amazon listings, comments, facts,
 ## 7. Tests
 
 ```bash
-./yudhix.sh unit     # backend (71 pytest) + frontend (11 Karma) unit tests
+./yudhix.sh unit     # backend (71 + 15 report pytest) + frontend (11 Karma) unit tests
 ./yudhix.sh e2e      # ~47 end-to-end checks through the real Keycloak (needs dev mode running)
 ```
 
-Backend unit tests cover the truth pipeline, attribution, AI providers and fallback, anti-hallucination guards, hybrid search, document parsing, the Amazon reader (against a saved product page) and the channel split. They need no database, AI model or network.
+Backend unit tests cover the truth pipeline, attribution, AI providers and fallback, anti-hallucination guards, hybrid search, document parsing, the Amazon reader (against a saved product page) and the channel split. They need no database, AI model or network. The report service's tests cover every section for every report type, risk ranking, workspace access (403), plain-word errors and PDF output.
 
 The end-to-end test creates two throwaway users, signs in with the real PKCE flow, and checks workspaces, invitations (including the email), role permissions, workspace isolation, plan changes with invoices, notifications and deletion. It removes its users at the end.
 
@@ -601,7 +649,8 @@ Production checklist: strong `AUTHOR_HMAC_KEY` and database passwords, `DEMO_WOR
 | Fact-checking | Hybrid search (BM25 + embeddings) and local or cloud AI with quote, number and second-opinion checks. | Scanned PDFs (OCR); an evaluation set from human verdicts. |
 | Sentiment & topics | Local or cloud AI for comments and reviews (stars decide review sentiment), keyword rules as fallback. | Agent corrections that feed back into the model. |
 | Products | Per product across YouTube and Amazon: sentiment, topics, positive and negative voices, ideas. | Trend over time per channel; which creators and listings drive negativity; alerts per product. |
-| Services | One Python API does everything. | Split into the planned Java services (`services/yudhix-*`) as load requires. |
+| Reports | Four report types, 10 sections, PDF download across chosen workspaces. | Scheduled reports by email; saved report setups; trend charts per product. |
+| Services | A Python API plus a separate reports service. | Split into the planned Java services (`services/yudhix-*`) as load requires. |
 | Mobile | Capacitor configured. | Generate native projects, icons, store listings, push alerts. |
 
 > **Security:** an old version of the web app had a YouTube API key in its code. It is still in git history, so **rotate that key in Google Cloud Console**. YouTube access now happens only on the server.

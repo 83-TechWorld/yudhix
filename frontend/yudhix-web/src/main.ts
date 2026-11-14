@@ -17,6 +17,8 @@ async function loadRuntimeConfig(): Promise<void> {
     const cfg = await res.json();
     const origin = location.origin;
     environment.apiUrl = (cfg.apiUrl || origin).replace(/\/$/, '');
+    // Reports service: same address as the API unless set (the gateway routes /api/v1/reports to it)
+    environment.reportsUrl = (cfg.reportsUrl || environment.apiUrl).replace(/\/$/, '');
     environment.keycloak = {
       url: (cfg.keycloakUrl || `${origin}/auth`).replace(/\/$/, ''),
       realm: cfg.keycloakRealm || environment.keycloak.realm,

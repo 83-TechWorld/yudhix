@@ -61,6 +61,19 @@ start_sense() {
     echo -e "    ${GREEN}✔ yudhix-sense running on http://localhost:8000${NC}"
 }
 
+start_report() {
+    echo -e "${ORANGE}[+]${WHITE} Starting yudhix-report (Reports service on :8010)...${NC}"
+    cd "$SCRIPT_DIR/services/yudhix-report"
+    if [ ! -d ".venv" ]; then
+        python3 -m venv .venv
+    fi
+    ./.venv/bin/pip install -q -r requirements.txt > /dev/null 2>&1
+    nohup ./.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8010 > "$LOG_DIR/report.log" 2>&1 &
+    echo $! > "$PID_DIR/report.pid"
+    cd "$SCRIPT_DIR"
+    echo -e "    ${GREEN}✔ yudhix-report running on http://localhost:8010${NC}"
+}
+
 start_frontend() {
     echo -e "${ORANGE}[+]${WHITE} Starting yudhix-web (Angular on :4200)...${NC}"
     cd "$SCRIPT_DIR/frontend/yudhix-web"
@@ -84,6 +97,7 @@ start_all() {
     print_banner
     check_ollama
     start_sense
+    start_report
     start_frontend
     echo -e "\n${ORANGE}All core servers initiated!${NC}"
     echo -e "${WHITE}Open the app: ${ORANGE}http://localhost:4200${NC}\n"
@@ -126,6 +140,13 @@ status_all() {
         echo -e "${WHITE}yudhix-sense (AI)      ${ORANGE}8000     ${GREEN}ONLINE${NC}"
     else
         echo -e "${WHITE}yudhix-sense (AI)      ${ORANGE}8000     ${RED}OFFLINE${NC}"
+    fi
+
+    # Reports
+    if curl -s http://localhost:8010/healthz > /dev/null 2>&1; then
+        echo -e "${WHITE}yudhix-report          ${ORANGE}8010     ${GREEN}ONLINE${NC}"
+    else
+        echo -e "${WHITE}yudhix-report          ${ORANGE}8010     ${RED}OFFLINE${NC}"
     fi
 
     # Frontend
@@ -255,6 +276,8 @@ case "$1" in
         print_banner
         echo -e "${ORANGE}[+] Backend unit tests (yudhix-sense)${NC}"
         (cd services/yudhix-sense && ./.venv/bin/python -m pytest -q tests)
+        echo -e "${ORANGE}[+] Backend unit tests (yudhix-report)${NC}"
+        (cd services/yudhix-report && ./.venv/bin/python -m pytest -q tests)
         echo -e "${ORANGE}[+] Frontend unit tests (yudhix-web)${NC}"
         (cd frontend/yudhix-web && npm test --silent)
         ;;
@@ -271,7 +294,7 @@ case "$1" in
         print_banner
         echo -e "${WHITE}Usage:${NC} ./yudhix.sh {start|stop|restart|status|test|unit|e2e|keycloak|docker-up|docker-down|k8s-up|k8s-down|k8s-status|db|init-db|ui}"
         echo ""
-        echo -e "  ${ORANGE}start${NC}    - Launch Ollama, yudhix-sense AI engine, and yudhix-web frontend"
+        echo -e "  ${ORANGE}start${NC}    - Launch Ollama, yudhix-sense AI engine, yudhix-report and yudhix-web frontend"
         echo -e "  ${ORANGE}stop${NC}     - Stop all background running services"
         echo -e "  ${ORANGE}status${NC}   - Display health and ports of all services"
         echo -e "  ${ORANGE}test${NC}     - Run live end-to-end PII masking & AI analysis test"

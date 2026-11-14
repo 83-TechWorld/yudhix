@@ -104,6 +104,23 @@ services:
       replicas: ${API_REPLICAS:-2}    # scale out: API_REPLICAS=4 ./deploy/scripts/docker-up.sh
     restart: unless-stopped
 
+  report:
+    build: { context: ../.., dockerfile: services/yudhix-report/Dockerfile }
+    image: yudhix/report:local
+    environment:
+      PG_HOST: postgres
+      PG_PORT: "5432"
+      PG_DB: yudhix
+      PG_USER: yudhix
+      PG_PASSWORD: ${POSTGRES_PASSWORD:-yudhix_local_pw}
+      KEYCLOAK_ISSUER: ${PUBLIC_URL:-http://localhost:8080}/auth/realms/yudhix
+      KEYCLOAK_JWKS_URL: http://keycloak:8080/auth/realms/yudhix/protocol/openid-connect/certs
+      CORS_ORIGINS: ${PUBLIC_URL:-http://localhost:8080}
+    depends_on:
+      postgres: { condition: service_healthy }
+      api: { condition: service_started }     # the API creates and migrates the schema
+    restart: unless-stopped
+
   web:
     build: { context: ../../frontend/yudhix-web }
     image: yudhix/web:local
@@ -118,11 +135,13 @@ services:
     environment:
       WEB_UPSTREAM: http://web:8080
       API_UPSTREAM: http://api:8000
+      REPORT_UPSTREAM: http://report:8010
       KEYCLOAK_UPSTREAM: http://keycloak:8080
       KEYCLOAK_ADMIN_PUBLIC: "true"     # local only: Keycloak admin console at /auth/admin
     depends_on:
       web: { condition: service_started }
       api: { condition: service_started }
+      report: { condition: service_started }
       keycloak: { condition: service_started }
     restart: unless-stopped
 

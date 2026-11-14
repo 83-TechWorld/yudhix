@@ -581,3 +581,36 @@ export interface ProductComment {
   isNew: boolean;
   topics: string[];
 }
+
+// ---- Reports (services/yudhix-report) -------------------------------------------------------
+export type ReportTone = 'good' | 'warn' | 'bad' | 'info';
+export interface ReportAudience { id: string; label: string; for: string; title: string; description: string; sections: string[]; }
+export interface ReportSectionOption { id: string; title: string; description: string; }
+export interface ReportWorkspace { id: string; name: string; role: WorkspaceRole; roleLabel: string; isDemo: boolean; plan: string | null; }
+export interface ReportOptions {
+  audiences: ReportAudience[];
+  sections: ReportSectionOption[];
+  periods: { id: string; label: string }[];
+  defaultPeriod: string;
+  workspaces: ReportWorkspace[];
+}
+export interface ReportRequest { audience: string; workspaceIds: string[]; period: string; sections: string[] | null; }
+export interface ReportKpi { label: string; value: string; sub: string | null; delta: { text: string; tone: ReportTone } | null; tone: ReportTone; }
+export interface ReportSentimentRow { label: string; sub?: string; negative: number; neutral: number; positive: number; }
+export type ReportBlock =
+  | { type: 'kpis'; items: ReportKpi[] }
+  | { type: 'findings'; items: { tone: ReportTone; text: string }[] }
+  | { type: 'table'; title?: string; columns: { label: string; align: 'left' | 'right' }[]; rows: string[][]; severityColumn?: number; empty?: string }
+  | { type: 'bars'; title?: string; rows: ReportSentimentRow[] }
+  | { type: 'trend'; title?: string; grain: string; points: ReportSentimentRow[] }
+  | { type: 'note'; text: string };
+export interface ReportSection { id: string; title: string; description: string; blocks: ReportBlock[]; }
+export interface Report {
+  title: string;
+  audience: { id: string; label: string; for: string; description: string };
+  period: { id: string; label: string; from: string | null; to: string };
+  generatedAt: string;
+  preparedBy: { name: string; email: string };
+  workspaces: { id: string; name: string; role: string; isDemo: boolean; plan: string | null }[];
+  sections: ReportSection[];
+}

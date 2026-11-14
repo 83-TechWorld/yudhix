@@ -1,0 +1,64 @@
+# Reports: yudhix-report. Builds business reports (JSON preview + PDF) across workspaces.
+# Stateless and read-only against Postgres; the gateway routes /api/v1/reports/ here.
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: report, labels: { app: report } }
+spec:
+  replicas: 1
+  strategy: { rollingUpdate: { maxUnavailable: 0, maxSurge: 1 } }
+  selector: { matchLabels: { app: report } }
+  template:
+    metadata: { labels: { app: report } }
+    spec:
+      securityContext: { runAsNonRoot: true, runAsUser: 10001, seccompProfile: { type: RuntimeDefault } }
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: report
+          image: yudhix/report:local
+          ports: [{ name: http, containerPort: 8010 }]
+          envFrom:
+            - configMapRef: { name: yudhix-config }
+          env:
+            - { name: WEB_CONCURRENCY, value: "2" }
+            - { name: KEYCLOAK_JWKS_URL, value: "http://keycloak:8080/auth/realms/yudhix/protocol/openid-connect/certs" }
+            - name: KEYCLOAK_ISSUER
+              value: "$(PUBLIC_URL)/auth/realms/yudhix"
+            - { name: CORS_ORIGINS, value: "$(PUBLIC_URL)" }
+            - name: PG_PASSWORD
+              valueFrom: { secretKeyRef: { name: yudhix-secrets, key: POSTGRES_PASSWORD } }
+          readinessProbe: { httpGet: { path: /readyz, port: http }, periodSeconds: 10, timeoutSeconds: 3 }
+          livenessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 20, timeoutSeconds: 3 }
+          resources:
+            requests: { cpu: 100m, memory: 160Mi }
+            limits: { cpu: "1", memory: 512Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+      volumes: [{ name: tmp, emptyDir: {} }]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: report, labels: { app: report } }
+spec:
+  selector: { app: report }
+  ports: [{ name: http, port: 8010, targetPort: http }]
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: { name: report }
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: report }
+  minReplicas: 1
+  maxReplicas: 4
+  metrics:
+    - { type: Resource, resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } } }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: report-from-gateway }
+spec:
+  podSelector: { matchLabels: { app: report } }
+  policyTypes: [Ingress]
+  ingress: [{ from: [{ podSelector: { matchLabels: { app: gateway } } }] }]

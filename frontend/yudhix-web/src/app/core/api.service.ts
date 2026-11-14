@@ -1,8 +1,11 @@
-import { HttpClient, HttpErrorResponse, HttpInterceptorFn, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpInterceptorFn, HttpParams, HttpResponse } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, catchError, from, switchMap, throwError } from 'rxjs';
 import { environment } from '../../environments/environment';
 import {
+  Report,
+  ReportOptions,
+  ReportRequest,
   AiProvider,
   AiSettings,
   AiStatus,
@@ -54,7 +57,8 @@ import { SessionService } from './session.service';
  * A 401 means the session ended: send the user back through sign-in.
  */
 export const contextInterceptor: HttpInterceptorFn = (req, next) => {
-  if (!req.url.startsWith(environment.apiUrl) || req.url.includes('/api/v1/public/')) return next(req);
+  const ours = req.url.startsWith(environment.apiUrl) || req.url.startsWith(environment.reportsUrl);
+  if (!ours || req.url.includes('/api/v1/public/')) return next(req);
   const auth = inject(AuthService);
   const session = inject(SessionService);
   return from(auth.token()).pipe(
@@ -76,6 +80,8 @@ export const contextInterceptor: HttpInterceptorFn = (req, next) => {
 /** Turns any HTTP error into one readable sentence for toasts and inline errors. */
 export function errorMessage(err: unknown): string {
   if (err instanceof HttpErrorResponse) {
+    if (err.status === 0 && environment.reportsUrl !== environment.apiUrl && err.url?.startsWith(environment.reportsUrl))
+      return "Can't reach the reports service. Is yudhix-report running on " + environment.reportsUrl + '?';
     if (err.status === 0) return "Can't reach the Yudhix API. Is yudhix-sense running on " + environment.apiUrl + '?';
     if (err.status === 402 && typeof err.error?.detail === 'string') return err.error.detail;
     const detail = err.error?.detail;
@@ -394,5 +400,19 @@ export class ApiService {
   }
   markRead(ids?: number[]): Observable<void> {
     return this.http.post<void>(`${this.v1}/notifications/read`, { ids: ids ?? null });
+  }
+
+  // --- Reports (separate service: services/yudhix-report) --------------------------------------
+  private get reports(): string {
+    return `${environment.reportsUrl}/api/v1/reports`;
+  }
+  reportOptions(): Observable<ReportOptions> {
+    return this.http.get<ReportOptions>(`${this.reports}/options`);
+  }
+  reportPreview(body: ReportRequest): Observable<Report> {
+    return this.http.post<Report>(`${this.reports}/preview`, body);
+  }
+  reportPdf(body: ReportRequest): Observable<HttpResponse<Blob>> {
+    return this.http.post(`${this.reports}/pdf`, body, { responseType: 'blob', observe: 'response' });
   }
 }

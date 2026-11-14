@@ -31,6 +31,7 @@ configMapGenerator:
       - SALES_EMAIL=sales@your-domain.com               # CHANGE
 images:                                                 # CHANGE registry + tag (see deploy/scripts/push-images.sh)
   - { name: yudhix/api,      newName: ghcr.io/83-techworld/yudhix-api,      newTag: v1.0.0 }
+  - { name: yudhix/report,   newName: ghcr.io/83-techworld/yudhix-report,   newTag: v1.0.0 }
   - { name: yudhix/web,      newName: ghcr.io/83-techworld/yudhix-web,      newTag: v1.0.0 }
   - { name: yudhix/gateway,  newName: ghcr.io/83-techworld/yudhix-gateway,  newTag: v1.0.0 }
   - { name: yudhix/keycloak, newName: ghcr.io/83-techworld/yudhix-keycloak, newTag: v1.0.0 }

@@ -12,6 +12,7 @@ resources:
   - gateway.yaml
   - web.yaml
   - api.yaml
+  - report.yaml
   - keycloak.yaml
   - keycloak-setup-job.yaml
   - network-policies.yaml

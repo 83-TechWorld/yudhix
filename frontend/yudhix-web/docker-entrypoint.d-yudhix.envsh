@@ -7,6 +7,7 @@ export PORT="${X_ZOHO_CATALYST_LISTEN_PORT:-${PORT:-8080}}"
 cat > /usr/share/nginx/html/config.json <<JSON
 {
   "apiUrl": "${API_URL:-}",
+  "reportsUrl": "${REPORTS_URL:-}",
   "keycloakUrl": "${KEYCLOAK_URL:-}",
   "keycloakRealm": "${KEYCLOAK_REALM:-yudhix}",
   "keycloakClientId": "${KEYCLOAK_CLIENT_ID:-yudhix-web}",

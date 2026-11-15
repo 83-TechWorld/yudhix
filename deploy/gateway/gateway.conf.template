@@ -52,6 +52,12 @@ server {
 
   location = /gateway/healthz { access_log off; default_type text/plain; return 200 "ok"; }
 
+  # Reports service (yudhix-report): PDFs take a few seconds, so allow a longer read
+  location /api/v1/reports/ {
+    limit_req zone=api burst=${API_RATE_BURST} nodelay;
+    proxy_read_timeout 120s;
+    proxy_pass ${REPORT_PASS};
+  }
   location /api/ {
     limit_req zone=api burst=${API_RATE_BURST} nodelay;
     proxy_pass ${API_PASS};

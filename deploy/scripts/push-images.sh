@@ -5,7 +5,7 @@
 source "$(dirname "$0")/lib.sh"
 : "${REGISTRY:?Set REGISTRY, e.g. ghcr.io/83-techworld}"
 if [ "${BUILD:-1}" = "1" ] && ! docker image inspect "yudhix/api:$TAG" >/dev/null 2>&1; then build_images; fi
-for name in api web gateway keycloak; do
+for name in api report web gateway keycloak; do
   target="$REGISTRY/yudhix-$name:$TAG"
   log "pushing $target"
   docker tag "yudhix/$name:$TAG" "$target"

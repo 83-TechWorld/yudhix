@@ -19,6 +19,7 @@ spec:
           env:
             - { name: WEB_UPSTREAM, value: "http://web:8080" }
             - { name: API_UPSTREAM, value: "http://api:8000" }
+            - { name: REPORT_UPSTREAM, value: "http://report:8010" }
             - { name: KEYCLOAK_UPSTREAM, value: "http://keycloak:8080" }
             - name: KEYCLOAK_ADMIN_PUBLIC
               valueFrom: { configMapKeyRef: { name: yudhix-config, key: KEYCLOAK_ADMIN_PUBLIC } }

@@ -23,6 +23,7 @@ build_images() {
   prepull
   local plat=(); [ -n "$PLATFORM" ] && plat=(--platform "$PLATFORM")
   log "building yudhix/api:$TAG";      docker build ${plat[@]+"${plat[@]}"} -q -f "$ROOT/services/yudhix-sense/Dockerfile" -t "yudhix/api:$TAG" "$ROOT" >/dev/null
+  log "building yudhix/report:$TAG";   docker build ${plat[@]+"${plat[@]}"} -q -f "$ROOT/services/yudhix-report/Dockerfile" -t "yudhix/report:$TAG" "$ROOT" >/dev/null
   log "building yudhix/web:$TAG";      docker build ${plat[@]+"${plat[@]}"} -q -t "yudhix/web:$TAG" "$ROOT/frontend/yudhix-web" >/dev/null
   log "building yudhix/gateway:$TAG";  docker build ${plat[@]+"${plat[@]}"} -q -t "yudhix/gateway:$TAG" "$ROOT/deploy/gateway" >/dev/null
   log "building yudhix/keycloak:$TAG"; docker build ${plat[@]+"${plat[@]}"} -q -f "$ROOT/deploy/keycloak/Dockerfile" -t "yudhix/keycloak:$TAG" "$ROOT" >/dev/null
